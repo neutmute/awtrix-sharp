@@ -29,19 +29,13 @@ namespace AwtrixSharpWeb
             services.Configure<MqttSettings>(
                 builder.Configuration.GetSection("Mqtt"));
 
+            services.Configure<AwtrixConfig>(
+                builder.Configuration.GetSection("Awtrix"));
+
             services.AddControllers(); 
-          //  services.AddOpenApi();
-            //services.AddHostedService<MqttService>();
+
             services.AddSingleton<MqttService>();
             services.AddHostedService(sp => sp.GetService<MqttService>());
-
-            //services.AddSwaggerGen(c => {
-            //    c.SwaggerDoc("swagger.json", new OpenApiInfo
-            //    {
-            //        Title = "AwtrixSharp",
-            //        Version = "v1"
-            //    });
-            //});
 
             services.AddEndpointsApiExplorer();
             services.AddSwaggerGen();
