@@ -31,7 +31,9 @@ namespace AwtrixSharpWeb
 
             services.AddControllers(); 
           //  services.AddOpenApi();
-            services.AddHostedService<MqttService>();
+            //services.AddHostedService<MqttService>();
+            services.AddSingleton<MqttService>();
+            services.AddHostedService(sp => sp.GetService<MqttService>());
 
             //services.AddSwaggerGen(c => {
             //    c.SwaggerDoc("swagger.json", new OpenApiInfo
