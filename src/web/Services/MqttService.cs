@@ -22,7 +22,7 @@ namespace AwtrixSharpWeb.Services
             _settings = settings.Value;
         }
 
-        public async Task ConnectAsync()
+        public async Task<bool> ConnectAsync(CancellationToken cancellationToken = default)
         {
             _log.LogInformation("Connecting to MQTT broker at {Host}...", _settings.Host);
             var mqttClientFactory = new MqttClientFactory();
@@ -42,8 +42,37 @@ namespace AwtrixSharpWeb.Services
 
             _client = mqttClientFactory.CreateMqttClient();
 
-            await _client.ConnectAsync(clientOptions, CancellationToken.None);
-            _log.LogInformation("Connected to MQTT broker successfully");
+            try
+            {
+                // Use a timeout for the connection attempt
+                using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+                using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
+                    timeoutCts.Token, 
+                    cancellationToken == default ? CancellationToken.None : cancellationToken);
+
+                var result = await _client.ConnectAsync(clientOptions, linkedCts.Token);
+                
+                if (_client.IsConnected)
+                {
+                    _log.LogInformation("Connected to MQTT broker");
+                    return true;
+                }
+                else
+                {
+                    _log.LogError($"Failed to connect to MQTT broker: {result.ReasonString}");
+                    return false;
+                }
+            }
+            catch (OperationCanceledException ex)
+            {
+                _log.LogError(ex, "Connection to MQTT broker timed out");
+                return false;
+            }
+            catch (Exception ex)
+            {
+                _log.LogError(ex, "Failed to connect to MQTT broker");
+                return false;
+            }
         }
 
         public async Task PublishAsync(string topic, string payload)

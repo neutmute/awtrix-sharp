@@ -1,3 +1,4 @@
+using AwtrixSharpWeb.Services;
 using Microsoft.AspNetCore.Mvc;
 
 namespace AwtrixSharpWeb.Controllers
@@ -6,23 +7,31 @@ namespace AwtrixSharpWeb.Controllers
     [Route("[controller]")]
     public class DiagnosticsController : ControllerBase
     {
-        private static readonly string[] Summaries = new[]
-        {
-            "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-        };
-
         private readonly ILogger<DiagnosticsController> _logger;
+        private readonly MqttService _mqttService;
 
-        public DiagnosticsController(ILogger<DiagnosticsController> logger)
+        public DiagnosticsController(ILogger<DiagnosticsController> logger, MqttService mqttService)
         {
             _logger = logger;
+            _mqttService = mqttService;
         }
 
-        [HttpGet(Name = "GetWeatherForecast")]
-        public IEnumerable<string> Get()
+        [HttpPost("mqtt")]
+        public async Task<IActionResult> Mqtt()
         {
-            return Enumerable.Range(1, 5).Select(index => index.ToString())
-            .ToArray();
+            var diagnosticInfo = new
+            {
+                Timestamp = DateTime.UtcNow,
+                Service = "AwtrixSharp",
+                Status = "Running",
+                Message = "Diagnostic test"
+            };
+            
+            var payload = System.Text.Json.JsonSerializer.Serialize(diagnosticInfo);
+            
+            await _mqttService.PublishAsync("awtrixsharp/diagnostic", payload);
+            
+            return Ok(diagnosticInfo);
         }
     }
 }
