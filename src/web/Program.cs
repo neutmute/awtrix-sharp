@@ -39,6 +39,8 @@ namespace AwtrixSharpWeb
             services.AddTransient<AwtrixService>();
             services.AddSingleton<MqttConnector>();
             services.AddSingleton<SlackConnector>();
+            services.AddSingleton<HttpPublisher>();
+            services.AddSingleton<MqttPublisher>();
             services.AddSingleton<Conductor>();
 
             services.AddHostedService(sp => sp.GetService<MqttConnector>());

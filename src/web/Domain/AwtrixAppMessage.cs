@@ -3,123 +3,205 @@ using System.Text.Json.Serialization;
 namespace AwtrixSharpWeb.Domain
 {
     /// <summary>
-    /// Represents an Awtrix application with its properties and default settings
+    /// Dictionary-based implementation of an Awtrix application message
+    /// that stores all properties as string key-value pairs without default values.
     /// </summary>
-    public class AwtrixAppMessage
+    public class AwtrixAppMessage : Dictionary<string, string>
     {
-        // Default values as constants
-        private static readonly string DefaultText = "New Awtrix App";
-        private static readonly int DefaultTextCase = 0;
-        private static readonly bool DefaultTopText = false;
-        private static readonly int DefaultTextOffset = 0;
-        private static readonly bool DefaultCenter = true;
-        private static readonly int[] DefaultColor = { 255, 255, 255 };
-        private static readonly int[][] DefaultGradient = Array.Empty<int[]>();
-        private static readonly double DefaultBlinkText = 0;
-        private static readonly double DefaultFadeText = 0;
-        private static readonly int[] DefaultBackground = { 0, 0, 0 };
-        private static readonly bool DefaultRainbow = false;
-        private static readonly string DefaultIcon = "None";
-        private static readonly int DefaultPushIcon = 0;
-        private static readonly int DefaultDuration = 7;
-        private static readonly int[] DefaultLine = Array.Empty<int>();
-        private static readonly int DefaultLifetime = 0;
-        private static readonly int DefaultLifetimeMode = 0;
-        private static readonly int[] DefaultBar = Array.Empty<int>();
-        private static readonly bool DefaultAutoscale = true;
-        private static readonly string DefaultOverlay = "Clear";
-        private static readonly int DefaultProgress = -1;
-        private static readonly int[] DefaultProgressC = { 0, 255, 0 };
-        private static readonly int[] DefaultProgressBC = { 255, 255, 255 };
-        private static readonly int DefaultScrollSpeed = 100;
-        private static readonly string DefaultEffect = "None";
-        private static readonly int DefaultEffectSpeed = 100;
-        private static readonly string DefaultEffectPalette = "None";
-        private static readonly bool DefaultEffectBlend = true;
+        // Helper methods to set properties with proper key names matching the original class
 
-        // Properties with default values
-        [JsonPropertyName("text")]
-        public string Text { get; set; } = DefaultText;
+        private string Get(string key)
+        {
+            if (this.TryGetValue(key, out var value))
+            {
+                return value;
+            }
+            return null;
+        }
 
-        [JsonPropertyName("textCase")]
-        public int TextCase { get; set; } = DefaultTextCase;
+        public string Text => Get("text");
 
-        [JsonPropertyName("topText")]
-        public bool TopText { get; set; } = DefaultTopText;
 
-        [JsonPropertyName("textOffset")]
-        public int TextOffset { get; set; } = DefaultTextOffset;
 
-        [JsonPropertyName("center")]
-        public bool Center { get; set; } = DefaultCenter;
+        public AwtrixAppMessage SetText(string value)
+        {
+            this["text"] = value;
+            return this;
+        }
 
-        [JsonPropertyName("color")]
-        public int[] Color { get; set; } = DefaultColor.Clone() as int[];
+        public AwtrixAppMessage SetTextCase(int value)
+        {
+            this["textCase"] = value.ToString();
+            return this;
+        }
 
-        [JsonPropertyName("gradient")]
-        public int[][] Gradient { get; set; } = DefaultGradient.Clone() as int[][];
+        public AwtrixAppMessage SetTopText(bool value)
+        {
+            return Set("topText", value);
+        }
 
-        [JsonPropertyName("blinkText")]
-        public double BlinkText { get; set; } = DefaultBlinkText;
 
-        [JsonPropertyName("fadeText")]
-        public double FadeText { get; set; } = DefaultFadeText;
+        public AwtrixAppMessage SetHold(bool value = true)
+        {
+            return Set("hold", value);
+        }
 
-        [JsonPropertyName("background")]
-        public int[] Background { get; set; } = DefaultBackground.Clone() as int[];
 
-        [JsonPropertyName("rainbow")]
-        public bool Rainbow { get; set; } = DefaultRainbow;
 
-        [JsonPropertyName("icon")]
-        public string Icon { get; set; } = DefaultIcon;
+        public AwtrixAppMessage SetTextOffset(int value)
+        {
+            this["textOffset"] = value.ToString();
+            return this;
+        }
 
-        [JsonPropertyName("pushIcon")]
-        public int PushIcon { get; set; } = DefaultPushIcon;
+        public AwtrixAppMessage SetCenter(bool value)
+        {
+            return Set("center", value);
+        }
 
-        [JsonPropertyName("duration")]
-        public int Duration { get; set; } = DefaultDuration;
+        public AwtrixAppMessage SetColor(int[] value)
+        {
+            this["color"] = string.Join(',', value);
+            return this;
+        }
 
-        [JsonPropertyName("line")]
-        public int[] Line { get; set; } = DefaultLine.Clone() as int[];
+        public AwtrixAppMessage SetGradient(int[][] value)
+        {
+            if (value != null && value.Length > 0)
+            {
+                this["gradient"] = string.Join(';', value.Select(arr => string.Join(',', arr)));
+            }
+            return this;
+        }
 
-        [JsonPropertyName("lifetime")]
-        public int Lifetime { get; set; } = DefaultLifetime;
+        public AwtrixAppMessage SetBlinkText(double value)
+        {
+            this["blinkText"] = value.ToString();
+            return this;
+        }
 
-        [JsonPropertyName("lifetimeMode")]
-        public int LifetimeMode { get; set; } = DefaultLifetimeMode;
+        public AwtrixAppMessage SetFadeText(double value)
+        {
+            this["fadeText"] = value.ToString();
+            return this;
+        }
 
-        [JsonPropertyName("bar")]
-        public int[] Bar { get; set; } = DefaultBar.Clone() as int[];
+        public AwtrixAppMessage SetBackground(int[] value)
+        {
+            this["background"] = string.Join(',', value);
+            return this;
+        }
 
-        [JsonPropertyName("autoscale")]
-        public bool Autoscale { get; set; } = DefaultAutoscale;
+        public AwtrixAppMessage SetRainbow(bool value = true)
+        {
+            return Set("rainbow", value);
+        }
 
-        [JsonPropertyName("overlay")]
-        public string Overlay { get; set; } = DefaultOverlay;
+        public AwtrixAppMessage SetIcon(string value)
+        {
+            this["icon"] = value;
+            return this;
+        }
 
-        [JsonPropertyName("progress")]
-        public int Progress { get; set; } = DefaultProgress;
+        public AwtrixAppMessage SetPushIcon(int value)
+        {
+            this["pushIcon"] = value.ToString();
+            return this;
+        }
 
-        [JsonPropertyName("progressC")]
-        public int[] ProgressC { get; set; } = DefaultProgressC.Clone() as int[];
+        public AwtrixAppMessage SetDuration(int value)
+        {
+            this["duration"] = value.ToString();
+            return this;
+        }
 
-        [JsonPropertyName("progressBC")]
-        public int[] ProgressBC { get; set; } = DefaultProgressBC.Clone() as int[];
+        public AwtrixAppMessage SetLine(int[] value)
+        {
+            this["line"] = string.Join(',', value);
+            return this;
+        }
 
-        [JsonPropertyName("scrollSpeed")]
-        public int ScrollSpeed { get; set; } = DefaultScrollSpeed;
+        public AwtrixAppMessage SetLifetime(int value)
+        {
+            this["lifetime"] = value.ToString();
+            return this;
+        }
 
-        [JsonPropertyName("effect")]
-        public string Effect { get; set; } = DefaultEffect;
+        public AwtrixAppMessage SetLifetimeMode(int value)
+        {
+            this["lifetimeMode"] = value.ToString();
+            return this;
+        }
 
-        [JsonPropertyName("effectSpeed")]
-        public int EffectSpeed { get; set; } = DefaultEffectSpeed;
+        public AwtrixAppMessage SetBar(int[] value)
+        {
+            this["bar"] = string.Join(',', value);
+            return this;
+        }
 
-        [JsonPropertyName("effectPalette")]
-        public string EffectPalette { get; set; } = DefaultEffectPalette;
+        public AwtrixAppMessage SetAutoscale(bool value) => Set("autoscale", value);
 
-        [JsonPropertyName("effectBlend")]
-        public bool EffectBlend { get; set; } = DefaultEffectBlend;
+        public AwtrixAppMessage SetOverlay(string value)
+        {
+            this["overlay"] = value;
+            return this;
+        }
+
+        public AwtrixAppMessage SetProgress(int value)
+        {
+            this["progress"] = value.ToString();
+            return this;
+        }
+
+        public AwtrixAppMessage SetProgressC(int[] value)
+        {
+            this["progressC"] = string.Join(',', value);
+            return this;
+        }
+
+        public AwtrixAppMessage SetProgressBC(int[] value)
+        {
+            this["progressBC"] = string.Join(',', value);
+            return this;
+        }
+
+        public AwtrixAppMessage SetScrollSpeed(int value)
+        {
+            this["scrollSpeed"] = value.ToString();
+            return this;
+        }
+
+        public AwtrixAppMessage SetEffect(string value)
+        {
+            this["effect"] = value;
+            return this;
+        }
+
+        public AwtrixAppMessage SetEffectSpeed(int value)
+        {
+            this["effectSpeed"] = value.ToString();
+            return this;
+        }
+
+        public AwtrixAppMessage SetEffectPalette(string value)
+        {
+            this["effectPalette"] = value;
+            return this;
+        }
+
+        public AwtrixAppMessage SetEffectBlend(bool value) => Set("effectBlend", value);
+
+
+        private AwtrixAppMessage Set(string key, bool value)
+        {
+            this[key] = value.ToString().ToLower();
+            return this;
+        }
+
+        public string ToJson()
+        {
+            var json = System.Text.Json.JsonSerializer.Serialize(this);
+            return json;
+        }
     }
 }

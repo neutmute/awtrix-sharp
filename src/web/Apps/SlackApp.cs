@@ -36,7 +36,7 @@ namespace AwtrixSharpWeb.Apps
                 }
                 else
                 {
-                    var message = new AwtrixAppMessage2()
+                    var message = new AwtrixAppMessage()
                             .SetText(e.StatusText)
                             .SetHold()
                             .SetRainbow();

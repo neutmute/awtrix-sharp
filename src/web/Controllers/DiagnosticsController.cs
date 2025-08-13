@@ -56,14 +56,8 @@ namespace AwtrixSharpWeb.Controllers
                     _logger.LogWarning("Device {Device} has an empty BaseTopic", device);
                     continue;
                 }
-                //var notification = new AwtrixAppMessage
-                //{
-                //    Text = "AwtrixSharp Diagnostic",
-                //};
-                //var payload = System.Text.Json.JsonSerializer.Serialize(notification);
-                //await _mqttService.PublishAsync($"{device.BaseTopic}/notify", payload);
 
-                var payload = new AwtrixAppMessage2()
+                var payload = new AwtrixAppMessage()
                                     .SetText("AwtrixSharp")
                                     .SetRainbow(true)
                                     .SetDuration(5);
