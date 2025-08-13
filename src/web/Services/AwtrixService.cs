@@ -1,54 +1,7 @@
 ﻿using AwtrixSharpWeb.Domain;
-using AwtrixSharpWeb.HostedServices;
 
 namespace AwtrixSharpWeb.Services
 {
-    public abstract class AwtrixPublisher
-    {
-        public string ToJson(AwtrixAppMessage? message)
-        {
-            if (message == null)
-            {
-                return string.Empty;
-            }
-            else
-            {
-                return message.ToJson();
-            }
-        }
-    }
-
-    public class HttpPublisher : AwtrixPublisher
-    {
-        private readonly HttpClient _httpClient;
-        public HttpPublisher()
-        {
-            _httpClient = new HttpClient();
-        }
-        public async Task<bool> Publish(string url, AwtrixAppMessage? message)
-        {
-            var json = ToJson(message);
-            var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
-            var response = await _httpClient.PostAsync(url, content);
-            return response.IsSuccessStatusCode;
-        }
-    }
-
-    public class MqttPublisher : AwtrixPublisher
-    {
-        MqttConnector _mqttService;
-
-        public MqttPublisher(MqttConnector mqttService)
-        {
-            _mqttService = mqttService;
-        }
-
-        public async Task<bool> Publish(string topic, AwtrixAppMessage? message)
-        {
-            await _mqttService.PublishAsync(topic, ToJson(message));
-            return true;
-        }
-    }
 
 
     public class AwtrixService
