@@ -32,8 +32,9 @@ namespace AwtrixSharpWeb
             services.Configure<AwtrixConfig>(
                 builder.Configuration.GetSection("Awtrix"));
 
-            services.AddControllers(); 
+            services.AddControllers();
 
+            services.AddTransient<AwtrixService>();
             services.AddSingleton<MqttService>();
             services.AddHostedService(sp => sp.GetService<MqttService>());
 

@@ -2,10 +2,10 @@
 {
     public class AwtrixConfig
     {
-        public AwtrixDevice[] Devices { get; set; } = Array.Empty<AwtrixDevice>();
+        public AwtrixAddress[] Devices { get; set; } = Array.Empty<AwtrixAddress>();
     }
 
-    public class AwtrixDevice
+    public class AwtrixAddress
     {
         /// <summary>
         /// eg: "awtrix/clock1" 

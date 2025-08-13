@@ -12,12 +12,19 @@ namespace AwtrixSharpWeb.Controllers
         private readonly ILogger<DiagnosticsController> _logger;
         private readonly AwtrixConfig _awtrixConfig;
         private readonly MqttService _mqttService;
+        private readonly AwtrixService _awtrixService;
 
-        public DiagnosticsController(ILogger<DiagnosticsController> logger, MqttService mqttService, IOptions<AwtrixConfig> devices)
+        public DiagnosticsController(
+            ILogger<DiagnosticsController> logger
+            , IOptions<AwtrixConfig> devices
+            , MqttService mqttService
+            , AwtrixService awtrixService
+            )
         {
             _awtrixConfig = devices.Value;
             _logger = logger;
             _mqttService = mqttService;
+            _awtrixService = awtrixService;
         }
 
         [HttpPost("mqtt")]
@@ -48,12 +55,19 @@ namespace AwtrixSharpWeb.Controllers
                     _logger.LogWarning("Device {Device} has an empty BaseTopic", device);
                     continue;
                 }
-                var notification = new AwtrixAppMessage
-                {
-                    Text = "AwtrixSharp Diagnostic",
-                };
-                var payload = System.Text.Json.JsonSerializer.Serialize(notification);
-                await _mqttService.PublishAsync($"{device.BaseTopic}/notify", payload);
+                //var notification = new AwtrixAppMessage
+                //{
+                //    Text = "AwtrixSharp Diagnostic",
+                //};
+                //var payload = System.Text.Json.JsonSerializer.Serialize(notification);
+                //await _mqttService.PublishAsync($"{device.BaseTopic}/notify", payload);
+
+                var payload = new AwtrixAppMessage2()
+                                    .SetText("AwtrixSharp")
+                                    .SetRainbow(true)
+                                    .SetDuration(5);
+
+                await _awtrixService.Notify(device, payload);
             }
 
             return Ok();
