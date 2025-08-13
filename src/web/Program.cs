@@ -1,5 +1,7 @@
-using AwtrixSharpWeb.Services;
+using AwtrixSharpWeb.Apps;
 using AwtrixSharpWeb.Domain;
+using AwtrixSharpWeb.HostedServices;
+using AwtrixSharpWeb.Services;
 using Microsoft.Extensions.Logging;
 using Microsoft.OpenApi.Models;
 
@@ -35,10 +37,13 @@ namespace AwtrixSharpWeb
             services.AddControllers();
 
             services.AddTransient<AwtrixService>();
-            services.AddSingleton<MqttService>();
-            services.AddSingleton<SlackSocketService>();
-            services.AddHostedService(sp => sp.GetService<MqttService>());
-            services.AddHostedService(sp => sp.GetService<SlackSocketService>());
+            services.AddSingleton<MqttConnector>();
+            services.AddSingleton<SlackConnector>();
+            services.AddSingleton<Conductor>();
+
+            services.AddHostedService(sp => sp.GetService<MqttConnector>());
+            services.AddHostedService(sp => sp.GetService<SlackConnector>());
+            services.AddHostedService(sp => sp.GetService<Conductor>());
 
             services.AddEndpointsApiExplorer();
             services.AddSwaggerGen();

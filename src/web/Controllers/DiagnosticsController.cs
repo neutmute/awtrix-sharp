@@ -1,4 +1,5 @@
 using AwtrixSharpWeb.Domain;
+using AwtrixSharpWeb.HostedServices;
 using AwtrixSharpWeb.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
@@ -11,13 +12,13 @@ namespace AwtrixSharpWeb.Controllers
     {
         private readonly ILogger<DiagnosticsController> _logger;
         private readonly AwtrixConfig _awtrixConfig;
-        private readonly MqttService _mqttService;
+        private readonly MqttConnector _mqttService;
         private readonly AwtrixService _awtrixService;
 
         public DiagnosticsController(
             ILogger<DiagnosticsController> logger
             , IOptions<AwtrixConfig> devices
-            , MqttService mqttService
+            , MqttConnector mqttService
             , AwtrixService awtrixService
             )
         {

@@ -8,15 +8,15 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace AwtrixSharpWeb.Services
+namespace AwtrixSharpWeb.HostedServices
 {
-    public class MqttService : IHostedService
+    public class MqttConnector : IHostedService
     {
         private IMqttClient _client;
-        private readonly ILogger<MqttService> _log;
+        private readonly ILogger<MqttConnector> _log;
         private readonly MqttSettings _settings;
 
-        public MqttService(ILogger<MqttService> logger, IOptions<MqttSettings> settings)
+        public MqttConnector(ILogger<MqttConnector> logger, IOptions<MqttSettings> settings)
         {
             _log = logger;
             _settings = settings.Value;

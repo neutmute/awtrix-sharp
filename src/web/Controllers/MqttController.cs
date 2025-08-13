@@ -1,5 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
-using AwtrixSharpWeb.Services;
+using AwtrixSharpWeb.HostedServices;
 
 namespace AwtrixSharpWeb.Controllers
 {
@@ -7,9 +7,9 @@ namespace AwtrixSharpWeb.Controllers
     [Route("[controller]")]
     public class MqttController : ControllerBase
     {
-        private readonly MqttService _mqttService;
+        private readonly MqttConnector _mqttService;
 
-        public MqttController(MqttService mqttService)
+        public MqttController(MqttConnector mqttService)
         {
             _mqttService = mqttService;
         }

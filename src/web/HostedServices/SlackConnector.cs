@@ -9,7 +9,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace AwtrixSharpWeb.Services
+namespace AwtrixSharpWeb.HostedServices
 {
     // Event args for user status changes
     public class SlackUserStatusChangedEventArgs : EventArgs
@@ -19,16 +19,17 @@ namespace AwtrixSharpWeb.Services
         public string StatusEmoji { get; set; } = string.Empty;
     }
 
-    public class SlackSocketService : IHostedService  
+    public class SlackConnector : IHostedService  
     {
-        ILogger<SlackSocketService> _logger;
+        ILogger<SlackConnector> _logger;
 
-        public SlackSocketService(ILogger<SlackSocketService> logger)
+        public SlackConnector(ILogger<SlackConnector> logger)
         {
             _logger = logger;
         }
 
         private static readonly HttpClient http = new HttpClient();
+
         public event EventHandler<SlackUserStatusChangedEventArgs>? UserStatusChanged;
 
         static async Task<string> OpenSocketUrlAsync(string appToken)

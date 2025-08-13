@@ -1,12 +1,13 @@
 ﻿using AwtrixSharpWeb.Domain;
+using AwtrixSharpWeb.HostedServices;
 
 namespace AwtrixSharpWeb.Services
 {
     public class AwtrixService
     {
-        MqttService _mqttService;
+        MqttConnector _mqttService;
 
-        public AwtrixService(MqttService mqttService)
+        public AwtrixService(MqttConnector mqttService)
         {
             _mqttService = mqttService;
         }
