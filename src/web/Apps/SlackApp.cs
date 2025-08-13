@@ -25,11 +25,25 @@ namespace AwtrixSharpWeb.Apps
 
         private void UserStatusChanged(object? sender, SlackUserStatusChangedEventArgs e)
         {
-            var message = new AwtrixAppMessage2()
-                    .SetText(e.StatusText)
-                    .SetRainbow(true);
 
-            var result = _awtrixService.Notify(_awtrixAddress, message).Result;
+            var userId = Environment.GetEnvironmentVariable("AWTRIXSHARP_SLACK__USERID"); // U*** (your user ID)
+            if (userId.Equals(e.UserId))
+            {
+                Task<bool> result;
+                if (e.StatusText == string.Empty)
+                {
+                    result = _awtrixService.Dismiss(_awtrixAddress);
+                }
+                else
+                {
+                    var message = new AwtrixAppMessage2()
+                            .SetText(e.StatusText)
+                            .SetHold()
+                            .SetRainbow();
+
+                    result = _awtrixService.Notify(_awtrixAddress, message);
+                }
+            }
         }
     }
 }

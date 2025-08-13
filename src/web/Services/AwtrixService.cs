@@ -24,7 +24,21 @@ namespace AwtrixSharpWeb.Services
 
         public async Task<bool> Notify(AwtrixAddress awtrixAddress, AwtrixAppMessage2 message)
         {
-            return await Publish(awtrixAddress.BaseTopic + "/notify", message);
+            if (String.IsNullOrWhiteSpace(message.Text))
+            {
+                return await Dismiss(awtrixAddress);
+            }
+            else
+            {
+                return await Publish(awtrixAddress.BaseTopic + "/notify", message);
+            }
+        }
+
+
+        /// <remarks>https://blueforcer.github.io/awtrix3/#/api?id=dismiss-notification</remarks>
+        public async Task<bool> Dismiss(AwtrixAddress awtrixAddress)
+        {
+            return await Publish(awtrixAddress.BaseTopic + "/notify/dismiss", null);
         }
 
         private async Task<bool> Publish(string topic, AwtrixAppMessage2? message)

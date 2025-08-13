@@ -56,8 +56,6 @@ namespace AwtrixSharpWeb
 
                 app.UseSwagger();
                 app.UseSwaggerUI();
-
-                //app.MapOpenApi();
             }
 
             app.UseHttpsRedirection();

@@ -10,6 +10,19 @@ namespace AwtrixSharpWeb.Domain
     {
         // Helper methods to set properties with proper key names matching the original class
 
+        private string Get(string key)
+        {
+            if (this.TryGetValue(key, out var value))
+            {
+                return value;
+            }
+            return null;
+        }
+
+        public string Text => Get("text");
+
+
+
         public AwtrixAppMessage2 SetText(string value)
         {
             this["text"] = value;
@@ -24,9 +37,16 @@ namespace AwtrixSharpWeb.Domain
 
         public AwtrixAppMessage2 SetTopText(bool value)
         {
-            this["topText"] = value.ToString().ToLower();
-            return this;
+            return Set("topText", value);
         }
+
+
+        public AwtrixAppMessage2 SetHold(bool value = true)
+        {
+            return Set("hold", value);
+        }
+
+
 
         public AwtrixAppMessage2 SetTextOffset(int value)
         {
@@ -36,8 +56,7 @@ namespace AwtrixSharpWeb.Domain
 
         public AwtrixAppMessage2 SetCenter(bool value)
         {
-            this["center"] = value.ToString().ToLower();
-            return this;
+            return Set("center", value);
         }
 
         public AwtrixAppMessage2 SetColor(int[] value)
@@ -73,10 +92,9 @@ namespace AwtrixSharpWeb.Domain
             return this;
         }
 
-        public AwtrixAppMessage2 SetRainbow(bool value)
+        public AwtrixAppMessage2 SetRainbow(bool value = true)
         {
-            this["rainbow"] = value.ToString().ToLower();
-            return this;
+            return Set("rainbow", value);
         }
 
         public AwtrixAppMessage2 SetIcon(string value)
@@ -121,11 +139,7 @@ namespace AwtrixSharpWeb.Domain
             return this;
         }
 
-        public AwtrixAppMessage2 SetAutoscale(bool value)
-        {
-            this["autoscale"] = value.ToString().ToLower();
-            return this;
-        }
+        public AwtrixAppMessage2 SetAutoscale(bool value) => Set("autoscale", value);
 
         public AwtrixAppMessage2 SetOverlay(string value)
         {
@@ -175,9 +189,12 @@ namespace AwtrixSharpWeb.Domain
             return this;
         }
 
-        public AwtrixAppMessage2 SetEffectBlend(bool value)
+        public AwtrixAppMessage2 SetEffectBlend(bool value) => Set("effectBlend", value);
+
+
+        private AwtrixAppMessage2 Set(string key, bool value)
         {
-            this["effectBlend"] = value.ToString().ToLower();
+            this[key] = value.ToString().ToLower();
             return this;
         }
     }
