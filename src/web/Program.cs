@@ -36,7 +36,9 @@ namespace AwtrixSharpWeb
 
             services.AddTransient<AwtrixService>();
             services.AddSingleton<MqttService>();
+            services.AddSingleton<SlackSocketService>();
             services.AddHostedService(sp => sp.GetService<MqttService>());
+            services.AddHostedService(sp => sp.GetService<SlackSocketService>());
 
             services.AddEndpointsApiExplorer();
             services.AddSwaggerGen();
