@@ -28,6 +28,20 @@ namespace AwtrixSharpWeb.Controllers
             _awtrixService = awtrixService;
         }
 
+        [HttpGet("")]
+        public IActionResult Get()
+        {
+            var diagnosticInfo = new
+            {
+                Timestamp = DateTime.UtcNow,
+                Message = "Hello, world"
+            };
+
+            var payload = System.Text.Json.JsonSerializer.Serialize(diagnosticInfo);
+
+            return Ok(diagnosticInfo);
+        }
+
         [HttpPost("mqtt")]
         public async Task<IActionResult> Mqtt()
         {
