@@ -1,5 +1,7 @@
 # AwtrixSharp
 
+[![Docker](https://github.com/neutmute/awtrix-sharp/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/neutmute/awtrix-sharp/actions/workflows/docker-publish.yml)
+
 ### Env Vars
 
 | Variable                       | Example Value        | Description                |
