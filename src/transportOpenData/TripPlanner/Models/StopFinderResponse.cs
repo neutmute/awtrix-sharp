@@ -9,6 +9,6 @@ namespace TransportOpenData.TripPlanner.Models
     public class StopFinderResponse
     {
         [JsonPropertyName("locations")]
-        public List<StopLocation>? Locations { get; set; }
+        public List<StopFinderLocation>? Locations { get; set; }
     }
 }

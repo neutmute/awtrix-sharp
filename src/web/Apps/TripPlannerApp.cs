@@ -6,6 +6,7 @@ using AwtrixSharpWeb.Domain;
 using AwtrixSharpWeb.Services;
 using Microsoft.Extensions.Logging;
 using TransportOpenData.TripPlanner;
+using TransportOpenData.TripPlanner.Models;
 
 namespace AwtrixSharpWeb.Apps
 {
