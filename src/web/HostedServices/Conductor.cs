@@ -13,7 +13,7 @@ namespace AwtrixSharpWeb.HostedServices
         private readonly MqttPublisher _mqttConnector;
         IOptions<AwtrixConfig> _awtrixConfig;
 
-        List<SlackApp> _apps;
+        List<SlackStatusApp> _apps;
         public Conductor(ILogger<Conductor> logger, IOptions<AwtrixConfig> awtrixConfig, MqttPublisher mqttConnector, HttpPublisher httpPublisher, SlackConnector slackConnector)
         {
             _logger = logger;
@@ -25,8 +25,8 @@ namespace AwtrixSharpWeb.HostedServices
         public Task StartAsync(CancellationToken cancellationToken)
         {
             var awtrixService = new AwtrixService(_httpPublisher, _mqttConnector);
-            var app = new SlackApp(_awtrixConfig.Value.Devices[0], _slackConnector, awtrixService);
-            _apps = new List<SlackApp> { app };
+            var app = new SlackStatusApp(_awtrixConfig.Value.Devices[0], _slackConnector, awtrixService);
+            _apps = new List<SlackStatusApp> { app };
 
             app.Initialize();
 
