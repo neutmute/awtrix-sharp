@@ -76,7 +76,7 @@
       "arrayBaseType": "System.Collections.ObjectModel.Collection",
       "dictionaryBaseType": "System.Collections.Generic.Dictionary",
       "classStyle": "Poco",
-      "jsonLibrary": "NewtonsoftJson",
+      "jsonLibrary": "SystemTextJson",
       "jsonPolymorphicSerializationStyle": "NJsonSchema",
       "generateDefaultValues": true,
       "generateDataAnnotations": true,
@@ -96,7 +96,7 @@
       "templateDirectory": null,
       "serviceHost": null,
       "serviceSchemes": null,
-      "output": "D:/Downloads/TripP2",
+      "output": "TripPlannerClient.nswag.cs",
       "newLineBehavior": "Auto"
     }
   }
