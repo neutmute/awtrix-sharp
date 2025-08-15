@@ -4,6 +4,8 @@ using AwtrixSharpWeb.HostedServices;
 using AwtrixSharpWeb.Services;
 using Microsoft.Extensions.Logging;
 using Microsoft.OpenApi.Models;
+using TransportOpenData;
+using TransportOpenData.TripPlanner;
 
 namespace AwtrixSharpWeb
 {
@@ -33,6 +35,12 @@ namespace AwtrixSharpWeb
 
             services.Configure<AwtrixConfig>(
                 builder.Configuration.GetSection("Awtrix"));
+                
+            // Configure Trip Planner settings
+            services.Configure<TransportOpenDataConfig>(config => {
+                config.ApiKey = Environment.GetEnvironmentVariable("TRANSPORTOPENDATA__APIKEY") ?? "";
+                config.BaseUrl = builder.Configuration.GetSection("TransportOpenData:BaseUrl").Value ?? "https://api.transport.nsw.gov.au/v1/tp";
+            });
 
             services.AddControllers();
 
@@ -42,6 +50,10 @@ namespace AwtrixSharpWeb
             services.AddSingleton<HttpPublisher>();
             services.AddSingleton<MqttPublisher>();
             services.AddSingleton<Conductor>();
+            
+            // Register the Trip Planner client
+            services.AddHttpClient();
+            services.AddSingleton<TripPlannerClient>();
 
             services.AddHostedService(sp => sp.GetService<MqttConnector>());
             services.AddHostedService(sp => sp.GetService<SlackConnector>());

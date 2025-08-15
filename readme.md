@@ -12,6 +12,8 @@
 | `AWTRIXSHARP_SLACK__USERID`    | `U123`             | Slack userId - user to monitor for status changes           |
 | `AWTRIXSHARP_SLACK__APPTOKEN`    | `xapp-222`             | Slack app token            |
 | `AWTRIXSHARP_SLACK__BOTTOKEN`  | `xoxb-`             | Slack bot token - reserved for future use           |
+| `TRANSPORTOPENDATA__APIKEY` | `your-api-key`     | NSW Transport Trip Planner API key |
+
 
 ### Powershell Script
 
@@ -53,6 +55,7 @@ services:
       AWTRIXSHARP_MQTT__PASSWORD: "xxxxxxxxxxxxxxx"
       AWTRIXSHARP_SLACK__APPTOKEN: "xapp-1-xxxxx"
       AWTRIXSHARP_SLACK__USERID: "Uxxxxxx"
+      TRANSPORTOPENDATA__APIKEY: "your-api-key-here"
 ```
 
 ## Development
@@ -66,10 +69,12 @@ $mqttPassword = ""
 $slackBotToken = ""
 $slackUserId = ""
 $slackAppToken = ""
-[System.Environment]::SetEnvironmentVariable('AWTRIXSHARP_MQTT__HOST', $mqttHostname, [System.EnvironmentVariableTarget]::Machine)
-[System.Environment]::SetEnvironmentVariable('AWTRIXSHARP_MQTT__USERNAME', $mqttUsername, [System.EnvironmentVariableTarget]::Machine)
-[System.Environment]::SetEnvironmentVariable('AWTRIXSHARP_MQTT__PASSWORD', $mqttPassword, [System.EnvironmentVariableTarget]::Machine)
-[System.Environment]::SetEnvironmentVariable('AWTRIXSHARP_SLACK__BOTTOKEN', $slackBotToken, [System.EnvironmentVariableTarget]::Machine)
-[System.Environment]::SetEnvironmentVariable('AWTRIXSHARP_SLACK__USERID', $slackUserId, [System.EnvironmentVariableTarget]::Machine)
-[System.Environment]::SetEnvironmentVariable('AWTRIXSHARP_SLACK__APPTOKEN', $slackAppToken, [System.EnvironmentVariableTarget]::Machine)
+$tripPlannerApiKey = ""
+[System.Environment]::SetEnvironmentVariable('AWTRIXSHARP_MQTT__HOST'       , $mqttHostname     , [System.EnvironmentVariableTarget]::Machine)
+[System.Environment]::SetEnvironmentVariable('AWTRIXSHARP_MQTT__USERNAME'   , $mqttUsername     , [System.EnvironmentVariableTarget]::Machine)
+[System.Environment]::SetEnvironmentVariable('AWTRIXSHARP_MQTT__PASSWORD'   , $mqttPassword     , [System.EnvironmentVariableTarget]::Machine)
+[System.Environment]::SetEnvironmentVariable('AWTRIXSHARP_SLACK__BOTTOKEN'  , $slackBotToken    , [System.EnvironmentVariableTarget]::Machine)
+[System.Environment]::SetEnvironmentVariable('AWTRIXSHARP_SLACK__USERID'    , $slackUserId      , [System.EnvironmentVariableTarget]::Machine)
+[System.Environment]::SetEnvironmentVariable('AWTRIXSHARP_SLACK__APPTOKEN'  , $slackAppToken    , [System.EnvironmentVariableTarget]::Machine)
+[System.Environment]::SetEnvironmentVariable('TRANSPORTOPENDATA__APIKEY'    , $tripPlannerApiKey, [System.EnvironmentVariableTarget]::Machine)
 ```
