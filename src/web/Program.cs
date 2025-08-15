@@ -53,7 +53,7 @@ namespace AwtrixSharpWeb
             
             // Register the Trip Planner client
             services.AddHttpClient();
-            services.AddSingleton<TripPlannerClient>();
+            services.AddSingleton<StopfinderClient>();
 
             services.AddHostedService(sp => sp.GetService<MqttConnector>());
             services.AddHostedService(sp => sp.GetService<SlackConnector>());
