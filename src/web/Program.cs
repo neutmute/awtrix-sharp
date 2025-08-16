@@ -64,7 +64,6 @@ namespace AwtrixSharpWeb
                 client.DefaultRequestHeaders.Add("Authorization", $"apikey {config.Value.ApiKey}");
             });
             
-            // Register the Trip Client
             services.AddHttpClient<TripClient>((serviceProvider, client) => {
                 var config = serviceProvider.GetRequiredService<IOptions<TransportOpenDataConfig>>();
                 

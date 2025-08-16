@@ -1,14 +1,15 @@
 ﻿using AwtrixSharpWeb.Controllers;
+using AwtrixSharpWeb.Interfaces;
 using TransportOpenData.TripPlanner;
 
 namespace AwtrixSharpWeb.Services
 {
-    public class TripPlannerService
+    public class TripPlannerService : ITripPlannerService
     {
         private readonly StopfinderClient _stopFinderClient;
         private readonly TripClient _tripClient;
-        private readonly ILogger<TripPlannerService> _logger; 
-        
+        private readonly ILogger<TripPlannerService> _logger;
+
         public TripPlannerService(
             StopfinderClient stopFinderClient,
             TripClient tripClient,
@@ -17,7 +18,6 @@ namespace AwtrixSharpWeb.Services
             _stopFinderClient = stopFinderClient;
             _tripClient = tripClient;
             _logger = logger;
-
         }
 
         public async Task<StopFinderResponse> FindStops(string query)
@@ -41,7 +41,7 @@ namespace AwtrixSharpWeb.Services
                 name_origin: originStopId,
                 type_destination: Type_destination.Any,
                 name_destination: destinationStopId,
-                calcNumberOfTrips: 5, 
+                calcNumberOfTrips: 5,
                 wheelchair: null,
                 excludedMeans: null,
                 exclMOT_1: null,
@@ -70,7 +70,7 @@ namespace AwtrixSharpWeb.Services
             var trips = await GetTrip(originStopId, destinationStopId);
 
             var output = new List<DateTimeOffset>();
-            foreach(var journey in trips.Journeys)
+            foreach (var journey in trips.Journeys)
             {
                 var departString = journey.Legs.First().Origin.DepartureTimeEstimated;
                 var utcTime = DateTimeOffset.Parse(departString);
@@ -79,6 +79,6 @@ namespace AwtrixSharpWeb.Services
             }
 
             return output;
-        }   
+        }
     }
 }

@@ -1,5 +1,4 @@
-﻿
-namespace AwtrixSharpWeb.Apps
+﻿namespace AwtrixSharpWeb.Interfaces
 {
     public interface IClock
     {
