@@ -51,7 +51,9 @@ namespace AwtrixSharpWeb
             services.AddSingleton<HttpPublisher>();
             services.AddSingleton<MqttPublisher>();
             services.AddSingleton<Conductor>();
-                        
+            services.AddSingleton<TimerService>();
+            
+
             // Register the Trip Planner clients with HTTP client factory
             services.AddHttpClient<StopfinderClient>((serviceProvider, client) => {
                 var config = serviceProvider.GetRequiredService<IOptions<TransportOpenDataConfig>>();
@@ -71,6 +73,7 @@ namespace AwtrixSharpWeb
             services.AddHostedService(sp => sp.GetService<MqttConnector>());
             services.AddHostedService(sp => sp.GetService<SlackConnector>());
             services.AddHostedService(sp => sp.GetService<Conductor>());
+            services.AddHostedService(sp => sp.GetService<TimerService>());
 
             services.AddEndpointsApiExplorer();
             services.AddSwaggerGen();
