@@ -3,33 +3,14 @@ using Microsoft.Extensions.Logging;
 
 namespace AwtrixSharpWeb.HostedServices
 {
-    /// <summary>
-    /// Event args for second change events
-    /// </summary>
-    public class SecondChangedEventArgs : EventArgs
-    {
-        /// <summary>
-        /// Current DateTime when the second changed
-        /// </summary>
-        public DateTime CurrentTime { get; }
-
-        public SecondChangedEventArgs(DateTime currentTime)
-        {
-            CurrentTime = currentTime;
-        }
-    }
-
-    /// <summary>
-    /// Event args for minute change events
-    /// </summary>
-    public class MinuteChangedEventArgs : EventArgs
+    public class ClockTickEventArgs : EventArgs
     {
         /// <summary>
         /// Current DateTime when the minute changed
         /// </summary>
         public DateTime CurrentTime { get; }
 
-        public MinuteChangedEventArgs(DateTime currentTime)
+        public ClockTickEventArgs(DateTime currentTime)
         {
             CurrentTime = currentTime;
         }
@@ -46,12 +27,12 @@ namespace AwtrixSharpWeb.HostedServices
         /// <summary>
         /// Event that fires every second
         /// </summary>
-        public event EventHandler<SecondChangedEventArgs>? SecondChanged;
+        public event EventHandler<ClockTickEventArgs>? SecondChanged;
 
         /// <summary>
         /// Event that fires every minute
         /// </summary>
-        public event EventHandler<MinuteChangedEventArgs>? MinuteChanged;
+        public event EventHandler<ClockTickEventArgs>? MinuteChanged;
 
         public TimerService(ILogger<TimerService> logger)
         {
@@ -128,12 +109,12 @@ namespace AwtrixSharpWeb.HostedServices
 
         private void OnSecondChanged(DateTime currentTime)
         {
-            SecondChanged?.Invoke(this, new SecondChangedEventArgs(currentTime));
+            SecondChanged?.Invoke(this, new ClockTickEventArgs(currentTime));
         }
 
         private void OnMinuteChanged(DateTime currentTime)
         {
-            MinuteChanged?.Invoke(this, new MinuteChangedEventArgs(currentTime));
+            MinuteChanged?.Invoke(this, new ClockTickEventArgs(currentTime));
         }
 
         public async Task StopAsync(CancellationToken cancellationToken)
