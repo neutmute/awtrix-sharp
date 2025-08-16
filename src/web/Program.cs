@@ -3,6 +3,7 @@ using AwtrixSharpWeb.Domain;
 using AwtrixSharpWeb.HostedServices;
 using AwtrixSharpWeb.Services;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Microsoft.OpenApi.Models;
 using TransportOpenData;
 using TransportOpenData.TripPlanner;
@@ -50,10 +51,15 @@ namespace AwtrixSharpWeb
             services.AddSingleton<HttpPublisher>();
             services.AddSingleton<MqttPublisher>();
             services.AddSingleton<Conductor>();
-            
-            // Register the Trip Planner client
-            services.AddHttpClient();
-            services.AddSingleton<StopfinderClient>();
+                        
+            // Register the Trip Planner client with HTTP client factory
+            services.AddHttpClient<StopfinderClient>((serviceProvider, client) => {
+                var config = serviceProvider.GetRequiredService<IOptions<TransportOpenDataConfig>>();
+                var headerValue = serviceProvider.GetRequiredService<string>();
+                
+                // Set the authorization header
+                client.DefaultRequestHeaders.Add("Authorization", $"apikey {config.Value.ApiKey}");
+            });
 
             services.AddHostedService(sp => sp.GetService<MqttConnector>());
             services.AddHostedService(sp => sp.GetService<SlackConnector>());
@@ -64,7 +70,7 @@ namespace AwtrixSharpWeb
 
             var app = builder.Build();
 
-           // if (app.Environment.IsDevelopment())
+           // if (app.Environment.IsDevelopment()) always show swagger
             {
                 app.UseDeveloperExceptionPage();
 
