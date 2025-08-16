@@ -22,6 +22,7 @@
 
 namespace TransportOpenData.TripPlanner
 {
+    using System.Text.Json.Serialization;
     using System = global::System;
 
     [System.CodeDom.Compiler.GeneratedCode("NSwag", "14.5.0.0 (NJsonSchema v11.4.0.0 (Newtonsoft.Json v13.0.0.0))")]
@@ -3004,8 +3005,8 @@ namespace TransportOpenData.TripPlanner
         /// <summary>
         /// Includes system messages that may be relevant to this particular request.
         /// </summary>
-        [System.Text.Json.Serialization.JsonPropertyName("systemMessages")]
-        public SystemMessages SystemMessages { get; set; }
+        //[System.Text.Json.Serialization.JsonPropertyName("systemMessages")]
+        //public SystemMessages SystemMessages { get; set; }
 
         /// <summary>
         /// The version of the API that provided the response. Note that if this value is different to above, then the returned data may be
@@ -3161,6 +3162,7 @@ namespace TransportOpenData.TripPlanner
         /// Contains additional information about this journey leg, such as wheelchair accessibility information.
         /// <br/>
         /// </summary>
+        [JsonIgnore]
         [System.Text.Json.Serialization.JsonPropertyName("properties")]
         public Properties3 Properties { get; set; }
 
@@ -5137,6 +5139,7 @@ namespace TransportOpenData.TripPlanner
         /// <summary>
         /// This value is not currently in use.
         /// </summary>
+        [JsonIgnore]
         [System.Text.Json.Serialization.JsonPropertyName("vehicleAccess")]
         public System.Collections.Generic.ICollection<string> VehicleAccess { get; set; }
 
