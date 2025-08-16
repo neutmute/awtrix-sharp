@@ -38,8 +38,8 @@ namespace AwtrixSharpWeb.HostedServices
         public Task StartAsync(CancellationToken cancellationToken)
         {
             var awtrixService = new AwtrixService(_httpPublisher, _mqttConnector);
-
-            foreach(var device in _awtrixConfig.Devices)
+            var clock = new Clock();
+            foreach (var device in _awtrixConfig.Devices)
             {
                 foreach(var appConfig in device.Apps)
                 {
@@ -48,7 +48,7 @@ namespace AwtrixSharpWeb.HostedServices
                     {
                         case "TripTimerApp":
                             var tripTimerConfig = appConfig.As<TripTimerAppConfig>();
-                            app = new TripTimerApp(device, awtrixService, _timerService, tripTimerConfig, _tripPlanner);
+                            app = new TripTimerApp(_logger, clock, device, awtrixService, _timerService, tripTimerConfig, _tripPlanner);
                             break;
                     }
                     if (app == null)

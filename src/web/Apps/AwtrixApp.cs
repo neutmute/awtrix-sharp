@@ -1,4 +1,5 @@
 ﻿using AwtrixSharpWeb.Domain;
+using AwtrixSharpWeb.HostedServices;
 using AwtrixSharpWeb.Services;
 
 namespace AwtrixSharpWeb.Apps
@@ -8,10 +9,13 @@ namespace AwtrixSharpWeb.Apps
         protected AwtrixAddress AwtrixAddress;
         protected AwtrixService AwtrixService;
 
-        public AwtrixApp(AwtrixAddress awtrixAddress, AwtrixService awtrixService)
+        protected ILogger Logger { get; private set; }
+
+        public AwtrixApp(ILogger logger, AwtrixAddress awtrixAddress, AwtrixService awtrixService)
         {
             AwtrixAddress = awtrixAddress;
             AwtrixService = awtrixService;
+            Logger = logger;
         }
 
         public abstract void Initialize();

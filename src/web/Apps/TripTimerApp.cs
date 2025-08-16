@@ -5,20 +5,32 @@ using NCrontab;
 
 namespace AwtrixSharpWeb.Apps
 {
+    public class Clock : IClock
+    {
+        public DateTimeOffset Now { get => DateTimeOffset.Now; }
+    }
+
     public abstract class ScheduledApp<TConfig> : AwtrixApp, IDisposable where TConfig : ScheduledAppConfig
     {
         protected CancellationTokenSource _cts;
-        private bool _isScheduled = false;
+        /// <summary>
+        /// waiting to wakeup
+        /// </summary>
+        protected bool IsScheduled { get; private set; }
         protected CrontabSchedule CrontabSchedule { get; private set; }
         protected readonly AwtrixAddress AwtrixAddress;
         protected readonly AwtrixService AwtrixService;
         protected readonly TConfig Config;
+        protected IClock Clock { get; }
 
-        public ScheduledApp(AwtrixAddress awtrixAddress, AwtrixService awtrixService, TConfig config) : base(awtrixAddress, awtrixService) 
+
+
+        public ScheduledApp(ILogger logger, IClock clock, AwtrixAddress awtrixAddress, AwtrixService awtrixService, TConfig config) : base(logger, awtrixAddress, awtrixService) 
         {
             AwtrixAddress = awtrixAddress;
             AwtrixService = awtrixService;
             Config = config;
+            Clock = clock;
         }
         public override void Initialize()
         {
@@ -38,19 +50,36 @@ namespace AwtrixSharpWeb.Apps
         {
             if (disposing)
             {
-                _cts?.Cancel();
-                _cts?.Dispose();
+
+                // Clear any displayed messages
+                _ = AwtrixService.Dismiss(AwtrixAddress);
+
+                Dispose(_cts);
             }
+        }
+
+        private bool Dispose(CancellationTokenSource cts)
+        {
+            if (cts == null)
+            {
+                return false; // Nothing to dispose
+            }
+            cts.Cancel();
+            cts.Dispose();
+
+
+            return true;
         }
 
         private void ScheduleNextWakeUp()
         {
-            if (_isScheduled)
+            if (IsScheduled)
             {
                 return; // Already scheduled
             }
 
-            _isScheduled = true;
+            IsScheduled = true;
+            Dispose(_cts);
             _cts = new CancellationTokenSource();
 
             // Start a background task to wait for the next scheduled time
@@ -75,24 +104,27 @@ namespace AwtrixSharpWeb.Apps
         private async Task WaitForCronSchedule(CancellationToken cancellationToken)
         {
             // Wait until the next scheduled time
-            var now = DateTime.Now;
-            var next = CrontabSchedule.GetNextOccurrence(now);
+            var now = Clock.Now;
+            var next = CrontabSchedule.GetNextOccurrence(now.DateTime);
             var delay = next - now;
 
-            Console.WriteLine($"Next wake up scheduled for {next} (in {delay})");
+            Logger.LogInformation($"Next wake up scheduled for {next} (in {delay})");
 
             await Task.Delay(delay, cancellationToken);
 
             // Only invoke WakeUp if we weren't cancelled
             if (!cancellationToken.IsCancellationRequested)
             {
+                // Set up cancellation for when ActiveTime expires
+                _cts.CancelAfter(Config.ActiveTime);
                 await WakeUp();
             }
         }
 
         private async Task WakeUp()
         {
-            _isScheduled = false; // Reset the scheduled flag
+            IsScheduled = false; // Reset the scheduled flag
+            var _activationStartTime = Clock.Now;
 
             try
             {
@@ -100,12 +132,14 @@ namespace AwtrixSharpWeb.Apps
             }
             catch (Exception ex)
             {
-                // Log exception if needed
                 Console.WriteLine($"Error in WakeUp: {ex.Message}");
             }
             finally
             {
-                // Schedule the next run
+                var activeTime = Clock.Now - _activationStartTime;
+                Logger.LogInformation($"{Config.Name} was active for {activeTime.TotalSeconds:F1} seconds");
+
+                await AwtrixService.Dismiss(AwtrixAddress);
                 ScheduleNextWakeUp();
             }
         }
@@ -115,43 +149,83 @@ namespace AwtrixSharpWeb.Apps
     public class TripTimerApp : ScheduledApp<TripTimerAppConfig>
     {
         private readonly TripPlannerService _tripPlanner;
-        private readonly TripTimerAppConfig _config;
         private readonly TimerService _timerService;
 
-        CancellationTokenSource _cts;
-
         public TripTimerApp(
-            AwtrixAddress awtrixAddress
+            ILogger logger
+            , IClock clock
+            , AwtrixAddress awtrixAddress
             , AwtrixService awtrixService
             , TimerService timerService
             , TripTimerAppConfig config
-            , TripPlannerService tripPlanner) : base(awtrixAddress, awtrixService, config)
+            , TripPlannerService tripPlanner) : base(logger, clock, awtrixAddress, awtrixService, config)
         {
             _tripPlanner = tripPlanner;
-            _config = config;
             _timerService = timerService;
         }
 
         public override void Initialize()
         {
             base.Initialize();
-            _timerService.SecondChanged += ClockTickSecond;
-            _timerService.MinuteChanged += ClockTickMinute; 
         }
 
         private void ClockTickMinute(object? sender, ClockTickEventArgs e)
         {
-
+          
         }
 
         private void ClockTickSecond(object? sender, ClockTickEventArgs e)
         {
+            // We could update a countdown display here if needed
         }
 
-        protected override Task ActivateScheduledWork(CancellationTokenSource cts)
+        protected override async Task ActivateScheduledWork(CancellationTokenSource cts)
         {
-            _cts = cts;
-            return Task.CompletedTask;
+            _timerService.SecondChanged += ClockTickSecond;
+            _timerService.MinuteChanged += ClockTickMinute;
+
+            try
+            {
+                await WaitForCancellation(cts.Token);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError($"Error in ActivateScheduledWork: {ex.Message}");
+            }
+            finally
+            {
+
+                _timerService.SecondChanged -= ClockTickSecond;
+                _timerService.MinuteChanged -= ClockTickMinute;
+            }
+        }
+
+        public static Task WaitForCancellation(CancellationToken token)
+        {
+            var tcs = new TaskCompletionSource();
+            token.Register(() => tcs.TrySetResult());
+            return tcs.Task;
+        }
+
+
+        // Clean up resources
+        new protected void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                // Unsubscribe from events
+                _timerService.SecondChanged -= ClockTickSecond;
+                _timerService.MinuteChanged -= ClockTickMinute;
+            }
+            
+            base.Dispose(disposing);
+        }
+
+        // Override the non-protected Dispose method to call our new protected Dispose method
+        public new void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
         }
     }
 }

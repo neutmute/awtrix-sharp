@@ -9,7 +9,7 @@ namespace AwtrixSharpWeb.Apps
     {
         SlackConnector _slackConnector;
 
-        public SlackStatusApp(AwtrixAddress awtrixAddress, AwtrixService awtrixService, SlackConnector slackConnector) : base(awtrixAddress, awtrixService)
+        public SlackStatusApp(ILogger logger, AwtrixAddress awtrixAddress, AwtrixService awtrixService, SlackConnector slackConnector) : base(logger, awtrixAddress, awtrixService)
         {
             _slackConnector = slackConnector;
         }
