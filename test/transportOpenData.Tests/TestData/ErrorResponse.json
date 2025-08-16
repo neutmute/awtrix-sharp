@@ -1,0 +1,11 @@
+{
+  "error": {
+    "message": "The application calling the API has not been authenticated.",
+    "versions": {
+      "controller": "10.5.17.3",
+      "interfaceMin": "10.1.0.0",
+      "interfaceMax": "10.7.0.0"
+    }
+  },
+  "version": "10.5.17.3"
+}

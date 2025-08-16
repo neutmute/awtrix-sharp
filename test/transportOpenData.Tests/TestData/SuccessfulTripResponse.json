@@ -1,0 +1,134 @@
+{
+  "version": "10.5.17.3",
+  "journeys": [
+    {
+      "legs": [
+        {
+          "origin": {
+            "type": "stop",
+            "id": "10101100",
+            "name": "Central Station",
+            "disassembledName": "Central",
+            "coord": [
+              151.20674,
+              -33.88289
+            ],
+            "properties": {
+              "WheelchairAccess": "true"
+            }
+          },
+          "destination": {
+            "type": "stop",
+            "id": "10102110",
+            "name": "Circular Quay",
+            "disassembledName": "Circular Quay",
+            "coord": [
+              151.21097,
+              -33.86127
+            ],
+            "properties": {
+              "WheelchairAccess": "true"
+            }
+          },
+          "transportation": {
+            "id": "T1",
+            "name": "T1 North Shore & Western Line",
+            "disassembledName": "T1",
+            "product": {
+              "class": 1,
+              "name": "Train",
+              "iconId": 1
+            },
+            "operator": {
+              "id": "sydneytrains",
+              "name": "Sydney Trains"
+            },
+            "destination": {
+              "name": "Berowra"
+            },
+            "properties": {
+              "tripCode": 572
+            }
+          },
+          "stopSequence": [
+            {
+              "type": "stop",
+              "id": "10101100",
+              "name": "Central Station",
+              "disassembledName": "Central",
+              "coord": [
+                151.20674,
+                -33.88289
+              ],
+              "departureTimePlanned": "2023-06-01T12:00:00Z",
+              "departureTimeEstimated": "2023-06-01T12:01:00Z",
+              "properties": {
+                "WheelchairAccess": "true"
+              }
+            },
+            {
+              "type": "stop",
+              "id": "10101115",
+              "name": "Town Hall Station",
+              "disassembledName": "Town Hall",
+              "coord": [
+                151.20663,
+                -33.87278
+              ],
+              "arrivalTimePlanned": "2023-06-01T12:03:00Z",
+              "arrivalTimeEstimated": "2023-06-01T12:04:00Z",
+              "departureTimePlanned": "2023-06-01T12:04:00Z",
+              "departureTimeEstimated": "2023-06-01T12:05:00Z",
+              "properties": {
+                "WheelchairAccess": "true"
+              }
+            },
+            {
+              "type": "stop",
+              "id": "10101140",
+              "name": "Wynyard Station",
+              "disassembledName": "Wynyard",
+              "coord": [
+                151.20583,
+                -33.86535
+              ],
+              "arrivalTimePlanned": "2023-06-01T12:06:00Z",
+              "arrivalTimeEstimated": "2023-06-01T12:07:00Z",
+              "departureTimePlanned": "2023-06-01T12:07:00Z",
+              "departureTimeEstimated": "2023-06-01T12:08:00Z",
+              "properties": {
+                "WheelchairAccess": "true"
+              }
+            },
+            {
+              "type": "stop",
+              "id": "10102110",
+              "name": "Circular Quay",
+              "disassembledName": "Circular Quay",
+              "coord": [
+                151.21097,
+                -33.86127
+              ],
+              "arrivalTimePlanned": "2023-06-01T12:10:00Z",
+              "arrivalTimeEstimated": "2023-06-01T12:11:00Z",
+              "properties": {
+                "WheelchairAccess": "true"
+              }
+            }
+          ],
+          "coords": [
+            [151.20674, -33.88289],
+            [151.20663, -33.87278],
+            [151.20583, -33.86535],
+            [151.21097, -33.86127]
+          ],
+          "duration": 600,
+          "distance": 3000,
+          "isRealtimeControlled": true
+        }
+      ],
+      "rating": 5,
+      "isAdditional": false
+    }
+  ]
+}

@@ -1,0 +1,399 @@
+{
+  "version": "10.5.17.3",
+  "journeys": [
+    {
+      "legs": [
+        {
+          "origin": {
+            "type": "stop",
+            "id": "10101100",
+            "name": "Central Station",
+            "disassembledName": "Central",
+            "coord": [
+              151.20674,
+              -33.88289
+            ],
+            "parent": {
+              "id": "parent_id",
+              "name": "Central Precinct",
+              "type": "stop"
+            },
+            "properties": {
+              "WheelchairAccess": "true"
+            }
+          },
+          "destination": {
+            "type": "stop",
+            "id": "10102110",
+            "name": "Circular Quay",
+            "disassembledName": "Circular Quay",
+            "coord": [
+              151.21097,
+              -33.86127
+            ],
+            "properties": {
+              "WheelchairAccess": "true"
+            }
+          },
+          "transportation": {
+            "id": "T1",
+            "name": "T1 North Shore & Western Line",
+            "disassembledName": "T1",
+            "description": "City Circle services via Town Hall",
+            "product": {
+              "class": 1,
+              "name": "Train",
+              "iconId": 1
+            },
+            "operator": {
+              "id": "sydneytrains",
+              "name": "Sydney Trains"
+            },
+            "destination": {
+              "name": "Berowra",
+              "id": "dest_id"
+            },
+            "properties": {
+              "tripCode": 572,
+              "isTTB": true
+            },
+            "number": "T1"
+          },
+          "stopSequence": [
+            {
+              "type": "platform",
+              "id": "10101100_platform_16",
+              "name": "Central Station Platform 16",
+              "disassembledName": "Central Pl 16",
+              "coord": [
+                151.20674,
+                -33.88289
+              ],
+              "parent": {
+                "id": "10101100",
+                "name": "Central Station",
+                "type": "stop"
+              },
+              "departureTimePlanned": "2023-06-01T12:00:00Z",
+              "departureTimeEstimated": "2023-06-01T12:01:00Z",
+              "properties": {
+                "WheelchairAccess": "true",
+                "downloads": [
+                  {
+                    "type": "RM",
+                    "url": "http://example.com/route_map.pdf"
+                  }
+                ]
+              }
+            },
+            {
+              "type": "platform",
+              "id": "10101115_platform_6",
+              "name": "Town Hall Station Platform 6",
+              "disassembledName": "Town Hall Pl 6",
+              "coord": [
+                151.20663,
+                -33.87278
+              ],
+              "parent": {
+                "id": "10101115",
+                "name": "Town Hall Station",
+                "type": "stop"
+              },
+              "arrivalTimePlanned": "2023-06-01T12:03:00Z",
+              "arrivalTimeEstimated": "2023-06-01T12:04:00Z",
+              "departureTimePlanned": "2023-06-01T12:04:00Z",
+              "departureTimeEstimated": "2023-06-01T12:05:00Z",
+              "properties": {
+                "WheelchairAccess": "true"
+              }
+            },
+            {
+              "type": "platform",
+              "id": "10101140_platform_3",
+              "name": "Wynyard Station Platform 3",
+              "disassembledName": "Wynyard Pl 3",
+              "coord": [
+                151.20583,
+                -33.86535
+              ],
+              "parent": {
+                "id": "10101140",
+                "name": "Wynyard Station",
+                "type": "stop"
+              },
+              "arrivalTimePlanned": "2023-06-01T12:06:00Z",
+              "arrivalTimeEstimated": "2023-06-01T12:07:00Z",
+              "departureTimePlanned": "2023-06-01T12:07:00Z",
+              "departureTimeEstimated": "2023-06-01T12:08:00Z",
+              "properties": {
+                "WheelchairAccess": "true"
+              }
+            },
+            {
+              "type": "platform",
+              "id": "10102110_platform_2",
+              "name": "Circular Quay Platform 2",
+              "disassembledName": "Circular Quay Pl 2",
+              "coord": [
+                151.21097,
+                -33.86127
+              ],
+              "parent": {
+                "id": "10102110",
+                "name": "Circular Quay",
+                "type": "stop"
+              },
+              "arrivalTimePlanned": "2023-06-01T12:10:00Z",
+              "arrivalTimeEstimated": "2023-06-01T12:11:00Z",
+              "properties": {
+                "WheelchairAccess": "true"
+              }
+            }
+          ],
+          "coords": [
+            [151.20674, -33.88289],
+            [151.20668, -33.88000],
+            [151.20663, -33.87278],
+            [151.20600, -33.87000],
+            [151.20583, -33.86535],
+            [151.20800, -33.86300],
+            [151.21097, -33.86127]
+          ],
+          "duration": 600,
+          "distance": 3000,
+          "isRealtimeControlled": true,
+          "hints": [
+            {
+              "infoText": "Please mind the gap when boarding and alighting."
+            },
+            {
+              "infoText": "This train has accessible facilities."
+            }
+          ],
+          "infos": [
+            {
+              "id": "alert_123",
+              "content": "Trackwork between Central and Circular Quay may cause delays.",
+              "priority": "normal",
+              "subtitle": "Trackwork Alert",
+              "version": 1,
+              "url": "http://example.com/alerts/123",
+              "urlText": "More Information"
+            }
+          ],
+          "pathDescriptions": [
+            {
+              "coord": [151.20674, -33.88289],
+              "name": "Exit Central Station main concourse",
+              "turnDirection": "STRAIGHT",
+              "manoeuvre": "LEAVE",
+              "distance": 100,
+              "duration": 60,
+              "fromCoordsIndex": 0,
+              "toCoordsIndex": 1
+            }
+          ],
+          "interchange": {
+            "coords": [
+              [151.21097, -33.86127],
+              [151.21150, -33.86100]
+            ],
+            "desc": "Walk from platform 2 to ferry wharf",
+            "type": 99
+          },
+          "footPathInfo": [
+            {
+              "duration": 180,
+              "position": "AFTER",
+              "footPathElem": [
+                {
+                  "description": "Walk from platform to station exit",
+                  "level": "LEVEL",
+                  "levelFrom": 0,
+                  "levelTo": 0,
+                  "type": "LEVEL",
+                  "origin": {
+                    "area": 1,
+                    "georef": "platform_exit",
+                    "platform": 2,
+                    "location": {
+                      "coord": [151.21097, -33.86127],
+                      "id": "10102110_platform_2",
+                      "type": "platform"
+                    }
+                  },
+                  "destination": {
+                    "area": 1,
+                    "georef": "station_exit",
+                    "platform": 0,
+                    "location": {
+                      "coord": [151.21150, -33.86100],
+                      "id": "10102110_exit",
+                      "type": "poi"
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "origin": {
+            "type": "stop",
+            "id": "10102110",
+            "name": "Circular Quay",
+            "disassembledName": "Circular Quay",
+            "coord": [
+              151.21097,
+              -33.86127
+            ],
+            "properties": {
+              "WheelchairAccess": "true"
+            }
+          },
+          "destination": {
+            "type": "stop",
+            "id": "10102120",
+            "name": "Manly Wharf",
+            "disassembledName": "Manly Wharf",
+            "coord": [
+              151.28562,
+              -33.80033
+            ],
+            "properties": {
+              "WheelchairAccess": "true"
+            }
+          },
+          "transportation": {
+            "id": "F1",
+            "name": "F1 Manly Ferry",
+            "disassembledName": "F1",
+            "product": {
+              "class": 9,
+              "name": "Ferry",
+              "iconId": 10
+            },
+            "operator": {
+              "id": "sydneyferries",
+              "name": "Sydney Ferries"
+            },
+            "destination": {
+              "name": "Manly"
+            },
+            "properties": {
+              "tripCode": 123
+            }
+          },
+          "stopSequence": [
+            {
+              "type": "stop",
+              "id": "10102110",
+              "name": "Circular Quay",
+              "disassembledName": "Circular Quay",
+              "coord": [
+                151.21097,
+                -33.86127
+              ],
+              "departureTimePlanned": "2023-06-01T12:20:00Z",
+              "departureTimeEstimated": "2023-06-01T12:20:00Z",
+              "properties": {
+                "WheelchairAccess": "true"
+              }
+            },
+            {
+              "type": "stop",
+              "id": "10102120",
+              "name": "Manly Wharf",
+              "disassembledName": "Manly Wharf",
+              "coord": [
+                151.28562,
+                -33.80033
+              ],
+              "arrivalTimePlanned": "2023-06-01T12:50:00Z",
+              "arrivalTimeEstimated": "2023-06-01T12:50:00Z",
+              "properties": {
+                "WheelchairAccess": "true"
+              }
+            }
+          ],
+          "coords": [
+            [151.21097, -33.86127],
+            [151.23000, -33.84000],
+            [151.25000, -33.82000],
+            [151.28562, -33.80033]
+          ],
+          "duration": 1800,
+          "distance": 10000,
+          "isRealtimeControlled": true
+        }
+      ],
+      "rating": 5,
+      "isAdditional": false
+    },
+    {
+      "legs": [
+        {
+          "origin": {
+            "type": "stop",
+            "id": "10101100",
+            "name": "Central Station",
+            "disassembledName": "Central",
+            "coord": [
+              151.20674,
+              -33.88289
+            ],
+            "properties": {
+              "WheelchairAccess": "true"
+            }
+          },
+          "destination": {
+            "type": "poi",
+            "id": "manly_beach",
+            "name": "Manly Beach",
+            "disassembledName": "Manly Beach",
+            "coord": [
+              151.28987,
+              -33.79617
+            ]
+          },
+          "transportation": {
+            "id": "walk",
+            "name": "Walking",
+            "disassembledName": "Walk",
+            "product": {
+              "class": 100,
+              "name": "Walking",
+              "iconId": 100
+            }
+          },
+          "duration": 14400,
+          "distance": 15000,
+          "isRealtimeControlled": false,
+          "pathDescriptions": [
+            {
+              "coord": [151.20674, -33.88289],
+              "name": "Head north on Elizabeth St",
+              "turnDirection": "STRAIGHT",
+              "manoeuvre": "LEAVE",
+              "distance": 500,
+              "duration": 360,
+              "skyDirection": 0
+            },
+            {
+              "coord": [151.20700, -33.87800],
+              "name": "Turn right onto Park St",
+              "turnDirection": "RIGHT",
+              "manoeuvre": "TURN",
+              "distance": 400,
+              "duration": 300,
+              "skyDirection": 90
+            }
+          ]
+        }
+      ],
+      "rating": 3,
+      "isAdditional": true
+    }
+  ]
+}
