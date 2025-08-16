@@ -46,6 +46,8 @@ namespace AwtrixSharpWeb
             services.AddControllers();
 
             services.AddTransient<AwtrixService>();
+            services.AddTransient<TripPlannerService>();
+
             services.AddSingleton<MqttConnector>();
             services.AddSingleton<SlackConnector>();
             services.AddSingleton<HttpPublisher>();

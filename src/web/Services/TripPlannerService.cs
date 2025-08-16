@@ -73,8 +73,9 @@ namespace AwtrixSharpWeb.Services
             foreach(var journey in trips.Journeys)
             {
                 var departString = journey.Legs.First().Origin.DepartureTimeEstimated;
-                var time = DateTimeOffset.Parse(departString);
-                output.Add(time);
+                var utcTime = DateTimeOffset.Parse(departString);
+                var localTime = TimeZoneInfo.ConvertTime(utcTime, TimeZoneInfo.Local);
+                output.Add(localTime);
             }
 
             return output;

@@ -36,10 +36,11 @@ namespace AwtrixSharpWeb.HostedServices
                     switch(appConfig.Name)
                     {
                         case "TripTimerApp":
-                         //   var app = 
+                            var tripTimerConfig = appConfig.As<TripTimerAppConfig>();
+                           // var app = new TripTimerApp();
                             break;
                     }
-                    app.Initialize();
+                   // app.Initialize();
                 }
             }
 
