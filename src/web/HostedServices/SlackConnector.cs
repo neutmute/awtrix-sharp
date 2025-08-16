@@ -65,53 +65,54 @@ namespace AwtrixSharpWeb.HostedServices
 
         private async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            try
-            {
-                var appToken = Environment.GetEnvironmentVariable("AWTRIXSHARP_SLACK__APPTOKEN"); // xapp-***
+            await Task.CompletedTask;
+            //try
+            //{
+            //    var appToken = Environment.GetEnvironmentVariable("AWTRIXSHARP_SLACK__APPTOKEN"); // xapp-***
 
-                if (string.IsNullOrEmpty(appToken))
-                {
-                    _logger.LogWarning("Slack AppToken not configured. Slack integration disabled.");
-                    return;
-                }
+            //    if (string.IsNullOrEmpty(appToken))
+            //    {
+            //        _logger.LogWarning("Slack AppToken not configured. Slack integration disabled.");
+            //        return;
+            //    }
 
-                _logger.LogInformation("Connecting to Slack");
+            //    _logger.LogInformation("Connecting to Slack");
 
-                while (!stoppingToken.IsCancellationRequested)
-                {
-                    try
-                    {
-                        await ConnectAndProcessEventsAsync(appToken, stoppingToken);
-                    }
-                    catch (WebSocketException wsEx)
-                    {
-                        _logger.LogError(wsEx, "WebSocket error, reconnecting in 5 seconds...");
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogError(ex, "Error in Slack connection, reconnecting in 5 seconds...");
-                    }
+            //    while (!stoppingToken.IsCancellationRequested)
+            //    {
+            //        try
+            //        {
+            //            await ConnectAndProcessEventsAsync(appToken, stoppingToken);
+            //        }
+            //        catch (WebSocketException wsEx)
+            //        {
+            //            _logger.LogError(wsEx, "WebSocket error, reconnecting in 5 seconds...");
+            //        }
+            //        catch (Exception ex)
+            //        {
+            //            _logger.LogError(ex, "Error in Slack connection, reconnecting in 5 seconds...");
+            //        }
 
-                    // Wait before reconnecting to avoid hammering the Slack API
-                    if (!stoppingToken.IsCancellationRequested)
-                    {
-                        await Task.Delay(5000, stoppingToken);
-                    }
-                }
-            }
-            catch (OperationCanceledException)
-            {
-                // Normal during shutdown, just log and exit
-                _logger.LogInformation("Slack connector stopping due to cancellation");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Unhandled exception in Slack connector");
-            }
-            finally
-            {
-                _logger.LogInformation("Slack connector stopped");
-            }
+            //        // Wait before reconnecting to avoid hammering the Slack API
+            //        if (!stoppingToken.IsCancellationRequested)
+            //        {
+            //            await Task.Delay(5000, stoppingToken);
+            //        }
+            //    }
+            //}
+            //catch (OperationCanceledException)
+            //{
+            //    // Normal during shutdown, just log and exit
+            //    _logger.LogInformation("Slack connector stopping due to cancellation");
+            //}
+            //catch (Exception ex)
+            //{
+            //    _logger.LogError(ex, "Unhandled exception in Slack connector");
+            //}
+            //finally
+            //{
+            //    _logger.LogInformation("Slack connector stopped");
+            //}
         }
 
         private async Task ConnectAndProcessEventsAsync(string appToken, CancellationToken stoppingToken)

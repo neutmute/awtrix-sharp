@@ -24,9 +24,14 @@ namespace AwtrixSharpWeb
                 .AddEnvironmentVariables("AWTRIXSHARP_");
 
             // Configure logging
-            builder.Logging.ClearProviders();
-            builder.Logging.AddConsole();
-            builder.Logging.AddDebug();
+            var logging = builder.Logging;
+            logging.ClearProviders();
+            logging.AddSimpleConsole(options =>
+            {
+                options.TimestampFormat = "HH:mm:ss ";
+                options.SingleLine = true;
+            });
+            logging.AddDebug();
 
             var services = builder.Services;
 

@@ -2,6 +2,7 @@ using AwtrixSharpWeb.Domain;
 using AwtrixSharpWeb.Interfaces;
 using AwtrixSharpWeb.Services;
 using NCrontab;
+using static System.Net.Mime.MediaTypeNames;
 
 namespace AwtrixSharpWeb.Apps
 {
@@ -88,7 +89,7 @@ namespace AwtrixSharpWeb.Apps
                 catch (Exception ex)
                 {
                     // Log exception if needed
-                    Console.WriteLine($"Error in TripTimerApp: {ex.Message}");
+                    Logger.LogWarning($"Error in TripTimerApp: {ex.Message}");
                 }
             });
         }
@@ -107,7 +108,7 @@ namespace AwtrixSharpWeb.Apps
             // Only invoke WakeUp if we weren't cancelled
             if (!cancellationToken.IsCancellationRequested)
             {
-                // Set up cancellation for when ActiveTime expires
+                Logger.LogInformation($"Waking up for {Config.ActiveTime}");
                 _cts.CancelAfter(Config.ActiveTime);
                 await WakeUp();
             }
@@ -124,12 +125,12 @@ namespace AwtrixSharpWeb.Apps
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error in WakeUp: {ex.Message}");
+                Logger.LogError($"Error during wakeup {ex}", ex);
             }
             finally
             {
                 var activeTime = Clock.Now - _activationStartTime;
-                Logger.LogInformation($"{Config.Name} was active for {activeTime.TotalSeconds:F1} seconds");
+                Logger.LogInformation($"{Config.Name} was active for {activeTime.TotalSeconds:F1} seconds. Dismissing notice");
 
                 await AwtrixService.Dismiss(AwtrixAddress);
                 ScheduleNextWakeUp();

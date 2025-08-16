@@ -33,6 +33,8 @@ namespace AwtrixSharpWeb.HostedServices
             _mqttConnector = mqttConnector;
             _tripPlanner = tripPlanner;
             _timerService = timerService;
+
+            _apps = new List<AwtrixApp>();
         }
 
         public Task StartAsync(CancellationToken cancellationToken)
@@ -48,6 +50,10 @@ namespace AwtrixSharpWeb.HostedServices
                     {
                         case "TripTimerApp":
                             var tripTimerConfig = appConfig.As<TripTimerAppConfig>();
+
+                            //tripTimerConfig.CronSchedule = "*/1 * * * *"; // Every minute
+                            //tripTimerConfig.ActiveTime = TimeSpan.FromSeconds(30);
+
                             app = new TripTimerApp(_logger, clock, device, awtrixService, _timerService, tripTimerConfig, _tripPlanner);
                             break;
                     }

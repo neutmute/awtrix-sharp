@@ -2,6 +2,7 @@ using AwtrixSharpWeb.Domain;
 using AwtrixSharpWeb.HostedServices;
 using AwtrixSharpWeb.Interfaces;
 using AwtrixSharpWeb.Services;
+using Microsoft.Extensions.Logging;
 
 namespace AwtrixSharpWeb.Apps
 {
@@ -38,6 +39,7 @@ namespace AwtrixSharpWeb.Apps
 
         protected override async Task ActivateScheduledWork(CancellationTokenSource cts)
         {
+            Logger.LogInformation($"Schedule has activated");
             _timerService.SecondChanged += ClockTickSecond;
             _timerService.MinuteChanged += ClockTickMinute;
 
@@ -51,6 +53,7 @@ namespace AwtrixSharpWeb.Apps
             }
             finally
             {
+                Logger.LogInformation($"Schedule deactivating");
                 _timerService.SecondChanged -= ClockTickSecond;
                 _timerService.MinuteChanged -= ClockTickMinute;
             }
