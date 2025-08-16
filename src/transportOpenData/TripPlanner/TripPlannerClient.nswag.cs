@@ -3285,6 +3285,7 @@ namespace TransportOpenData.TripPlanner
         /// Indicates what you have to do (in addition the turn `turnDirection`) to execute this step of the path description.
         /// <br/>
         /// </summary>
+        [JsonIgnore]
         [System.Text.Json.Serialization.JsonPropertyName("manoeuvre")]
         [System.Text.Json.Serialization.JsonConverter(typeof(System.Text.Json.Serialization.JsonStringEnumConverter))]
         public TripRequestResponseJourneyLegPathDescriptionManoeuvre? Manoeuvre { get; set; }

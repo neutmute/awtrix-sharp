@@ -56,6 +56,10 @@ namespace AwtrixSharpWeb.Controllers
         //    }
         //}
 
+
+        /// <summary>
+        /// Very detailed trip data
+        /// </summary>
         [HttpGet("trip")]
         public async Task<IActionResult> GetTrip([FromQuery] string originId, [FromQuery] string destinationId)
         {
