@@ -18,17 +18,14 @@ namespace AwtrixSharpWeb.Apps
         /// </summary>
         protected bool IsScheduled { get; private set; }
         protected CrontabSchedule CrontabSchedule { get; private set; }
-        protected readonly AwtrixAddress AwtrixAddress;
-        protected readonly AwtrixService AwtrixService;
         protected readonly TConfig Config;
         protected IClock Clock { get; }
 
 
 
-        public ScheduledApp(ILogger logger, IClock clock, AwtrixAddress awtrixAddress, AwtrixService awtrixService, TConfig config) : base(logger, awtrixAddress, awtrixService) 
+        public ScheduledApp(ILogger logger, IClock clock, AwtrixAddress awtrixAddress, IAwtrixService awtrixService, TConfig config) : base(logger, awtrixAddress, awtrixService) 
         {
             AwtrixAddress = awtrixAddress;
-            AwtrixService = awtrixService;
             Config = config;
             Clock = clock;
         }
@@ -155,7 +152,7 @@ namespace AwtrixSharpWeb.Apps
             ILogger logger
             , IClock clock
             , AwtrixAddress awtrixAddress
-            , AwtrixService awtrixService
+            , IAwtrixService awtrixService
             , TimerService timerService
             , TripTimerAppConfig config
             , TripPlannerService tripPlanner) : base(logger, clock, awtrixAddress, awtrixService, config)

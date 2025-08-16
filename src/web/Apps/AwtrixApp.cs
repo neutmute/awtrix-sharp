@@ -7,11 +7,11 @@ namespace AwtrixSharpWeb.Apps
     public abstract class AwtrixApp
     {
         protected AwtrixAddress AwtrixAddress;
-        protected AwtrixService AwtrixService;
+        protected IAwtrixService AwtrixService;
 
         protected ILogger Logger { get; private set; }
 
-        public AwtrixApp(ILogger logger, AwtrixAddress awtrixAddress, AwtrixService awtrixService)
+        public AwtrixApp(ILogger logger, AwtrixAddress awtrixAddress, IAwtrixService awtrixService)
         {
             AwtrixAddress = awtrixAddress;
             AwtrixService = awtrixService;

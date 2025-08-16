@@ -4,7 +4,7 @@ namespace AwtrixSharpWeb.Services
 {
 
 
-    public class AwtrixService
+    public class AwtrixService : IAwtrixService
     {
         HttpPublisher _httpPublisher;
         MqttPublisher _mqttPublisher;
