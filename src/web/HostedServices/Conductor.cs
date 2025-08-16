@@ -11,13 +11,14 @@ namespace AwtrixSharpWeb.HostedServices
         private readonly SlackConnector _slackConnector;
         private readonly HttpPublisher _httpPublisher;
         private readonly MqttPublisher _mqttConnector;
-        IOptions<AwtrixConfig> _awtrixConfig;
+        AwtrixConfig _awtrixConfig;
 
-        List<SlackStatusApp> _apps;
+        List<AwtrixApp> _apps;
+
         public Conductor(ILogger<Conductor> logger, IOptions<AwtrixConfig> awtrixConfig, MqttPublisher mqttConnector, HttpPublisher httpPublisher, SlackConnector slackConnector)
         {
             _logger = logger;
-            _awtrixConfig = awtrixConfig;
+            _awtrixConfig = awtrixConfig.Value;
             _slackConnector = slackConnector;
             _httpPublisher = httpPublisher;
             _mqttConnector = mqttConnector;
@@ -25,10 +26,26 @@ namespace AwtrixSharpWeb.HostedServices
         public Task StartAsync(CancellationToken cancellationToken)
         {
             var awtrixService = new AwtrixService(_httpPublisher, _mqttConnector);
-            var app = new SlackStatusApp(_awtrixConfig.Value.Devices[0], _slackConnector, awtrixService);
-            _apps = new List<SlackStatusApp> { app };
 
-            app.Initialize();
+            foreach(var device in _awtrixConfig.Devices)
+            {
+                foreach(var appConfig in device.Apps)
+                {
+                    AwtrixApp app = null;
+                    switch(appConfig.Name)
+                    {
+                        case "TripTimerApp":
+                         //   var app = 
+                            break;
+                    }
+                    app.Initialize();
+                }
+            }
+
+            //var app = new SlackStatusApp(_awtrixConfig.Value.Devices[0], _slackConnector, awtrixService);
+            //_apps = new List<SlackStatusApp> { app };
+
+            //app.Initialize();
 
             return Task.CompletedTask;
         }

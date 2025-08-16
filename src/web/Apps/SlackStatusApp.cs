@@ -4,19 +4,30 @@ using AwtrixSharpWeb.Services;
 
 namespace AwtrixSharpWeb.Apps
 {
-    public class SlackStatusApp
+    public abstract class AwtrixApp
     {
-        AwtrixAddress _awtrixAddress;
-        SlackConnector _slackConnector;
-        AwtrixService _awtrixService;
-        public SlackStatusApp(AwtrixAddress awtrixAddress, SlackConnector slackConnector, AwtrixService awtrixService)
+        protected AwtrixAddress AwtrixAddress;
+        protected AwtrixService AwtrixService;
+
+        public AwtrixApp(AwtrixAddress awtrixAddress, AwtrixService awtrixService)
         {
-            _awtrixAddress = awtrixAddress;
-            _slackConnector = slackConnector;
-            _awtrixService = awtrixService;
+            AwtrixAddress = awtrixAddress;
+            AwtrixService = awtrixService;
         }
 
-        public void Initialize()
+        public abstract void Initialize();
+    }
+
+    public class SlackStatusApp : AwtrixApp
+    {
+        SlackConnector _slackConnector;
+
+        public SlackStatusApp(AwtrixAddress awtrixAddress, AwtrixService awtrixService, SlackConnector slackConnector) : base(awtrixAddress, awtrixService)
+        {
+            _slackConnector = slackConnector;
+        }
+
+        public override void Initialize()
         {
             _slackConnector.UserStatusChanged += UserStatusChanged;
         }
@@ -29,7 +40,7 @@ namespace AwtrixSharpWeb.Apps
                 Task<bool> result;
                 if (e.StatusText == string.Empty)
                 {
-                    result = _awtrixService.Dismiss(_awtrixAddress);
+                    result = AwtrixService.Dismiss(AwtrixAddress);
                 }
                 else
                 {
@@ -38,7 +49,7 @@ namespace AwtrixSharpWeb.Apps
                             .SetHold()
                             .SetRainbow();
 
-                    result = _awtrixService.Notify(_awtrixAddress, message);
+                    result = AwtrixService.Notify(AwtrixAddress, message);
                 }
             }
         }

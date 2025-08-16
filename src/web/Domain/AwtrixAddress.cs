@@ -2,7 +2,12 @@
 {
     public class AwtrixConfig
     {
-        public AwtrixAddress[] Devices { get; set; } = Array.Empty<AwtrixAddress>();
+        public DeviceConfig[] Devices { get; set; } = Array.Empty<DeviceConfig>();
+    }
+
+    public class DeviceConfig : AwtrixAddress
+    {
+        public List<AppConfig> Apps { get; set; } = new List<AppConfig>();
     }
 
     public class AwtrixAddress
