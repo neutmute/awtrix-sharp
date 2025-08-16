@@ -23,6 +23,7 @@ namespace AwtrixSharpWeb.HostedServices
             _httpPublisher = httpPublisher;
             _mqttConnector = mqttConnector;
         }
+
         public Task StartAsync(CancellationToken cancellationToken)
         {
             var awtrixService = new AwtrixService(_httpPublisher, _mqttConnector);
