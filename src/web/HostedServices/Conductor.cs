@@ -11,17 +11,28 @@ namespace AwtrixSharpWeb.HostedServices
         private readonly SlackConnector _slackConnector;
         private readonly HttpPublisher _httpPublisher;
         private readonly MqttPublisher _mqttConnector;
+        private readonly TripPlannerService _tripPlanner;
+        private readonly TimerService _timerService;
         AwtrixConfig _awtrixConfig;
 
         List<AwtrixApp> _apps;
 
-        public Conductor(ILogger<Conductor> logger, IOptions<AwtrixConfig> awtrixConfig, MqttPublisher mqttConnector, HttpPublisher httpPublisher, SlackConnector slackConnector)
+        public Conductor(
+            ILogger<Conductor> logger
+            , IOptions<AwtrixConfig> awtrixConfig
+            , TimerService timerService
+            , TripPlannerService tripPlanner
+            , MqttPublisher mqttConnector
+            , HttpPublisher httpPublisher
+            , SlackConnector slackConnector)
         {
             _logger = logger;
             _awtrixConfig = awtrixConfig.Value;
             _slackConnector = slackConnector;
             _httpPublisher = httpPublisher;
             _mqttConnector = mqttConnector;
+            _tripPlanner = tripPlanner;
+            _timerService = timerService;
         }
 
         public Task StartAsync(CancellationToken cancellationToken)
@@ -37,10 +48,16 @@ namespace AwtrixSharpWeb.HostedServices
                     {
                         case "TripTimerApp":
                             var tripTimerConfig = appConfig.As<TripTimerAppConfig>();
-                           // var app = new TripTimerApp();
+                            app = new TripTimerApp(device, awtrixService, _timerService, tripTimerConfig, _tripPlanner);
                             break;
                     }
-                   // app.Initialize();
+                    if (app == null)
+                    {
+                        _logger.LogWarning($"App {appConfig.Name} is not implemented.");
+                        continue;
+                    }
+                    app.Initialize();
+                    _apps.Add(app);
                 }
             }
 
