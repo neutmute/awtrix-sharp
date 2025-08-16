@@ -52,10 +52,17 @@ namespace AwtrixSharpWeb
             services.AddSingleton<MqttPublisher>();
             services.AddSingleton<Conductor>();
                         
-            // Register the Trip Planner client with HTTP client factory
+            // Register the Trip Planner clients with HTTP client factory
             services.AddHttpClient<StopfinderClient>((serviceProvider, client) => {
                 var config = serviceProvider.GetRequiredService<IOptions<TransportOpenDataConfig>>();
-                var headerValue = serviceProvider.GetRequiredService<string>();
+                
+                // Set the authorization header
+                client.DefaultRequestHeaders.Add("Authorization", $"apikey {config.Value.ApiKey}");
+            });
+            
+            // Register the Trip Client
+            services.AddHttpClient<TripClient>((serviceProvider, client) => {
+                var config = serviceProvider.GetRequiredService<IOptions<TransportOpenDataConfig>>();
                 
                 // Set the authorization header
                 client.DefaultRequestHeaders.Add("Authorization", $"apikey {config.Value.ApiKey}");
