@@ -43,7 +43,7 @@ namespace AwtrixSharpWeb.Controllers
         {
             try
             {
-                var result = await _tripPlannerService.GetNextDepartures(originId, destinationId);
+                var result = await _tripPlannerService.GetNextDepartures(originId, destinationId, DateTime.Now);
                 return Ok(result);
             }
             catch (Exception ex)
@@ -64,7 +64,7 @@ namespace AwtrixSharpWeb.Controllers
             {
                 // Use the TripClient to get trip information
                 // Setting up default parameters based on the API requirements
-                var result = await _tripPlannerService.GetTrip(originId, destinationId);
+                var result = await _tripPlannerService.GetTrip(originId, destinationId, DateTime.Now);
 
                 return Ok(result);
             }

@@ -46,6 +46,10 @@ namespace AwtrixSharpWeb.Domain
             return Set("hold", value);
         }
 
+        public AwtrixAppMessage SetStack(bool value = true)
+        {
+            return Set("stack", value);
+        }
 
 
         public AwtrixAppMessage SetTextOffset(int value)
@@ -109,9 +113,9 @@ namespace AwtrixSharpWeb.Domain
             return this;
         }
 
-        public AwtrixAppMessage SetDuration(int value)
+        public AwtrixAppMessage SetDuration(TimeSpan value)
         {
-            this["duration"] = value.ToString();
+            this["duration"] = Convert.ToInt32(value.TotalSeconds).ToString();
             return this;
         }
 

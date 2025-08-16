@@ -25,9 +25,9 @@ namespace AwtrixSharpWeb.Services
             return await _stopFinderClient.RequestAsync(OutputFormat4.RapidJSON, Type_sf.Stop, query, CoordOutputFormat3.EPSG4326, TfNSWSF.True, null);
         }
 
-        public async Task<TripRequestResponse> GetTrip(string originStopId, string destinationStopId)
+        public async Task<TripRequestResponse> GetTrip(string originStopId, string destinationStopId, DateTime fromWhen)
         {
-            var now = DateTime.Now;
+            _logger.LogInformation("Getting trip from {Origin} to {Destination} from {Time:HH:mm}", originStopId, destinationStopId, fromWhen);
 
             // Use the TripClient to get trip information
             // Setting up default parameters based on the API requirements
@@ -35,8 +35,8 @@ namespace AwtrixSharpWeb.Services
                 outputFormat: OutputFormat5.RapidJSON,
                 coordOutputFormat: CoordOutputFormat4.EPSG4326,
                 depArrMacro: DepArrMacro.Dep, // Departing after the specified time
-                itdDate: now.ToString("yyyyMMdd"), // Today's date
-                itdTime: now.ToString("HHmm"), // Current time
+                itdDate: fromWhen.ToString("yyyyMMdd"), // Today's date
+                itdTime: fromWhen.ToString("HHmm"), // Current time
                 type_origin: Type_origin.Any,
                 name_origin: originStopId,
                 type_destination: Type_destination.Any,
@@ -65,9 +65,9 @@ namespace AwtrixSharpWeb.Services
             return result;
         }
 
-        public async Task<List<DateTimeOffset>> GetNextDepartures(string originStopId, string destinationStopId)
+        public async Task<List<DateTimeOffset>> GetNextDepartures(string originStopId, string destinationStopId, DateTime fromWhen)
         {
-            var trips = await GetTrip(originStopId, destinationStopId);
+            var trips = await GetTrip(originStopId, destinationStopId, fromWhen);
 
             var output = new List<DateTimeOffset>();
             foreach (var journey in trips.Journeys)

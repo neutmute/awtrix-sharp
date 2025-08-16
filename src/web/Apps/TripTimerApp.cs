@@ -3,6 +3,7 @@ using AwtrixSharpWeb.HostedServices;
 using AwtrixSharpWeb.Interfaces;
 using AwtrixSharpWeb.Services;
 using Microsoft.Extensions.Logging;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace AwtrixSharpWeb.Apps
 {
@@ -12,6 +13,8 @@ namespace AwtrixSharpWeb.Apps
     {
         private readonly ITripPlannerService _tripPlanner;
         private readonly ITimerService _timerService;
+
+        List<DateTimeOffset> _nextDepartures;
 
         public TripTimerApp(
             ILogger logger
@@ -24,22 +27,79 @@ namespace AwtrixSharpWeb.Apps
         {
             _tripPlanner = tripPlanner;
             _timerService = timerService;
+            _nextDepartures = new List<DateTimeOffset>();
         }
 
 
         private void ClockTickMinute(object? sender, ClockTickEventArgs e)
         {
-            Logger.LogInformation($"Clock ticked minute: {e.Time}");    
+            Logger.LogInformation($"Clock ticked minute: {e.Time}");
         }
 
         private void ClockTickSecond(object? sender, ClockTickEventArgs e)
         {
             Logger.LogInformation($"Clock ticked second: {e.Time}");
+            var message = BuildMessage(e);
+            AwtrixService.Notify(AwtrixAddress, message);
+        }
+
+        private AwtrixAppMessage BuildMessage(ClockTickEventArgs e)
+        {
+            var alarmTimes = _nextDepartures.Select(GetAlarmTime)
+                .Where(alarmTime => alarmTime > Clock.Now)
+                .OrderBy(alarmTime => alarmTime)
+                .ToList();
+            
+            if (alarmTimes.Count == 0)
+            {
+                Logger.LogWarning("No future departures");
+                _cts.Cancel();
+                return new AwtrixAppMessage(); 
+            }
+            else
+            {
+                var nextAlarm = alarmTimes.First();
+                var timeToAlarm = nextAlarm - Clock.Now;
+                var secondsToAlarm = (int)timeToAlarm.TotalSeconds;
+
+                var thisSecond = e.Time.Second;
+                var isOddSecond = thisSecond % 2 == 1;
+                var spacer = isOddSecond ? " " : ":";
+
+                var text = $"{Clock.Now:HH}{spacer}{Clock.Now:MM} T{secondsToAlarm}";
+                                
+                var message = new AwtrixAppMessage()
+                    .SetText(text)
+                    .SetStack(false)
+                    .SetDuration(TimeSpan.FromSeconds(70));
+
+                if (secondsToAlarm < 5)
+                {
+                    message.SetText("GO GO GO");
+                    message.SetRainbow();
+                }
+
+                return message;
+            }
+
+        }
+
+        private DateTimeOffset GetAlarmTime(DateTimeOffset departure)
+        {
+            return departure.Add(-Config.TimeToOrigin).Add(-Config.TimeToPrepare);
         }
 
         protected override async Task ActivateScheduledWork(CancellationTokenSource cts)
         {
             Logger.LogInformation($"Schedule has activated");
+
+            var earliestDeparture = Clock.Now.Add(Config.TimeToOrigin).Add(Config.TimeToPrepare);
+
+            _nextDepartures = await _tripPlanner.GetNextDepartures(Config.StopIdOrigin, Config.StopIdDestination, earliestDeparture.LocalDateTime);
+            var departuresCsv = string.Join(", ", _nextDepartures.Select(d => d.ToString("HH:mm:ss")));
+
+            Logger.LogInformation($"{_nextDepartures.Count} future depatures found: {departuresCsv}");
+
             _timerService.SecondChanged += ClockTickSecond;
             _timerService.MinuteChanged += ClockTickMinute;
 

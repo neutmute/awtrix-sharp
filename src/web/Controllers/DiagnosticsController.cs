@@ -74,7 +74,7 @@ namespace AwtrixSharpWeb.Controllers
                 var payload = new AwtrixAppMessage()
                                     .SetText("AwtrixSharp")
                                     .SetRainbow(true)
-                                    .SetDuration(5);
+                                    .SetDuration(TimeSpan.FromSeconds(5));
 
                 await _awtrixService.Notify(device, payload);
             }
