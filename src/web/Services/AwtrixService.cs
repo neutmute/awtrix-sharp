@@ -45,8 +45,10 @@ namespace AwtrixSharpWeb.Services
             }
         }
 
-
-        public static (int quantized, int quantizedBlinkOff) Quantize(int progress)
+        /// <summary>
+        /// Blink acts as a sign of life
+        /// </summary>
+        public static (int quantized, int quantizedBlink) Quantize(int progress)
         {
             int p = Math.Clamp(progress, 0, 100);
 

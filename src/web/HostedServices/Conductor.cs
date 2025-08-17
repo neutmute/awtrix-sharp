@@ -2,6 +2,7 @@
 using AwtrixSharpWeb.Domain;
 using AwtrixSharpWeb.Interfaces;
 using AwtrixSharpWeb.Services;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 
 namespace AwtrixSharpWeb.HostedServices
@@ -14,12 +15,14 @@ namespace AwtrixSharpWeb.HostedServices
         private readonly MqttPublisher _mqttConnector;
         private readonly TripPlannerService _tripPlanner;
         private readonly TimerService _timerService;
+        private readonly IHostEnvironment _hostEnvironment;
         AwtrixConfig _awtrixConfig;
 
         List<IAwtrixApp> _apps;
 
         public Conductor(
             ILogger<Conductor> logger
+            , IHostEnvironment env
             , IOptions<AwtrixConfig> awtrixConfig
             , TimerService timerService
             , TripPlannerService tripPlanner
@@ -34,6 +37,7 @@ namespace AwtrixSharpWeb.HostedServices
             _mqttConnector = mqttConnector;
             _tripPlanner = tripPlanner;
             _timerService = timerService;
+            _hostEnvironment = env;
 
             _apps = new List<IAwtrixApp>();
         }
@@ -42,6 +46,12 @@ namespace AwtrixSharpWeb.HostedServices
         {
             var awtrixService = new AwtrixService(_httpPublisher, _mqttConnector);
             var clock = new Clock();
+
+
+            _logger.LogInformation("Environment: {EnvName}", _hostEnvironment.EnvironmentName);
+
+          
+
             foreach (var device in _awtrixConfig.Devices)
             {
                 foreach(var appConfig in device.Apps)
@@ -52,8 +62,12 @@ namespace AwtrixSharpWeb.HostedServices
                         case "TripTimerApp":
                             var tripTimerConfig = appConfig.As<TripTimerAppConfig>();
 
-                            //tripTimerConfig.CronSchedule = "*/1 * * * *"; // Every minute
-                            //tripTimerConfig.ActiveTime = TimeSpan.FromMinutes(30);
+                            if (_hostEnvironment.IsDevelopment())
+                            {
+                                tripTimerConfig.CronSchedule = "*/1 * * * *"; // Every minute
+                                tripTimerConfig.ActiveTime = TimeSpan.FromMinutes(30);
+                            }
+
 
                             app = new TripTimerApp(_logger, clock, device, awtrixService, _timerService, tripTimerConfig, _tripPlanner);
                             break;

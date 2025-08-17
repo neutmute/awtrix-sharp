@@ -61,7 +61,7 @@ namespace AwtrixSharpWeb.Apps
                 var isOddSecond = thisSecond % 2 == 1;
                 var spacer = isOddSecond ? " " : ":";
 
-                var text = $"{Clock.Now:MM}T{secondsToAlarm}";
+                var text = $"{Clock.Now:mm}T{secondsToAlarm}";
 
                 var quantisedProgress = GetProgress(Clock, nextAlarm);
                 var useProgress = quantisedProgress.quantized;
@@ -78,8 +78,10 @@ namespace AwtrixSharpWeb.Apps
 
                 if (secondsToAlarm < 20)
                 {
-                    message.SetText("GO GO GO");
-                    message.SetRainbow();
+                    message
+                        .SetText("GO!")
+                        .SetRainbow()
+                        .SetProgress(100);
                 }
 
                 return message;
