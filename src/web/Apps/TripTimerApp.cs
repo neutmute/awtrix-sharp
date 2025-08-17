@@ -33,12 +33,11 @@ namespace AwtrixSharpWeb.Apps
 
         private void ClockTickMinute(object? sender, ClockTickEventArgs e)
         {
-            Logger.LogInformation($"Clock ticked minute: {e.Time}");
+            Logger.LogDebug($"Clock ticked minute: {e.Time}");
         }
 
         private void ClockTickSecond(object? sender, ClockTickEventArgs e)
         {
-            Logger.LogInformation($"Clock ticked second: {e.Time}");
             var message = BuildMessage(e);
             _ = AppUpdate(message).Result;
         }

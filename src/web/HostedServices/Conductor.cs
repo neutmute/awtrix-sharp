@@ -52,8 +52,8 @@ namespace AwtrixSharpWeb.HostedServices
                         case "TripTimerApp":
                             var tripTimerConfig = appConfig.As<TripTimerAppConfig>();
 
-                            tripTimerConfig.CronSchedule = "*/1 * * * *"; // Every minute
-                            tripTimerConfig.ActiveTime = TimeSpan.FromMinutes(30);
+                            //tripTimerConfig.CronSchedule = "*/1 * * * *"; // Every minute
+                            //tripTimerConfig.ActiveTime = TimeSpan.FromMinutes(30);
 
                             app = new TripTimerApp(_logger, clock, device, awtrixService, _timerService, tripTimerConfig, _tripPlanner);
                             break;
