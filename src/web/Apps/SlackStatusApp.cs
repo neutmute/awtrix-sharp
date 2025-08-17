@@ -5,11 +5,11 @@ using AwtrixSharpWeb.Services;
 namespace AwtrixSharpWeb.Apps
 {
 
-    public class SlackStatusApp : AwtrixApp
+    public class SlackStatusApp : AwtrixApp<AppConfig>
     {
         SlackConnector _slackConnector;
 
-        public SlackStatusApp(ILogger logger, AwtrixAddress awtrixAddress, AwtrixService awtrixService, SlackConnector slackConnector) : base(logger, awtrixAddress, awtrixService)
+        public SlackStatusApp(ILogger logger, AppConfig config, AwtrixAddress awtrixAddress, AwtrixService awtrixService, SlackConnector slackConnector) : base(logger, config, awtrixAddress, awtrixService)
         {
             _slackConnector = slackConnector;
         }
@@ -24,10 +24,10 @@ namespace AwtrixSharpWeb.Apps
             var userId = Environment.GetEnvironmentVariable("AWTRIXSHARP_SLACK__USERID"); // U*** (your user ID)
             if (userId.Equals(e.UserId))
             {
-                Task<bool> result;
+                bool result;
                 if (e.StatusText == string.Empty)
                 {
-                    result = AwtrixService.Dismiss(AwtrixAddress);
+                    result = AppClear().Result;
                 }
                 else
                 {
@@ -36,7 +36,7 @@ namespace AwtrixSharpWeb.Apps
                             .SetHold()
                             .SetRainbow();
 
-                    result = AwtrixService.Notify(AwtrixAddress, message);
+                    result = AppUpdate(message).Result;
                 }
             }
         }

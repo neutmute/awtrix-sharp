@@ -6,7 +6,7 @@ using static System.Net.Mime.MediaTypeNames;
 
 namespace AwtrixSharpWeb.Apps
 {
-    public abstract class ScheduledApp<TConfig> : AwtrixApp, IDisposable where TConfig : ScheduledAppConfig
+    public abstract class ScheduledApp<TConfig> : AwtrixApp<TConfig>, IDisposable where TConfig : ScheduledAppConfig
     {
         protected CancellationTokenSource _cts;
         /// <summary>
@@ -14,15 +14,14 @@ namespace AwtrixSharpWeb.Apps
         /// </summary>
         protected bool IsScheduled { get; private set; }
         protected CrontabSchedule CrontabSchedule { get; private set; }
-        protected readonly TConfig Config;
+        //protected readonly TConfig Config;
         protected IClock Clock { get; }
 
 
 
-        public ScheduledApp(ILogger logger, IClock clock, AwtrixAddress awtrixAddress, IAwtrixService awtrixService, TConfig config) : base(logger, awtrixAddress, awtrixService) 
+        public ScheduledApp(ILogger logger, IClock clock, AwtrixAddress awtrixAddress, IAwtrixService awtrixService, TConfig config) : base(logger, config, awtrixAddress, awtrixService) 
         {
-            AwtrixAddress = awtrixAddress;
-            Config = config;
+          //  Config = config;
             Clock = clock;
         }
         public override void Initialize()
@@ -44,8 +43,10 @@ namespace AwtrixSharpWeb.Apps
             if (disposing)
             {
 
-                // Clear any displayed messages
-                _ = AwtrixService.Dismiss(AwtrixAddress);
+                Logger.LogInformation($"Disposing  App: {Config.Name}");
+
+                _ = Dismiss();
+                _ = AppClear();
 
                 Dispose(_cts);
             }
@@ -121,6 +122,7 @@ namespace AwtrixSharpWeb.Apps
 
             try
             {
+                await AppClear();
                 await ActivateScheduledWork(_cts);
             }
             catch (Exception ex)
@@ -132,7 +134,6 @@ namespace AwtrixSharpWeb.Apps
                 var activeTime = Clock.Now - _activationStartTime;
                 Logger.LogInformation($"{Config.Name} was active for {activeTime.TotalSeconds:F1} seconds. Dismissing notice");
 
-                await AwtrixService.Dismiss(AwtrixAddress);
                 ScheduleNextWakeUp();
             }
         }

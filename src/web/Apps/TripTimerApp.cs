@@ -40,7 +40,7 @@ namespace AwtrixSharpWeb.Apps
         {
             Logger.LogInformation($"Clock ticked second: {e.Time}");
             var message = BuildMessage(e);
-            AwtrixService.Notify(AwtrixAddress, message);
+            _ = AppUpdate(message).Result;
         }
 
         private AwtrixAppMessage BuildMessage(ClockTickEventArgs e)
@@ -66,14 +66,17 @@ namespace AwtrixSharpWeb.Apps
                 var isOddSecond = thisSecond % 2 == 1;
                 var spacer = isOddSecond ? " " : ":";
 
-                var text = $"{Clock.Now:HH}{spacer}{Clock.Now:MM} T{secondsToAlarm}";
-                                
+                var text = $"{Clock.Now:MM}T{secondsToAlarm}";
+
                 var message = new AwtrixAppMessage()
                     .SetText(text)
                     .SetStack(false)
-                    .SetDuration(TimeSpan.FromSeconds(70));
+                    .SetDuration(300)
+                    //.SetHold()
+                    ;
+                   // .SetDuration(TimeSpan.FromSeconds(2));
 
-                if (secondsToAlarm < 5)
+                if (secondsToAlarm < 20)
                 {
                     message.SetText("GO GO GO");
                     message.SetRainbow();
@@ -129,7 +132,7 @@ namespace AwtrixSharpWeb.Apps
                 _timerService.SecondChanged -= ClockTickSecond;
                 _timerService.MinuteChanged -= ClockTickMinute;
             }
-            
+                        
             base.Dispose(disposing);
         }
 

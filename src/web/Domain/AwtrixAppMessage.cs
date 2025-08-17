@@ -113,6 +113,12 @@ namespace AwtrixSharpWeb.Domain
             return this;
         }
 
+        public AwtrixAppMessage SetDuration(int value)
+        {
+            SetDuration(TimeSpan.FromSeconds(value));
+            return this;
+        }
+
         public AwtrixAppMessage SetDuration(TimeSpan value)
         {
             this["duration"] = Convert.ToInt32(value.TotalSeconds).ToString();
