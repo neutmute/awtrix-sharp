@@ -2,13 +2,9 @@ using AwtrixSharpWeb.Domain;
 using AwtrixSharpWeb.HostedServices;
 using AwtrixSharpWeb.Interfaces;
 using AwtrixSharpWeb.Services;
-using Microsoft.Extensions.Logging;
-using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace AwtrixSharpWeb.Apps
 {
-
-
     public class TripTimerApp : ScheduledApp<TripTimerAppConfig>
     {
         private readonly ITripPlannerService _tripPlanner;
@@ -67,17 +63,18 @@ namespace AwtrixSharpWeb.Apps
 
                 var text = $"{Clock.Now:MM}T{secondsToAlarm}";
 
-                var progress = GetProgress(Clock, nextAlarm);
+                var quantisedProgress = GetProgress(Clock, nextAlarm);
+                var useProgress = quantisedProgress.quantized;
                 if (isOddSecond)
                 {
-                    progress--;
+                    useProgress = quantisedProgress.quantizedBlink;
                 }
 
                 var message = new AwtrixAppMessage()
                     .SetText(text)
                     .SetStack(false)
                     .SetDuration(300)
-                    .SetProgress(progress);
+                    .SetProgress(useProgress);
 
                 if (secondsToAlarm < 20)
                 {
@@ -90,14 +87,7 @@ namespace AwtrixSharpWeb.Apps
 
         }
 
-        static int Quantize(int value)
-        {
-            value = Math.Clamp(value, 0, 100);
-            double step = 100.0 / 31.0; // 32 bins
-            return (int)Math.Round(value / step, MidpointRounding.ToZero);
-        }
-
-        internal static int GetProgress(IClock clock, DateTimeOffset nextAlarm)
+        internal static (int quantized, int quantizedBlink) GetProgress(IClock clock, DateTimeOffset nextAlarm)
         {
             const int ZeroFromMinutes = 5;
 
@@ -105,8 +95,8 @@ namespace AwtrixSharpWeb.Apps
             var secondsSinceCountFrom = (int)(clock.Now - nextAlarm.AddMinutes(-ZeroFromMinutes)).TotalSeconds;
             var progress = secondsSinceCountFrom * 100 / countFromSecs;
 
-            //var quantizedProgress = Quantize(progress);
-            return progress;
+            var quantizedProgress = AwtrixService.Quantize(progress);
+            return quantizedProgress;
         }
 
         private DateTimeOffset GetAlarmTime(DateTimeOffset departure)

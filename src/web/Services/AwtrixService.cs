@@ -46,6 +46,33 @@ namespace AwtrixSharpWeb.Services
         }
 
 
+        public static (int quantized, int quantizedBlinkOff) Quantize(int progress)
+        {
+            int p = Math.Clamp(progress, 0, 100);
+
+            int LedCount(int v)
+            {
+                if (v < 4) return 0;
+                if (v == 100) return 32;
+                return 1 + (int)Math.Floor((v - 4) * 31.0 / 96.0); // 4–99 => 1–31
+            }
+
+            int n = LedCount(p);
+            int blink;
+
+            if (n == 0) blink = 4;            // nothing lit
+            else if (n == 32) blink = 99;     // drop to 31 LEDs
+            else if (p < 4) blink = 1; // one bin lower
+            else
+            {
+                int lowerBound = (n == 1) ? 4 : (int)Math.Ceiling(4 + 96.0 * (n - 1) / 31.0);
+                blink = Math.Clamp(lowerBound - 1, 0, 99); // one bin lower
+            }
+
+            return (p, blink);
+        }
+
+
         /// <remarks>https://blueforcer.github.io/awtrix3/#/api?id=dismiss-notification</remarks>
         public async Task<bool> Dismiss(AwtrixAddress awtrixAddress)
         {

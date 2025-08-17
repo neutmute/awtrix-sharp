@@ -170,9 +170,7 @@ namespace Test.Apps
 
             var actualProgess = TripTimerApp.GetProgress(clock, nextAlarm);
 
-            Assert.Equal(expectedProgess, actualProgess);
-
-
+            Assert.Equal(expectedProgess, actualProgess.quantized);
         }
         
     }
