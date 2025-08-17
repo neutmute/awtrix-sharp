@@ -210,7 +210,36 @@ namespace AwtrixSharpWeb.Domain
 
         public string ToJson()
         {
-            var json = System.Text.Json.JsonSerializer.Serialize(this);
+            // Create a new dictionary to modify if needed
+            var dictionaryToSerialize = new Dictionary<string, object>(this.Count);
+            
+            // Copy all items from this dictionary to the new one
+            foreach (var kvp in this)
+            {
+                // Check if it's the text property and if it starts with "[
+                if (kvp.Key == "text" && kvp.Value != null && kvp.Value.StartsWith("["))
+                {
+                    try
+                    {
+                        // Try to parse the text as JSON
+                        var jsonElement = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(kvp.Value);
+                        dictionaryToSerialize[kvp.Key] = jsonElement; // Add as JSON object
+                    }
+                    catch
+                    {
+                        // If parsing fails, use the original string
+                        dictionaryToSerialize[kvp.Key] = kvp.Value;
+                    }
+                }
+                else
+                {
+                    // Add other properties as is
+                    dictionaryToSerialize[kvp.Key] = kvp.Value;
+                }
+            }
+            
+            // Serialize the modified dictionary
+            var json = System.Text.Json.JsonSerializer.Serialize(dictionaryToSerialize);
             return json;
         }
     }

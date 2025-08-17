@@ -30,7 +30,7 @@ namespace AwtrixSharpWeb.Services
         {
             var json = ToJson(message);
             var publisherType = this.GetType().Name;
-            _logger.LogDebug($"{publisherType} Publishing to {url} with payload: {json}", publisherType, url, json);
+            _logger.LogDebug("{publisherType} Publishing to {url} with payload: {json}", publisherType, url, json);
             return await Publish(url, json);
         }
     }

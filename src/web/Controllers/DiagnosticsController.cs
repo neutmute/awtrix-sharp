@@ -61,7 +61,7 @@ namespace AwtrixSharpWeb.Controllers
         }
 
         [HttpPost("awtrix/text")]
-        public async Task<IActionResult> AwtrixText()
+        public async Task<IActionResult> AwtrixText(string text = "Awtrix Sharp!")
         {
             foreach(var device in _awtrixConfig.Devices)
             {
@@ -72,8 +72,7 @@ namespace AwtrixSharpWeb.Controllers
                 }
 
                 var payload = new AwtrixAppMessage()
-                                    .SetText("Awtrix Sharp!")
-                                    .SetRainbow(true)
+                                    .SetText(text)
                                     .SetProgress(50)
                                     .SetDuration(TimeSpan.FromSeconds(10));
 

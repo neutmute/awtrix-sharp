@@ -99,7 +99,7 @@ namespace AwtrixSharpWeb.HostedServices
                 // Check if minute has changed as well
                 if (currentTime.Minute != _lastTime.Minute)
                 {
-                    _logger.LogInformation("Minute changed: {Minute}", currentTime.ToString("HH:mm:ss"));
+                    _logger.LogDebug("Minute changed: {Minute}", currentTime.ToString("HH:mm:ss"));
                     OnMinuteChanged(currentTime);
                 }
 
