@@ -13,7 +13,7 @@ namespace AwtrixSharpWeb.Services
             _mqttService = mqttService;
         }
 
-        protected override async Task<bool> DoPublish(string topic, string payload)
+        public override async Task<bool> Publish(string topic, string payload)
         {
             await _mqttService.PublishAsync(topic, payload);
             return true;

@@ -60,8 +60,8 @@ namespace AwtrixSharpWeb.Controllers
             return Ok(diagnosticInfo);
         }
 
-        [HttpPost("awtrix")]
-        public async Task<IActionResult> Awtrix()
+        [HttpPost("awtrix/text")]
+        public async Task<IActionResult> AwtrixText()
         {
             foreach(var device in _awtrixConfig.Devices)
             {
@@ -72,11 +72,52 @@ namespace AwtrixSharpWeb.Controllers
                 }
 
                 var payload = new AwtrixAppMessage()
-                                    .SetText("AwtrixSharp")
+                                    .SetText("Awtrix Sharp!")
                                     .SetRainbow(true)
-                                    .SetDuration(TimeSpan.FromSeconds(5));
+                                    .SetProgress(50)
+                                    .SetDuration(TimeSpan.FromSeconds(10));
 
                 await _awtrixService.Notify(device, payload);
+            }
+
+            return Ok();
+        }
+
+        [HttpPost("awtrix/progress")]
+        public async Task<IActionResult> AwtrixProgess(int progress)
+        {
+            foreach (var device in _awtrixConfig.Devices)
+            {
+                if (string.IsNullOrEmpty(device.BaseTopic))
+                {
+                    _logger.LogWarning("Device {Device} has an empty BaseTopic", device);
+                    continue;
+                }
+
+                var payload = new AwtrixAppMessage()
+                                    .SetText(progress.ToString())
+                                    .SetProgress(progress)
+                                    .SetDuration(TimeSpan.FromSeconds(1));
+
+                await _awtrixService.Notify(device, payload);
+            }
+
+            return Ok();
+        }
+
+
+        [HttpPost("awtrix/rtttl")]
+        public async Task<IActionResult> AwtrixRtttl(string rtttl)
+        {
+            foreach (var device in _awtrixConfig.Devices)
+            {
+                if (string.IsNullOrEmpty(device.BaseTopic))
+                {
+                    _logger.LogWarning("Device {Device} has an empty BaseTopic", device);
+                    continue;
+                }
+
+                await _awtrixService.PlayRtttl(device, rtttl);
             }
 
             return Ok();

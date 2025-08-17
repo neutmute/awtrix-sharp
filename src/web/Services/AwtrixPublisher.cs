@@ -24,14 +24,14 @@ namespace AwtrixSharpWeb.Services
             }
         }
 
-        protected abstract Task<bool> DoPublish(string url, string payload);
+        public abstract Task<bool> Publish(string url, string payload);
 
         public async Task<bool> Publish(string url, AwtrixAppMessage? message)
         {
             var json = ToJson(message);
             var publisherType = this.GetType().Name;
             _logger.LogDebug($"{publisherType} Publishing to {url} with payload: {json}", publisherType, url, json);
-            return await DoPublish(url, json);
+            return await Publish(url, json);
         }
     }
 }

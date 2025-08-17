@@ -15,6 +15,14 @@ namespace AwtrixSharpWeb.Services
             _mqttPublisher = mqttPublisher;
         }
 
+        /// <summary>
+        /// https://blueforcer.github.io/awtrix3/#/api?id=sound-playback
+        /// </summary>
+        public async Task<bool> PlayRtttl(AwtrixAddress awtrixAddress, string rtttl)
+        {
+            return await ResolvePublisher(awtrixAddress.BaseTopic).Publish(awtrixAddress.BaseTopic + $"/rtttl", rtttl);
+        }
+
         public async Task<bool> AppUpdate(AwtrixAddress awtrixAddress, string appName, AwtrixAppMessage message)
         {
             return await Publish(awtrixAddress.BaseTopic + $"/custom/{appName}", message);
@@ -46,13 +54,19 @@ namespace AwtrixSharpWeb.Services
 
         private async Task<bool> Publish(string topic, AwtrixAppMessage? message)
         {
+            return await ResolvePublisher(topic).Publish(topic, message);
+            
+        }
+
+        private AwtrixPublisher ResolvePublisher(string topic)
+        {
             if (topic.StartsWith("http://") || topic.StartsWith("https://"))
             {
-                return await _httpPublisher.Publish(topic, message);
+                return _httpPublisher;
             }
             else
             {
-                return await _mqttPublisher.Publish(topic, message);
+                return _mqttPublisher;
             }
         }
     }

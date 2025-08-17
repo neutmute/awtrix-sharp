@@ -12,7 +12,7 @@ namespace AwtrixSharpWeb.Services
             _httpClient = new HttpClient();
         }
 
-        protected override async Task<bool> DoPublish(string url, string payload)
+        public override async Task<bool> Publish(string url, string payload)
         {
             var content = new StringContent(payload, System.Text.Encoding.UTF8, "application/json");
             var response = await _httpClient.PostAsync(url, content);
