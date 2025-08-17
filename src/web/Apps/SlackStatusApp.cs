@@ -14,7 +14,7 @@ namespace AwtrixSharpWeb.Apps
             _slackConnector = slackConnector;
         }
 
-        public override void Initialize()
+        protected override void Initialize()
         {
             _slackConnector.UserStatusChanged += UserStatusChanged;
         }

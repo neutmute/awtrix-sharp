@@ -68,13 +68,17 @@ namespace AwtrixSharpWeb.Apps
 
                 var text = $"{Clock.Now:MM}T{secondsToAlarm}";
 
+                var progress = GetProgress(Clock, nextAlarm);
+                if (isOddSecond)
+                {
+                    progress--;
+                }
+
                 var message = new AwtrixAppMessage()
                     .SetText(text)
                     .SetStack(false)
                     .SetDuration(300)
-                    //.SetHold()
-                    ;
-                   // .SetDuration(TimeSpan.FromSeconds(2));
+                    .SetProgress(progress);
 
                 if (secondsToAlarm < 20)
                 {
@@ -85,6 +89,25 @@ namespace AwtrixSharpWeb.Apps
                 return message;
             }
 
+        }
+
+        static int Quantize(int value)
+        {
+            value = Math.Clamp(value, 0, 100);
+            double step = 100.0 / 31.0; // 32 bins
+            return (int)Math.Round(value / step, MidpointRounding.ToZero);
+        }
+
+        protected static int GetProgress(IClock clock, DateTimeOffset nextAlarm)
+        {
+            const int ZeroFromMinutes = 5;
+
+            var countFromSecs = (int) TimeSpan.FromMinutes(ZeroFromMinutes).TotalSeconds;
+            var secondsSinceCountFrom = (int)(clock.Now - nextAlarm.AddMinutes(-ZeroFromMinutes)).TotalSeconds;
+            var progress = secondsSinceCountFrom * 100 / countFromSecs;
+
+            var quantizedProgress = Quantize(progress);
+            return quantizedProgress;
         }
 
         private DateTimeOffset GetAlarmTime(DateTimeOffset departure)

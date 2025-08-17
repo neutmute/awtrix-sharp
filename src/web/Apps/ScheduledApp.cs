@@ -24,7 +24,8 @@ namespace AwtrixSharpWeb.Apps
           //  Config = config;
             Clock = clock;
         }
-        public override void Initialize()
+
+        protected override void Initialize()
         {
             CrontabSchedule = CrontabSchedule.Parse(Config.CronSchedule);
 

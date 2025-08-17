@@ -107,7 +107,7 @@ namespace Test.Apps
                 .ReturnsAsync(true);
             
             // Act
-            sut.Initialize();
+            sut.Init();
             
             // Simulate time passing and trigger the scheduled execution
             // First, advance to just before the next cron trigger

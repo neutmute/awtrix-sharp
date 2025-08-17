@@ -2,6 +2,6 @@
 {
     public interface IAwtrixApp
     {
-        void Initialize();
+        void Init();
     }
 }

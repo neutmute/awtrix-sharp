@@ -23,7 +23,13 @@ namespace AwtrixSharpWeb.Apps
             Logger = logger;
         }
 
-        public abstract void Initialize();
+        public void Init()
+        {
+            _ = AppClear().Result;
+            Initialize();
+        }
+
+        protected abstract void Initialize();
 
         protected async Task<bool> Notify(AwtrixAppMessage message)
         {

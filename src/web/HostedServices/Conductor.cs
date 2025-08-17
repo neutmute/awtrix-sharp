@@ -68,7 +68,7 @@ namespace AwtrixSharpWeb.HostedServices
                             continue;
                     }
 
-                    app.Initialize();
+                    app.Init();
                     _apps.Add(app);
                 }
             }
