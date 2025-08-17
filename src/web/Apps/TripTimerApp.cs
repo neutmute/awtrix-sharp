@@ -98,7 +98,7 @@ namespace AwtrixSharpWeb.Apps
             return (int)Math.Round(value / step, MidpointRounding.ToZero);
         }
 
-        protected static int GetProgress(IClock clock, DateTimeOffset nextAlarm)
+        internal static int GetProgress(IClock clock, DateTimeOffset nextAlarm)
         {
             const int ZeroFromMinutes = 5;
 
@@ -106,8 +106,8 @@ namespace AwtrixSharpWeb.Apps
             var secondsSinceCountFrom = (int)(clock.Now - nextAlarm.AddMinutes(-ZeroFromMinutes)).TotalSeconds;
             var progress = secondsSinceCountFrom * 100 / countFromSecs;
 
-            var quantizedProgress = Quantize(progress);
-            return quantizedProgress;
+            //var quantizedProgress = Quantize(progress);
+            return progress;
         }
 
         private DateTimeOffset GetAlarmTime(DateTimeOffset departure)

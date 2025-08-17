@@ -155,5 +155,25 @@ namespace Test.Apps
             // Clean up
             sut.Dispose();
         }
+
+        [Theory]
+        [InlineData(0, 100, "")] // 0% progress
+        [InlineData(175, 41, "")] // 25% progress
+        [InlineData(150, 50, "")] // 50% progress
+        [InlineData(300, 0, "")] // 100% progress
+        public void GetProgress_ReturnsExpectedProgressValue(int secondsToAlarm, int expectedProgess, string rationale)
+        {
+
+            var nextAlarm = DateTimeOffset.Parse("2023-01-01T12:00:00Z");
+            var now = nextAlarm.AddSeconds(-secondsToAlarm);
+            var clock = new MockClock(now);
+
+            var actualProgess = TripTimerApp.GetProgress(clock, nextAlarm);
+
+            Assert.Equal(expectedProgess, actualProgess);
+
+
+        }
+        
     }
 }
