@@ -2,6 +2,21 @@ using System.Text.Json.Serialization;
 
 namespace AwtrixSharpWeb.Domain
 {
+    public class AwtrixSettings : Dictionary<string, string>
+    {
+        public AwtrixSettings SetGlobalTextColor(string value)
+        {
+            this["TCOL"] = value;
+            return this;
+        }
+
+        public string ToJson()
+        {
+            var json = System.Text.Json.JsonSerializer.Serialize(this);
+            return json;
+        }
+    }
+
     /// <summary>
     /// Dictionary-based implementation of an Awtrix application message
     /// that stores all properties as string key-value pairs without default values.

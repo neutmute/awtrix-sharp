@@ -121,5 +121,18 @@ namespace AwtrixSharpWeb.Controllers
 
             return Ok();
         }
+
+
+        [HttpPost("awtrix/settings/text-color")]
+        public async Task<IActionResult> SetGlobalTextColor(string hexColor = "#00FF00")
+        {
+            foreach (var device in _awtrixConfig.Devices)
+            {
+                var message = new AwtrixSettings().SetGlobalTextColor(hexColor);
+                await _awtrixService.Set(device, message);
+            }
+
+            return Ok();
+        }
     }
 }

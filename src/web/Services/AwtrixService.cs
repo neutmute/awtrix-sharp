@@ -16,6 +16,16 @@ namespace AwtrixSharpWeb.Services
         }
 
         /// <summary>
+        /// https://blueforcer.github.io/awtrix3/#/api?id=change-settings
+        /// </summary>
+        public async Task<bool> Set(AwtrixAddress awtrixAddress, AwtrixSettings settings)
+        {
+            var payload = settings.ToJson();
+            return await ResolvePublisher(awtrixAddress.BaseTopic).Publish(awtrixAddress.BaseTopic + $"/settings", payload);
+        }
+
+
+        /// <summary>
         /// https://blueforcer.github.io/awtrix3/#/api?id=sound-playback
         /// </summary>
         public async Task<bool> PlayRtttl(AwtrixAddress awtrixAddress, string rtttl)
