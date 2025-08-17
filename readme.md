@@ -41,6 +41,7 @@ services:
       - 8883:8883
     environment:
       TZ: "Australia/Sydney"
+
   awtrix:
     container_name: awtrix
     image: ghcr.io/neutmute/awtrix-sharp:master
@@ -50,6 +51,7 @@ services:
       - ./data/awtrix/appsettings.json:/app/appsettings.json
     environment:
       TZ: "Australia/Sydney"
+      ASPNETCORE_ENVIRONMENT: "Production"
       AWTRIXSHARP_MQTT__HOST: "mosquitto"
       AWTRIXSHARP_MQTT__USERNAME: "xxxxxxxxxxxxxxx"
       AWTRIXSHARP_MQTT__PASSWORD: "xxxxxxxxxxxxxxx"

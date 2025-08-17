@@ -61,7 +61,9 @@ namespace AwtrixSharpWeb.Apps
                 var isOddSecond = thisSecond % 2 == 1;
                 var spacer = isOddSecond ? " " : ":";
 
-                var text = $"{Clock.Now:mm}T{secondsToAlarm}";
+                var hour = Clock.Now.Hour.ToString();
+
+                var text = $"{hour}{spacer}{Clock.Now:mm} {secondsToAlarm}";
 
                 var quantisedProgress = GetProgress(Clock, nextAlarm);
                 var useProgress = quantisedProgress.quantized;
