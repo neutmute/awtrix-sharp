@@ -54,9 +54,13 @@ namespace AwtrixSharpWeb.HostedServices
 
             foreach (var device in _awtrixConfig.Devices)
             {
-                foreach(var appConfig in device.Apps)
+                var diurnalApp = new DirunalDecorator(_logger, _timerService, AppConfig.Empty, device, awtrixService);
+                _apps.Add(diurnalApp);
+
+                foreach (var appConfig in device.Apps)
                 {
                     IAwtrixApp app;
+
                     switch(appConfig.Name)
                     {
                         case "TripTimerApp":
@@ -64,8 +68,8 @@ namespace AwtrixSharpWeb.HostedServices
 
                             if (_hostEnvironment.IsDevelopment())
                             {
-                                tripTimerConfig.CronSchedule = "*/1 * * * *"; // Every minute
-                                tripTimerConfig.ActiveTime = TimeSpan.FromMinutes(30);
+                                //tripTimerConfig.CronSchedule = "*/1 * * * *"; // Every minute
+                                //tripTimerConfig.ActiveTime = TimeSpan.FromMinutes(30);
                             }
 
 
@@ -82,8 +86,12 @@ namespace AwtrixSharpWeb.HostedServices
                             continue;
                     }
 
-                    app.Init();
                     _apps.Add(app);
+                }
+
+                foreach(var app in _apps)
+                {
+                    app.Init();
                 }
             }
 

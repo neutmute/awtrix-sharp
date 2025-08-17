@@ -8,5 +8,6 @@ namespace AwtrixSharpWeb.Services
         Task<bool> AppUpdate(AwtrixAddress awtrixAddress, string appName, AwtrixAppMessage message);
         Task<bool> Dismiss(AwtrixAddress awtrixAddress);
         Task<bool> Notify(AwtrixAddress awtrixAddress, AwtrixAppMessage message);
+        Task<bool> Set(AwtrixAddress awtrixAddress, AwtrixSettings settings);
     }
 }

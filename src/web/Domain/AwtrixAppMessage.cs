@@ -10,6 +10,12 @@ namespace AwtrixSharpWeb.Domain
             return this;
         }
 
+        public AwtrixSettings SetBrightness(byte value)
+        {
+            this["BRI"] = value.ToString();
+            return this;
+        }
+
         public string ToJson()
         {
             var json = System.Text.Json.JsonSerializer.Serialize(this);

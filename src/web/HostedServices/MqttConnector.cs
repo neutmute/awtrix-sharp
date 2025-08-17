@@ -77,7 +77,12 @@ namespace AwtrixSharpWeb.HostedServices
 
         public async Task PublishAsync(string topic, string payload)
         {
-            _log.LogInformation("Publishing MQTT to topic {Topic} with payload {Payload}", topic, payload);  
+            var payloadLog = payload;
+            if (string.IsNullOrEmpty(payload))
+            {
+                payloadLog = "<empty>";
+            }
+            _log.LogInformation("Publishing MQTT to topic {Topic} with payload {Payload}", topic, payloadLog);  
 
             var message = new MqttApplicationMessageBuilder()
                 .WithTopic(topic)

@@ -2,6 +2,8 @@
 {
     public class AppConfig : Dictionary<string, string>
     {
+        public static AppConfig Empty => new AppConfig();
+
         private string Get(string key)
         {
             if (this.TryGetValue(key, out var value))

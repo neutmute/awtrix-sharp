@@ -48,7 +48,16 @@ namespace AwtrixSharpWeb.Apps
 
         protected async Task<bool> AppClear()
         {
+            if (Config.Name == null)
+            {
+                // Diurnal sending empty custom payload causes errors
+                return false;
+            }
             return await AwtrixService.AppClear(AwtrixAddress, Config.Name);
+        }
+        protected async Task<bool> Set(AwtrixSettings settings)
+        {
+            return await AwtrixService.Set(AwtrixAddress, settings);
         }
     }
 }
