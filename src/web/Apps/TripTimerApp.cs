@@ -134,12 +134,15 @@ namespace AwtrixSharpWeb.Apps
         {
             Logger.LogInformation($"Schedule has activated");
 
-            var earliestDeparture = Clock.Now.Add(Config.TimeToOrigin).Add(Config.TimeToPrepare);
+            var earliestDeparture = GetAlarmTime(Clock.Now).prepareForDepartTime;
 
             var newDepartures = await _tripPlanner.GetNextDepartures(Config.StopIdOrigin, Config.StopIdDestination, earliestDeparture.LocalDateTime);
             NextDepartures.Clear();
-            NextDepartures.AddRange(newDepartures);
-            var departuresCsv = string.Join(", ", NextDepartures.Select(d => d.ToString("HH:mm:ss")));
+            
+            // Round to the minute otherwise we get to alarm time and it
+            NextDepartures.AddRange(newDepartures.Select(d => d.AddSeconds(-d.Second)));
+            
+            var departuresCsv = string.Join(", ", NextDepartures.Select(d => d.ToString("HH:mm")));
 
             Logger.LogInformation($"{NextDepartures.Count} future depatures found: {departuresCsv}");
 
