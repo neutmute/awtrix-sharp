@@ -64,13 +64,6 @@ namespace AwtrixSharpWeb.HostedServices
                     {
                         case "TripTimerApp":
                             var tripTimerConfig = appConfig.As<TripTimerAppConfig>();
-
-                            if (isDev)
-                            {
-                                tripTimerConfig.CronSchedule = "*/1 * * * *"; // Every minute
-                                tripTimerConfig.ActiveTime = TimeSpan.FromMinutes(30);
-                            }
-
                             app = new TripTimerApp(_logger, clock, device, awtrixService, _timerService, tripTimerConfig, _tripPlanner);
                             break;
 
@@ -92,6 +85,13 @@ namespace AwtrixSharpWeb.HostedServices
                     app.Init();
                 }
             }
+
+            if (isDev)
+            {
+                // Execute the TripTimerApp immediately in development mode
+                ((TripTimerApp)_apps.First(a => a is TripTimerApp)).ExecuteNow();
+            }
+
 
             return Task.CompletedTask;
         }

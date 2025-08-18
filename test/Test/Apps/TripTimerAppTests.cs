@@ -86,9 +86,9 @@ namespace Test.Apps
 
             var expectedPrepareForDepartTime = DateTimeOffset.Parse("2025-08-19T06:19:00+10:00");
             var expectedDepartTime = DateTimeOffset.Parse("2025-08-19T06:27:00+10:00");
-            Assert.Equal(departureTime, actualAlarmTime.originDepartTime);
-            Assert.Equal(expectedDepartTime, actualAlarmTime.departForOriginTime);
-            Assert.Equal(expectedPrepareForDepartTime, actualAlarmTime.prepareForDepartTime);
+            Assert.Equal(departureTime, actualAlarmTime.OriginDepartTime);
+            Assert.Equal(expectedDepartTime, actualAlarmTime.DepartForOriginTime);
+            Assert.Equal(expectedPrepareForDepartTime, actualAlarmTime.PrepareForDepartTime);
         }
 
         [Fact]

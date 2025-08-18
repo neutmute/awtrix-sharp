@@ -116,6 +116,14 @@ namespace AwtrixSharpWeb.Apps
             }
         }
 
+        public void ExecuteNow()
+        {
+            Logger.LogInformation($"ExecuteNow() triggering immediate wake");
+            Dispose(_cts);
+            _cts = new CancellationTokenSource();
+            _ = WakeUp();
+        }
+
         private async Task WakeUp()
         {
             IsScheduled = false; // Reset the scheduled flag
@@ -138,7 +146,6 @@ namespace AwtrixSharpWeb.Apps
                 ScheduleNextWakeUp();
             }
         }
-
 
         protected static Task WaitForCancellation(CancellationToken token)
         {

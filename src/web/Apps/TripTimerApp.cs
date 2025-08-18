@@ -13,6 +13,30 @@ namespace AwtrixSharpWeb.Apps
 
         internal List<DateTimeOffset> NextDepartures { get; set; }
 
+        internal class AlarmStages
+        {
+            /// <summary>
+            /// When you have to start getting ready to leave
+            /// </summary>
+            public DateTimeOffset PrepareForDepartTime { get; set; }
+
+
+            /// <summary>
+            /// When you have to leave for the origin station
+            /// </summary>
+            public DateTimeOffset DepartForOriginTime { get; set; }
+
+            /// <summary>
+            /// When the train departs from the origin station
+            /// </summary>
+            public DateTimeOffset OriginDepartTime { get; set; }
+
+            public override string ToString()
+            {
+                return $"{PrepareForDepartTime:HH:mm} -> {DepartForOriginTime:HH:mm} -> {OriginDepartTime:HH:mm}";
+            }
+        }
+
         public TripTimerApp(
             ILogger logger
             , IClock clock
@@ -42,9 +66,9 @@ namespace AwtrixSharpWeb.Apps
         private AwtrixAppMessage BuildMessage(ClockTickEventArgs e)
         {
             var alarmTimes = NextDepartures.Select(GetAlarmTime)
-                .Where(alarmTime => alarmTime.prepareForDepartTime > Clock.Now)
-                .OrderBy(alarmTime => alarmTime)
-                .Select(at => at.prepareForDepartTime)
+                .Where(alarmTime => alarmTime.PrepareForDepartTime > Clock.Now)
+                .Select(at => at.PrepareForDepartTime)
+                .Order()                
                 .ToList();
 
             if (alarmTimes.Count == 0)
@@ -83,7 +107,7 @@ namespace AwtrixSharpWeb.Apps
 
                 var text = jsonFormat
                     .Replace("(TIME_NOW)", $"{hourString}{spacer}{Clock.Now:mm}")
-                    .Replace("(TIME_ALARM)", $"{nextAlarm.Minute}");
+                    .Replace("(TIME_ALARM)", $"{nextAlarm:mm}");
 
                 var quantisedProgress = GetProgress(Clock, nextAlarm);
                 var useProgress = quantisedProgress.quantized;
@@ -123,18 +147,19 @@ namespace AwtrixSharpWeb.Apps
             return quantizedProgress;
         }
 
-        internal (DateTimeOffset originDepartTime, DateTimeOffset departForOriginTime, DateTimeOffset prepareForDepartTime) GetAlarmTime(DateTimeOffset originDepartTime)
+        internal AlarmStages GetAlarmTime(DateTimeOffset originDepartTime)
         {
             var departForOriginTime = originDepartTime.Add(-Config.TimeToOrigin);
             var prepareForDepartTime = departForOriginTime.Add(-Config.TimeToPrepare);
-            return (originDepartTime, departForOriginTime, prepareForDepartTime);
+            return new AlarmStages { OriginDepartTime = originDepartTime, DepartForOriginTime = departForOriginTime, PrepareForDepartTime = prepareForDepartTime };
         }
 
         protected override async Task ActivateScheduledWork(CancellationTokenSource cts)
         {
             Logger.LogInformation($"Schedule has activated");
 
-            var earliestDeparture = GetAlarmTime(Clock.Now).prepareForDepartTime;
+            // Find the earliest we could get to the train station and query from then
+            var earliestDeparture = Clock.Now.Add(Config.TimeToOrigin).Add(Config.TimeToPrepare);
 
             var newDepartures = await _tripPlanner.GetNextDepartures(Config.StopIdOrigin, Config.StopIdDestination, earliestDeparture.LocalDateTime);
             NextDepartures.Clear();
@@ -142,9 +167,11 @@ namespace AwtrixSharpWeb.Apps
             // Round to the minute otherwise we get to alarm time and it
             NextDepartures.AddRange(newDepartures.Select(d => d.AddSeconds(-d.Second)));
             
-            var departuresCsv = string.Join(", ", NextDepartures.Select(d => d.ToString("HH:mm")));
+            var departuresCsv = string.Join(Environment.NewLine, NextDepartures.Select(d => GetAlarmTime(d).ToString()));
 
-            Logger.LogInformation($"{NextDepartures.Count} future depatures found: {departuresCsv}");
+            Logger.LogInformation($"{NextDepartures.Count} future depatures found:");
+            Logger.LogInformation($"Prep -> Leave -> Departure");
+            NextDepartures.ForEach(d => Logger.LogInformation(GetAlarmTime(d).ToString()));
 
             _timerService.SecondChanged += ClockTickSecond;
             _timerService.MinuteChanged += ClockTickMinute;
