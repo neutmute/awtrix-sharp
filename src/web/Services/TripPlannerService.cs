@@ -25,7 +25,7 @@ namespace AwtrixSharpWeb.Services
             return await _stopFinderClient.RequestAsync(OutputFormat4.RapidJSON, Type_sf.Stop, query, CoordOutputFormat3.EPSG4326, TfNSWSF.True, null);
         }
 
-        public async Task<TripRequestResponse> GetTrip(string originStopId, string destinationStopId, DateTime fromWhen)
+        public async Task<TripRequestResponse> GetTrips(string originStopId, string destinationStopId, DateTime fromWhen)
         {
             _logger.LogInformation("Getting trip from {Origin} to {Destination} from {Time:HH:mm}", originStopId, destinationStopId, fromWhen);
 
@@ -67,7 +67,7 @@ namespace AwtrixSharpWeb.Services
 
         public async Task<List<DateTimeOffset>> GetNextDepartures(string originStopId, string destinationStopId, DateTime fromWhen)
         {
-            var trips = await GetTrip(originStopId, destinationStopId, fromWhen);
+            var trips = await GetTrips(originStopId, destinationStopId, fromWhen);
 
             var output = new List<DateTimeOffset>();
             foreach (var journey in trips.Journeys)

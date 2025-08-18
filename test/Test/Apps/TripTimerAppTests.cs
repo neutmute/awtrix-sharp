@@ -14,26 +14,6 @@ using System.Threading.Tasks;
 namespace Test.Apps
 {
 
-    public class MockClock : IClock
-    {
-        private DateTimeOffset _currentTime;
-        public MockClock(DateTimeOffset initialTime)
-        {
-            _currentTime = initialTime;
-        }
-        public DateTimeOffset Now => _currentTime;
-
-        public void SetTime(DateTimeOffset newTime)
-        {
-            _currentTime = newTime;
-        }
-
-        public void AdvanceTime(TimeSpan timeSpan)
-        {
-            _currentTime = _currentTime.Add(timeSpan);
-        }
-    }   
-
     public class TripTimerAppTests
     {
         IClock _clock;
@@ -53,6 +33,14 @@ namespace Test.Apps
             _mockTimerService = new Mock<ITimerService>();
             _mockTripPlannerService = new Mock<ITripPlannerService>();
 
+            _mockTripPlannerService.Setup(x => x.GetNextDepartures(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<DateTime>()))
+                .ReturnsAsync(new List<DateTimeOffset>
+                {
+                    DateTimeOffset.Parse("2025-08-19T06:28:00+10:00"),
+                    DateTimeOffset.Parse("2025-08-19T06:41:00+10:00"),
+                    DateTimeOffset.Parse("2025-08-19T06:53:00+10:00")
+                });
+
             _mockLog
               .Setup(x => x.Log(
                   It.Is<LogLevel>(l => l == LogLevel.Information),
@@ -69,9 +57,9 @@ namespace Test.Apps
             _timerConfig = new TripTimerAppConfig
             {
                 CronSchedule = "* * * * *", // Every minute
-                ActiveTime = TimeSpan.FromSeconds(10), // Active for 60 minutes
-                TimeToOrigin = TimeSpan.FromMinutes(15), // 15 minutes to origin    
-                TimeToPrepare = TimeSpan.FromMinutes(30), // 30 minutes to prepare  
+                ActiveTime = TimeSpan.FromMinutes(30),
+                TimeToOrigin = TimeSpan.FromMinutes(14),
+                TimeToPrepare = TimeSpan.FromMinutes(8),
             };
 
             _timerConfig.Add("Name", "TripTimer");
@@ -86,6 +74,21 @@ namespace Test.Apps
                 , _mockTripPlannerService.Object);
 
             return sut;
+        }
+
+        [Fact]
+        public void GetAlarm()
+        {
+            // Arrange
+            var sut = GetSystemUnderTest();
+            var departureTime = DateTimeOffset.Parse("2025-08-19T06:41:00+10:00");
+            var actualAlarmTime = sut.GetAlarmTime(departureTime);
+
+            var expectedPrepareForDepartTime = DateTimeOffset.Parse("2025-08-19T06:19:00+10:00");
+            var expectedDepartTime = DateTimeOffset.Parse("2025-08-19T06:27:00+10:00");
+            Assert.Equal(departureTime, actualAlarmTime.originDepartTime);
+            Assert.Equal(expectedDepartTime, actualAlarmTime.departForOriginTime);
+            Assert.Equal(expectedPrepareForDepartTime, actualAlarmTime.prepareForDepartTime);
         }
 
         [Fact]

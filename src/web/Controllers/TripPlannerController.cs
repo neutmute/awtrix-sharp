@@ -39,11 +39,12 @@ namespace AwtrixSharpWeb.Controllers
         }
 
         [HttpGet("departures")]
-        public async Task<IActionResult> GetDepartures([FromQuery] string originId, [FromQuery] string destinationId)
+        public async Task<IActionResult> GetDepartures([FromQuery] string originId, [FromQuery] string destinationId, [FromQuery] string fromDateTime)
         {
             try
             {
-                var result = await _tripPlannerService.GetNextDepartures(originId, destinationId, DateTime.Now);
+                var fromTimestamp = DateTime.Parse(fromDateTime);
+                var result = await _tripPlannerService.GetNextDepartures(originId, destinationId, fromTimestamp);
                 return Ok(result);
             }
             catch (Exception ex)
@@ -58,13 +59,12 @@ namespace AwtrixSharpWeb.Controllers
         /// Very detailed trip data
         /// </summary>
         [HttpGet("trip")]
-        public async Task<IActionResult> GetTrip([FromQuery] string originId, [FromQuery] string destinationId)
+        public async Task<IActionResult> GetTrip([FromQuery] string originId, [FromQuery] string destinationId, [FromQuery] string fromDateTime)
         {
             try
             {
-                // Use the TripClient to get trip information
-                // Setting up default parameters based on the API requirements
-                var result = await _tripPlannerService.GetTrip(originId, destinationId, DateTime.Now);
+                var fromTimestamp = DateTime.Parse(fromDateTime);
+                var result = await _tripPlannerService.GetTrips(originId, destinationId, fromTimestamp);
 
                 return Ok(result);
             }

@@ -11,7 +11,7 @@ namespace AwtrixSharpWeb.Apps
         private readonly ITripPlannerService _tripPlanner;
         private readonly ITimerService _timerService;
 
-        List<DateTimeOffset> _nextDepartures;
+        internal List<DateTimeOffset> NextDepartures { get; set; }
 
         public TripTimerApp(
             ILogger logger
@@ -24,7 +24,7 @@ namespace AwtrixSharpWeb.Apps
         {
             _tripPlanner = tripPlanner;
             _timerService = timerService;
-            _nextDepartures = new List<DateTimeOffset>();
+            NextDepartures = new List<DateTimeOffset>();
         }
 
 
@@ -41,9 +41,10 @@ namespace AwtrixSharpWeb.Apps
 
         private AwtrixAppMessage BuildMessage(ClockTickEventArgs e)
         {
-            var alarmTimes = _nextDepartures.Select(GetAlarmTime)
-                .Where(alarmTime => alarmTime > Clock.Now)
+            var alarmTimes = NextDepartures.Select(GetAlarmTime)
+                .Where(alarmTime => alarmTime.prepareForDepartTime > Clock.Now)
                 .OrderBy(alarmTime => alarmTime)
+                .Select(at => at.prepareForDepartTime)
                 .ToList();
 
             if (alarmTimes.Count == 0)
@@ -56,7 +57,7 @@ namespace AwtrixSharpWeb.Apps
             {
                 var nextAlarm = alarmTimes.First();
                 var timeToAlarm = nextAlarm - Clock.Now;
-                var secondsToAlarm = (int)timeToAlarm.TotalSeconds;
+                var secondsToAlarm = (int) timeToAlarm.TotalSeconds;
 
                 var thisSecond = e.Time.Second;
                 var isOddSecond = thisSecond % 2 == 1;
@@ -71,18 +72,18 @@ namespace AwtrixSharpWeb.Apps
                 //var text = $"{hour}{spacer}{Clock.Now:mm}->{nextAlarm.Minute}";
                 var jsonFormat = @"[
 	{
-	  ""t"": ""(TIME)"",
+	  ""t"": ""(TIME_NOW)"",
 	  ""c"": ""00FF00""
 	},
 	{
-	  ""t"": "" ->(GOAL)"",
+	  ""t"": "" ->(TIME_ALARM)"",
 	  ""c"": ""FF0000""
 	}
 ]";
 
                 var text = jsonFormat
-                    .Replace("(TIME)", $"{hourString}{spacer}{Clock.Now:mm}")
-                    .Replace("(GOAL)", $"{nextAlarm.Minute}");
+                    .Replace("(TIME_NOW)", $"{hourString}{spacer}{Clock.Now:mm}")
+                    .Replace("(TIME_ALARM)", $"{nextAlarm.Minute}");
 
                 var quantisedProgress = GetProgress(Clock, nextAlarm);
                 var useProgress = quantisedProgress.quantized;
@@ -122,9 +123,11 @@ namespace AwtrixSharpWeb.Apps
             return quantizedProgress;
         }
 
-        private DateTimeOffset GetAlarmTime(DateTimeOffset departure)
+        internal (DateTimeOffset originDepartTime, DateTimeOffset departForOriginTime, DateTimeOffset prepareForDepartTime) GetAlarmTime(DateTimeOffset originDepartTime)
         {
-            return departure.Add(-Config.TimeToOrigin).Add(-Config.TimeToPrepare);
+            var departForOriginTime = originDepartTime.Add(-Config.TimeToOrigin);
+            var prepareForDepartTime = departForOriginTime.Add(-Config.TimeToPrepare);
+            return (originDepartTime, departForOriginTime, prepareForDepartTime);
         }
 
         protected override async Task ActivateScheduledWork(CancellationTokenSource cts)
@@ -133,10 +136,12 @@ namespace AwtrixSharpWeb.Apps
 
             var earliestDeparture = Clock.Now.Add(Config.TimeToOrigin).Add(Config.TimeToPrepare);
 
-            _nextDepartures = await _tripPlanner.GetNextDepartures(Config.StopIdOrigin, Config.StopIdDestination, earliestDeparture.LocalDateTime);
-            var departuresCsv = string.Join(", ", _nextDepartures.Select(d => d.ToString("HH:mm:ss")));
+            var newDepartures = await _tripPlanner.GetNextDepartures(Config.StopIdOrigin, Config.StopIdDestination, earliestDeparture.LocalDateTime);
+            NextDepartures.Clear();
+            NextDepartures.AddRange(newDepartures);
+            var departuresCsv = string.Join(", ", NextDepartures.Select(d => d.ToString("HH:mm:ss")));
 
-            Logger.LogInformation($"{_nextDepartures.Count} future depatures found: {departuresCsv}");
+            Logger.LogInformation($"{NextDepartures.Count} future depatures found: {departuresCsv}");
 
             _timerService.SecondChanged += ClockTickSecond;
             _timerService.MinuteChanged += ClockTickMinute;
@@ -158,7 +163,6 @@ namespace AwtrixSharpWeb.Apps
         }
 
 
-        // Clean up resources
         new protected void Dispose(bool disposing)
         {
             if (disposing)
@@ -171,8 +175,8 @@ namespace AwtrixSharpWeb.Apps
             base.Dispose(disposing);
         }
 
-        // Override the non-protected Dispose method to call our new protected Dispose method
-        public new void Dispose()
+
+        public void Dispose()
         {
             Dispose(true);
             GC.SuppressFinalize(this);
