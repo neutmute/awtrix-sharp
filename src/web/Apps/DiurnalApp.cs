@@ -5,13 +5,13 @@ using AwtrixSharpWeb.Services;
 
 namespace AwtrixSharpWeb.Apps
 {
-    public class DirunalApp : AwtrixApp<AppConfig>
+    public class DiurnalApp : AwtrixApp<AppConfig>
     {
         ITimerService _timerService;
 
         Dictionary<int, AwtrixSettings> _hourMap;
 
-        public DirunalApp(
+        public DiurnalApp(
             ILogger logger
             , ITimerService timerService
             , AppConfig config
@@ -32,7 +32,8 @@ namespace AwtrixSharpWeb.Apps
             {
                 { 6, new AwtrixSettings().SetBrightness(8) },
                 { 7, new AwtrixSettings().SetGlobalTextColor("#FFFFFF") },
-                { 19, new AwtrixSettings().SetGlobalTextColor("#FF0000").SetBrightness(1) }, 
+                { 19, new AwtrixSettings().SetGlobalTextColor("#FF0000") },
+                { 21, new AwtrixSettings().SetBrightness(1) },
             };
 
             if (Config.IsEnvironmentDev())

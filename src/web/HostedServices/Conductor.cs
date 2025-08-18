@@ -53,7 +53,7 @@ namespace AwtrixSharpWeb.HostedServices
 
             foreach (var device in _awtrixConfig.Devices)
             {
-                var diurnalApp = new DirunalApp(_logger, _timerService, AppConfig.Empty(_hostEnvironment.EnvironmentName), device, awtrixService);
+                var diurnalApp = new DiurnalApp(_logger, _timerService, AppConfig.Empty(_hostEnvironment.EnvironmentName), device, awtrixService);
                 _apps.Add(diurnalApp);
 
                 foreach (var appConfig in device.Apps)
