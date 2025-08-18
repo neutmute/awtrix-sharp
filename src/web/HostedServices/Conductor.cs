@@ -47,14 +47,13 @@ namespace AwtrixSharpWeb.HostedServices
             var awtrixService = new AwtrixService(_httpPublisher, _mqttConnector);
             var clock = new Clock();
 
+            var isDev = _hostEnvironment.IsDevelopment();
+            _logger.LogInformation("Environment: {EnvName}, isDev={isDev}", _hostEnvironment.EnvironmentName, isDev);
 
-            _logger.LogInformation("Environment: {EnvName}", _hostEnvironment.EnvironmentName);
-
-          
 
             foreach (var device in _awtrixConfig.Devices)
             {
-                var diurnalApp = new DirunalDecorator(_logger, _timerService, AppConfig.Empty, device, awtrixService);
+                var diurnalApp = new DirunalApp(_logger, _timerService, AppConfig.Empty(_hostEnvironment.EnvironmentName), device, awtrixService);
                 _apps.Add(diurnalApp);
 
                 foreach (var appConfig in device.Apps)
@@ -66,12 +65,11 @@ namespace AwtrixSharpWeb.HostedServices
                         case "TripTimerApp":
                             var tripTimerConfig = appConfig.As<TripTimerAppConfig>();
 
-                            if (_hostEnvironment.IsDevelopment())
+                            if (isDev)
                             {
-                                //tripTimerConfig.CronSchedule = "*/1 * * * *"; // Every minute
-                                //tripTimerConfig.ActiveTime = TimeSpan.FromMinutes(30);
+                                tripTimerConfig.CronSchedule = "*/1 * * * *"; // Every minute
+                                tripTimerConfig.ActiveTime = TimeSpan.FromMinutes(30);
                             }
-
 
                             app = new TripTimerApp(_logger, clock, device, awtrixService, _timerService, tripTimerConfig, _tripPlanner);
                             break;

@@ -5,13 +5,13 @@ using AwtrixSharpWeb.Services;
 
 namespace AwtrixSharpWeb.Apps
 {
-    public class DirunalDecorator : AwtrixApp<AppConfig>
+    public class DirunalApp : AwtrixApp<AppConfig>
     {
         ITimerService _timerService;
 
         Dictionary<int, AwtrixSettings> _hourMap;
 
-        public DirunalDecorator(
+        public DirunalApp(
             ILogger logger
             , ITimerService timerService
             , AppConfig config
@@ -32,13 +32,15 @@ namespace AwtrixSharpWeb.Apps
             {
                 { 6, new AwtrixSettings().SetBrightness(8) },
                 { 7, new AwtrixSettings().SetGlobalTextColor("#FFFFFF") },
-                { 19, new AwtrixSettings().SetGlobalTextColor("#FF0000").SetBrightness(1) }, // Evening color
-                { 21, new AwtrixSettings().SetGlobalTextColor("#FF0000").SetBrightness(1) } // Evening color
+                { 19, new AwtrixSettings().SetGlobalTextColor("#FF0000").SetBrightness(1) }, 
             };
 
-            // Trigger the first minute change immediately to set the initial color
-            var fakeClockTick = new ClockTickEventArgs(DateTime.Now.AddMinutes(-DateTime.Now.Minute));
-            ClockTickMinute(this, fakeClockTick);
+            if (Config.IsEnvironmentDev())
+            {
+                // Tick straight away for testing
+                var fakeClockTick = new ClockTickEventArgs(DateTime.Now.AddMinutes(-DateTime.Now.Minute));
+                ClockTickMinute(this, fakeClockTick);
+            }
         }
 
         private void ClockTickMinute(object? sender, ClockTickEventArgs e)

@@ -74,8 +74,10 @@ namespace AwtrixSharpWeb.Controllers
                 var payload = new AwtrixAppMessage()
                                     .SetText(text)
                                     .SetProgress(50)
-                                    .SetDuration(TimeSpan.FromSeconds(10));
+                                    .SetStack(false)
+                                    .SetDuration(TimeSpan.FromSeconds(5));
 
+                await _awtrixService.Dismiss(device);
                 await _awtrixService.Notify(device, payload);
             }
 

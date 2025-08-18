@@ -2,6 +2,7 @@ using AwtrixSharpWeb.Domain;
 using AwtrixSharpWeb.HostedServices;
 using AwtrixSharpWeb.Interfaces;
 using AwtrixSharpWeb.Services;
+using System.Xml.Linq;
 
 namespace AwtrixSharpWeb.Apps
 {
@@ -44,12 +45,12 @@ namespace AwtrixSharpWeb.Apps
                 .Where(alarmTime => alarmTime > Clock.Now)
                 .OrderBy(alarmTime => alarmTime)
                 .ToList();
-            
+
             if (alarmTimes.Count == 0)
             {
                 Logger.LogWarning("No future departures");
                 _cts.Cancel();
-                return new AwtrixAppMessage(); 
+                return new AwtrixAppMessage();
             }
             else
             {
@@ -61,9 +62,27 @@ namespace AwtrixSharpWeb.Apps
                 var isOddSecond = thisSecond % 2 == 1;
                 var spacer = isOddSecond ? " " : ":";
 
-                var hour = Clock.Now.Hour.ToString();
+                // 12h saves a character, ToString("h") fails
+                var hour = Clock.Now.Hour % 12;
+                if (hour == 0) hour = 12;
+                var hourString = hour.ToString();
 
-                var text = $"{hour}{spacer}{Clock.Now:mm} {secondsToAlarm}";
+                //var text = $"{hour}{spacer}{Clock.Now:mm} {secondsToAlarm}";
+                //var text = $"{hour}{spacer}{Clock.Now:mm}->{nextAlarm.Minute}";
+                var jsonFormat = @"[
+	{
+	  ""t"": ""(TIME)"",
+	  ""c"": ""00FF00""
+	},
+	{
+	  ""t"": "" ->(GOAL)"",
+	  ""c"": ""FF0000""
+	}
+]";
+
+                var text = jsonFormat
+                    .Replace("(TIME)", $"{hourString}{spacer}{Clock.Now:mm}")
+                    .Replace("(GOAL)", $"{nextAlarm.Minute}");
 
                 var quantisedProgress = GetProgress(Clock, nextAlarm);
                 var useProgress = quantisedProgress.quantized;
