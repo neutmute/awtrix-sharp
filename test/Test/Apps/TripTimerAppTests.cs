@@ -171,7 +171,9 @@ namespace Test.Apps
             var now = nextAlarm.AddSeconds(-secondsToAlarm);
             var clock = new MockClock(now);
 
-            var actualProgess = TripTimerApp.GetProgress(clock, nextAlarm);
+            var sut = GetSystemUnderTest();
+
+            var actualProgess = sut.GetProgress(clock, nextAlarm);
 
             Assert.Equal(expectedProgess, actualProgess.quantized);
         }

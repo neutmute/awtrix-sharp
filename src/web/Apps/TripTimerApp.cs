@@ -153,11 +153,11 @@ namespace AwtrixSharpWeb.Apps
 
         }
 
-        internal static (int quantized, int quantizedBlink) GetProgress(IClock clock, DateTimeOffset nextAlarm)
+        internal (int quantized, int quantizedBlink) GetProgress(IClock clock, DateTimeOffset nextAlarm)
         {
             const int ZeroFromMinutes = 5;
 
-            var countFromSecs = (int) TimeSpan.FromMinutes(ZeroFromMinutes).TotalSeconds;
+            var countFromSecs = (TimeSpan.FromMinutes(ZeroFromMinutes) - VisualAlertBuffer).Seconds; // enure full progress bar
             var secondsSinceCountFrom = (int)(clock.Now - nextAlarm.AddMinutes(-ZeroFromMinutes)).TotalSeconds;
             var progress = secondsSinceCountFrom * 100 / countFromSecs;
 
