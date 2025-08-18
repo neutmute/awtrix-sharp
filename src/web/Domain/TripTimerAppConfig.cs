@@ -32,6 +32,15 @@
             return result;
         }
 
+        public AppConfig SetName(string name)
+        {
+            if (!string.IsNullOrWhiteSpace(name))
+            {
+                this["Name"] = name;
+            }
+            return this;
+        }
+
         private string Get(string key)
         {
             if (this.TryGetValue(key, out var value))

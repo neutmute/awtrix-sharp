@@ -7,6 +7,13 @@ using Microsoft.Extensions.Options;
 
 namespace AwtrixSharpWeb.HostedServices
 {
+    internal class AppNames
+    {
+        public const string DiurnalApp = "DiurnalApp";
+        public const string TripTimerApp = "TripTimerApp";
+        public const string SlackStatusApp = "SlackStatusApp";
+    }
+
     public class Conductor : IHostedService
     {
         private readonly ILogger<Conductor> _logger;
@@ -19,6 +26,7 @@ namespace AwtrixSharpWeb.HostedServices
         AwtrixConfig _awtrixConfig;
 
         List<IAwtrixApp> _apps;
+
 
         public Conductor(
             ILogger<Conductor> logger
@@ -44,39 +52,14 @@ namespace AwtrixSharpWeb.HostedServices
 
         public Task StartAsync(CancellationToken cancellationToken)
         {
-            var awtrixService = new AwtrixService(_httpPublisher, _mqttConnector);
-            var clock = new Clock();
-
-            var isDev = _hostEnvironment.IsDevelopment();
-            _logger.LogInformation("Environment: {EnvName}, isDev={isDev}", _hostEnvironment.EnvironmentName, isDev);
-
-
             foreach (var device in _awtrixConfig.Devices)
             {
-                var diurnalApp = new DiurnalApp(_logger, _timerService, AppConfig.Empty(_hostEnvironment.EnvironmentName), device, awtrixService);
-                _apps.Add(diurnalApp);
+                var diurnalConfig = AppConfig.Empty(_hostEnvironment.EnvironmentName).SetName(AppNames.DiurnalApp);
+                _apps.Add(AppFactory(device, diurnalConfig));
 
                 foreach (var appConfig in device.Apps)
                 {
-                    IAwtrixApp app;
-
-                    switch(appConfig.Name)
-                    {
-                        case "TripTimerApp":
-                            var tripTimerConfig = appConfig.As<TripTimerAppConfig>();
-                            app = new TripTimerApp(_logger, clock, device, awtrixService, _timerService, tripTimerConfig, _tripPlanner);
-                            break;
-
-                        case "SlackStatusApp":
-                            var slackStatusConfig = appConfig.As<AppConfig>();
-                            app = new SlackStatusApp(_logger, slackStatusConfig, device, awtrixService, _slackConnector);
-                            break;
-
-                        default:
-                            _logger.LogWarning($"App {appConfig.Name} is not implemented.");
-                            continue;
-                    }
-
+                    var app = AppFactory(device, appConfig);            
                     _apps.Add(app);
                 }
 
@@ -86,15 +69,57 @@ namespace AwtrixSharpWeb.HostedServices
                 }
             }
 
-            if (isDev)
+            if (_hostEnvironment.IsDevelopment())
             {
                 // Execute the TripTimerApp immediately in development mode
-                ((TripTimerApp)_apps.First(a => a is TripTimerApp)).ExecuteNow();
+                //((TripTimerApp)_apps.First(a => a is TripTimerApp)).ExecuteNow();
             }
-
 
             return Task.CompletedTask;
         }
+
+        private IAwtrixApp AppFactory(DeviceConfig device, AppConfig appConfig)
+        {
+            IAwtrixApp app;
+
+            var awtrixService = new AwtrixService(_httpPublisher, _mqttConnector);
+            var clock = new Clock();
+
+            var isDev = _hostEnvironment.IsDevelopment();
+            _logger.LogInformation("Environment: {EnvName}, isDev={isDev}", _hostEnvironment.EnvironmentName, isDev);
+
+            switch (appConfig.Name)
+            {
+                case AppNames.DiurnalApp:
+                    app = new DiurnalApp(_logger, _timerService, appConfig, device, awtrixService);
+                    break;
+
+                case AppNames.TripTimerApp:
+                    var tripTimerConfig = appConfig.As<TripTimerAppConfig>();
+                    app = new TripTimerApp(_logger, clock, device, awtrixService, _timerService, tripTimerConfig, _tripPlanner);
+                    break;
+
+                case AppNames.SlackStatusApp:
+                    var slackStatusConfig = appConfig.As<AppConfig>();
+                    app = new SlackStatusApp(_logger, slackStatusConfig, device, awtrixService, _slackConnector);
+                    break;
+
+                default:
+                   throw new NotImplementedException(appConfig.Name);
+            }
+
+            return app;
+        }
+
+        public void ExecuteNow(string baseTopic, string appName)
+        {
+            var device = _awtrixConfig.Devices.First(d => d.BaseTopic == baseTopic);
+            var config = device.Apps.First(a => a.Name == appName);
+
+            var app = AppFactory(device, config);
+            app.ExecuteNow();
+        }
+
         public Task StopAsync(CancellationToken cancellationToken)
         {
             _logger.LogInformation("Conductor stopped.");

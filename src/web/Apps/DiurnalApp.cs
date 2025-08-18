@@ -20,7 +20,6 @@ namespace AwtrixSharpWeb.Apps
             : base(logger, config, awtrixAddress, awtrixService)
         {
             _timerService = timerService;
-
         }
 
         protected override void Initialize()

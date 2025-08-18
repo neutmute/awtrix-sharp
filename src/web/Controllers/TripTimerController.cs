@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using AwtrixSharpWeb.HostedServices;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.OpenApi.Attributes;
 using System.ComponentModel;
 
@@ -11,13 +12,20 @@ namespace AwtrixSharpWeb.Controllers
     [ApiController]
     public class TripTimerController : ControllerBase
     {
+        Conductor _conductor;
+
+        public TripTimerController(Conductor conductor)
+        {
+            _conductor = conductor;
+        }
 
         /// <summary>
         /// Start now
         /// </summary>
         [HttpPost]
-        public void Post()
+        public void StartNow([FromQuery] string baseTopic = "awtrix/clock1", [FromQuery] string appName = AppNames.TripTimerApp)
         {
+            _conductor.ExecuteNow(baseTopic, appName);
         }
     }
 }

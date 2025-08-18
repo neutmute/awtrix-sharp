@@ -116,7 +116,7 @@ namespace AwtrixSharpWeb.Apps
             }
         }
 
-        public void ExecuteNow()
+        public override void ExecuteNow()
         {
             Logger.LogInformation($"ExecuteNow() triggering immediate wake");
             Dispose(_cts);

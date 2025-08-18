@@ -31,6 +31,13 @@ namespace AwtrixSharpWeb.Apps
 
         protected abstract void Initialize();
 
+        /// <summary>
+        /// For debugging purposes, allow immediate execution of the app
+        /// </summary>
+        public virtual void ExecuteNow()
+        {
+        }
+
         protected async Task<bool> Notify(AwtrixAppMessage message)
         {
             return await AwtrixService.Notify(AwtrixAddress, message);

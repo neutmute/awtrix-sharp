@@ -3,5 +3,6 @@
     public interface IAwtrixApp
     {
         void Init();
+        void ExecuteNow();
     }
 }
