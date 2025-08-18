@@ -13,6 +13,11 @@ namespace AwtrixSharpWeb.Apps
 
         internal List<DateTimeOffset> NextDepartures { get; set; }
 
+        /// <summary>
+        /// How long before the alarm actually triggers do we show the visual alert 
+        /// </summary>
+        private readonly TimeSpan VisualAlertBuffer;
+
         internal class AlarmStages
         {
             /// <summary>
@@ -49,6 +54,8 @@ namespace AwtrixSharpWeb.Apps
             _tripPlanner = tripPlanner;
             _timerService = timerService;
             NextDepartures = new List<DateTimeOffset>();
+
+            VisualAlertBuffer = TimeSpan.FromSeconds(20);
         }
 
 
@@ -81,7 +88,7 @@ namespace AwtrixSharpWeb.Apps
             {
                 var nextAlarm = alarmTimes.First();
                 var timeToAlarm = nextAlarm - Clock.Now;
-                var secondsToAlarm = (int) timeToAlarm.TotalSeconds;
+                //var secondsToAlarm = (int) timeToAlarm.TotalSeconds;
 
                 var thisSecond = e.Time.Second;
                 var isOddSecond = thisSecond % 2 == 1;
@@ -92,22 +99,31 @@ namespace AwtrixSharpWeb.Apps
                 if (hour == 0) hour = 12;
                 var hourString = hour.ToString();
 
+                var nowColor = "00FF00";
+
+                if (nextAlarm.AddMinutes(-1) <= Clock.Now)
+                {
+                    // We are in the last minute before the alarm
+                    nowColor = "FFA500";
+                }
+
                 //var text = $"{hour}{spacer}{Clock.Now:mm} {secondsToAlarm}";
                 //var text = $"{hour}{spacer}{Clock.Now:mm}->{nextAlarm.Minute}";
                 var jsonFormat = @"[
 	{
-	  ""t"": ""(TIME_NOW)"",
-	  ""c"": ""00FF00""
+	  ""t"": ""(NOW_TIME)"",
+	  ""c"": ""(NOW_COLOR)""
 	},
 	{
-	  ""t"": "" ->(TIME_ALARM)"",
+	  ""t"": "" ->(ALARM_TIME)"",
 	  ""c"": ""FF0000""
 	}
 ]";
 
                 var text = jsonFormat
-                    .Replace("(TIME_NOW)", $"{hourString}{spacer}{Clock.Now:mm}")
-                    .Replace("(TIME_ALARM)", $"{nextAlarm:mm}");
+                    .Replace("(NOW_TIME)", $"{hourString}{spacer}{Clock.Now:mm}")
+                    .Replace("(NOW_COLOR)", nowColor)
+                    .Replace("(ALARM_TIME)", $"{nextAlarm:mm}");
 
                 var quantisedProgress = GetProgress(Clock, nextAlarm);
                 var useProgress = quantisedProgress.quantized;
@@ -122,10 +138,12 @@ namespace AwtrixSharpWeb.Apps
                     .SetDuration(300)
                     .SetProgress(useProgress);
 
-                if (secondsToAlarm < 20)
+                if (timeToAlarm < VisualAlertBuffer)
                 {
+                    text = "GO!";
+                    Logger.LogInformation($"{text}");
                     message
-                        .SetText("GO!")
+                        .SetText(text)
                         .SetRainbow()
                         .SetProgress(100);
                 }
