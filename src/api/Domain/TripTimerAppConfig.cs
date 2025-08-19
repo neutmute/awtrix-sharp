@@ -1,4 +1,6 @@
-﻿namespace AwtrixSharpWeb.Domain
+﻿using AwtrixSharpWeb.Interfaces;
+
+namespace AwtrixSharpWeb.Domain
 {
     public static class AppConfigExtensions
     {
@@ -20,7 +22,7 @@
         }
     }
 
-    public class AppConfig : Dictionary<string, string>
+    public class AppConfig : Dictionary<string, string>, IAppConfig
     {
         public const string EnvironmentKey = "Environment";
 
@@ -41,7 +43,7 @@
             return this;
         }
 
-        private string Get(string key)
+        public string Get(string key)
         {
             if (this.TryGetValue(key, out var value))
             {
@@ -72,7 +74,7 @@
         {
             // Create a new instance of the target type
             T target = new T();
-            
+
             // Copy all key-value pairs from source to target
             foreach (var kvp in source)
             {

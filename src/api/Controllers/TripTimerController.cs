@@ -1,4 +1,5 @@
-﻿using AwtrixSharpWeb.HostedServices;
+﻿using AwtrixSharpWeb.Apps;
+using AwtrixSharpWeb.HostedServices;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.OpenApi.Attributes;
 using System.ComponentModel;
@@ -22,10 +23,30 @@ namespace AwtrixSharpWeb.Controllers
         /// <summary>
         /// Start now
         /// </summary>
-        [HttpPost]
+        [HttpPost("start")]
         public void StartNow([FromQuery] string baseTopic = "awtrix/clock1", [FromQuery] string appName = AppNames.TripTimerApp)
         {
             _conductor.ExecuteNow(baseTopic, appName);
+        }
+
+
+        /// <summary>
+        /// Start now
+        /// </summary>
+        [HttpPost("test/alarm-timings")]
+        public IActionResult TestTimingConfig([FromQuery] string timestamp = "2025-09-01 06:41")
+        {
+            var dateTime = DateTimeOffset.Parse(timestamp);
+
+            var app = _conductor
+                            .FindApps(AppNames.TripTimerApp)
+                            .First();
+
+
+            var tripTimer = (TripTimerApp)app;
+            var alarmSegments = tripTimer.GetAlarmTime(dateTime);
+
+            return Ok(alarmSegments);
         }
     }
 }

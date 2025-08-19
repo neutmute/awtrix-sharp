@@ -7,11 +7,13 @@ namespace AwtrixSharpWeb.Apps
 {
     public abstract class AwtrixApp<TConfig> : IAwtrixApp where TConfig : AppConfig
     {
-        private AwtrixAddress AwtrixAddress;
+        public AwtrixAddress AwtrixAddress { get; private set; }
 
         private IAwtrixService AwtrixService;
 
-        protected readonly TConfig Config;
+        public readonly TConfig Config;
+
+        public IAppConfig GetConfig() => Config;
 
         protected ILogger Logger { get; private set; }
 

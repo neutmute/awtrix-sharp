@@ -120,6 +120,12 @@ namespace AwtrixSharpWeb.HostedServices
             app.ExecuteNow();
         }
 
+        public List<IAwtrixApp> FindApps(string appName)
+        {
+            var app = _apps.FindAll(a => a.GetConfig().Name == appName);
+            return app;
+        }
+
         public Task StopAsync(CancellationToken cancellationToken)
         {
             _logger.LogInformation("Conductor stopped.");
