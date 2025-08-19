@@ -13,7 +13,7 @@ namespace AwtrixSharpWeb.HostedServices
         public const string DiurnalApp = "DiurnalApp";
         public const string TripTimerApp = "TripTimerApp";
         public const string SlackStatusApp = "SlackStatusApp";
-        public const string MqttApp = "MqttApp";
+        public const string MqttRenderApp = "MqttRenderApp";
     }
 
     public class Conductor : IHostedService
@@ -104,9 +104,9 @@ namespace AwtrixSharpWeb.HostedServices
                     app = new TripTimerApp(_logger, clock, device, awtrixService, _timerService, tripTimerConfig, _tripPlanner);
                     break;
 
-                case AppNames.MqttApp:
+                case AppNames.MqttRenderApp:
                     var mqttConfig = appConfig.As<MqttAppConfig>();
-                    app = new MqttApp(_logger, clock, mqttConfig, device, awtrixService, _mqttConnector);
+                    app = new MqttRenderApp(_logger, clock, mqttConfig, device, awtrixService, _mqttConnector);
                     break;
 
                 case AppNames.SlackStatusApp:
@@ -127,6 +127,7 @@ namespace AwtrixSharpWeb.HostedServices
             var config = device.Apps.First(a => a.Name == appName);
 
             var app = AppFactory(device, config);
+            app.Init();
             app.ExecuteNow();
         }
 

@@ -104,7 +104,7 @@ namespace AwtrixSharpWeb.Apps
             var next = CrontabSchedule.GetNextOccurrence(now.DateTime);
             var delay = next - now;
 
-            Logger.LogInformation($"Next wake up scheduled for {next} (in {delay})");
+            Logger.LogInformation($"{Config.Name} Next wake up scheduled for {next} (in {delay})");
 
             await Task.Delay(delay, cancellationToken);
 

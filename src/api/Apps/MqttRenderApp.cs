@@ -7,11 +7,11 @@ using System.Text;
 
 namespace AwtrixSharpWeb.Apps
 {
-    public class MqttApp : ScheduledApp<MqttAppConfig>
+    public class MqttRenderApp : ScheduledApp<MqttAppConfig>
     {
         IMqttConnector _mqttConnector;
 
-        public MqttApp(
+        public MqttRenderApp(
          ILogger logger
          ,IClock clock
          ,MqttAppConfig config
@@ -22,11 +22,28 @@ namespace AwtrixSharpWeb.Apps
             _mqttConnector = mqttConnector;
         }
 
-        protected override Task ActivateScheduledWork(CancellationTokenSource cts)
+        protected override async Task ActivateScheduledWork(CancellationTokenSource cts)
         {
-            _mqttConnector.Subscribe(Config.ReadTopic);
+            await _mqttConnector.Subscribe(Config.ReadTopic);
             _mqttConnector.MessageReceived += MessageReceived;
-            return Task.CompletedTask;
+
+            try
+            {
+                await WaitForCancellation(cts.Token);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError($"Error in ActivateScheduledWork: {ex.Message}");
+            }
+            finally
+            {
+                Deactivate();
+            }
+        }
+
+        private void Deactivate()
+        {
+            _mqttConnector.MessageReceived -= MessageReceived;
         }
 
         private Task MessageReceived(MqttApplicationMessageReceivedEventArgs arg)
@@ -47,7 +64,7 @@ namespace AwtrixSharpWeb.Apps
                 message.SetColor("#FFFF00");
             }
 
-            return Notify(message);
+            return AppUpdate(message);
         }
     }
 }

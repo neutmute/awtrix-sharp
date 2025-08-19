@@ -205,10 +205,15 @@ namespace AwtrixSharpWeb.Apps
             }
             finally
             {
-                Logger.LogInformation($"Schedule deactivating");
-                _timerService.SecondChanged -= ClockTickSecond;
-                _timerService.MinuteChanged -= ClockTickMinute;
+                Deactivate();
             }
+        }
+
+        private void Deactivate()
+        {
+            Logger.LogInformation($"Schedule deactivating");
+            _timerService.SecondChanged -= ClockTickSecond;
+            _timerService.MinuteChanged -= ClockTickMinute;
         }
 
 
@@ -216,9 +221,7 @@ namespace AwtrixSharpWeb.Apps
         {
             if (disposing)
             {
-                // Unsubscribe from events
-                _timerService.SecondChanged -= ClockTickSecond;
-                _timerService.MinuteChanged -= ClockTickMinute;
+                Deactivate();
             }
                         
             base.Dispose(disposing);
