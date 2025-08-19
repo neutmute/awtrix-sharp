@@ -1,4 +1,6 @@
-﻿namespace AwtrixSharpWeb.Domain
+﻿using AwtrixSharpWeb.Apps.Configs;
+
+namespace AwtrixSharpWeb.Domain
 {
     public class AwtrixConfig
     {

@@ -83,6 +83,11 @@ namespace AwtrixSharpWeb.Domain
         {
             return Set("center", value);
         }
+        public AwtrixAppMessage SetColor(string value)
+        {
+            this["color"] = value;
+            return this;
+        }
 
         public AwtrixAppMessage SetColor(int[] value)
         {

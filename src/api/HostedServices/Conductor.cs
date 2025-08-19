@@ -1,4 +1,5 @@
 ﻿using AwtrixSharpWeb.Apps;
+using AwtrixSharpWeb.Apps.Configs;
 using AwtrixSharpWeb.Domain;
 using AwtrixSharpWeb.Interfaces;
 using AwtrixSharpWeb.Services;
@@ -12,14 +13,16 @@ namespace AwtrixSharpWeb.HostedServices
         public const string DiurnalApp = "DiurnalApp";
         public const string TripTimerApp = "TripTimerApp";
         public const string SlackStatusApp = "SlackStatusApp";
+        public const string MqttApp = "MqttApp";
     }
 
     public class Conductor : IHostedService
     {
         private readonly ILogger<Conductor> _logger;
         private readonly SlackConnector _slackConnector;
+        private readonly MqttConnector _mqttConnector;
         private readonly HttpPublisher _httpPublisher;
-        private readonly MqttPublisher _mqttConnector;
+        private readonly MqttPublisher _mqttPublisher;
         private readonly TripPlannerService _tripPlanner;
         private readonly TimerService _timerService;
         private readonly IHostEnvironment _hostEnvironment;
@@ -34,14 +37,16 @@ namespace AwtrixSharpWeb.HostedServices
             , IOptions<AwtrixConfig> awtrixConfig
             , TimerService timerService
             , TripPlannerService tripPlanner
-            , MqttPublisher mqttConnector
+            , MqttPublisher mqttPublisher
             , HttpPublisher httpPublisher
-            , SlackConnector slackConnector)
+            , SlackConnector slackConnector
+            , MqttConnector mqttConnector)
         {
             _logger = logger;
             _awtrixConfig = awtrixConfig.Value;
             _slackConnector = slackConnector;
             _httpPublisher = httpPublisher;
+            _mqttPublisher = mqttPublisher;
             _mqttConnector = mqttConnector;
             _tripPlanner = tripPlanner;
             _timerService = timerService;
@@ -82,7 +87,7 @@ namespace AwtrixSharpWeb.HostedServices
         {
             IAwtrixApp app;
 
-            var awtrixService = new AwtrixService(_httpPublisher, _mqttConnector);
+            var awtrixService = new AwtrixService(_httpPublisher, _mqttPublisher);
             var clock = new Clock();
 
             var isDev = _hostEnvironment.IsDevelopment();
@@ -97,6 +102,11 @@ namespace AwtrixSharpWeb.HostedServices
                 case AppNames.TripTimerApp:
                     var tripTimerConfig = appConfig.As<TripTimerAppConfig>();
                     app = new TripTimerApp(_logger, clock, device, awtrixService, _timerService, tripTimerConfig, _tripPlanner);
+                    break;
+
+                case AppNames.MqttApp:
+                    var mqttConfig = appConfig.As<MqttAppConfig>();
+                    app = new MqttApp(_logger, clock, mqttConfig, device, awtrixService, _mqttConnector);
                     break;
 
                 case AppNames.SlackStatusApp:

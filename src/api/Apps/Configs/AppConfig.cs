@@ -1,27 +1,7 @@
 ﻿using AwtrixSharpWeb.Interfaces;
 
-namespace AwtrixSharpWeb.Domain
+namespace AwtrixSharpWeb.Apps.Configs
 {
-    public static class AppConfigExtensions
-    {
-        public static void SetEnvironment(this AppConfig config, string environment)
-        {
-            if (!string.IsNullOrWhiteSpace(environment))
-            {
-                config.TryAdd(AppConfig.EnvironmentKey, environment);
-            }
-        }
-
-        public static bool IsEnvironmentDev(this AppConfig config)
-        {
-            if (config.TryGetValue(AppConfig.EnvironmentKey, out var environment))
-            { 
-                return environment.ToLower().StartsWith("dev");
-            }
-            return false;
-        }
-    }
-
     public class AppConfig : Dictionary<string, string>, IAppConfig
     {
         public const string EnvironmentKey = "Environment";
@@ -45,7 +25,7 @@ namespace AwtrixSharpWeb.Domain
 
         public string Get(string key)
         {
-            if (this.TryGetValue(key, out var value))
+            if (TryGetValue(key, out var value))
             {
                 return value;
             }
@@ -155,34 +135,5 @@ namespace AwtrixSharpWeb.Domain
             // For complex types, you might want to use JSON deserialization or other methods
             throw new NotSupportedException($"Conversion from string to {targetType} is not supported.");
         }
-    }
-
-    public class ScheduledAppConfig : AppConfig
-    {
-        public string CronSchedule { get; set; }
-
-        /// <summary>
-        /// How long to take over the clock for
-        /// </summary>
-        public TimeSpan ActiveTime { get; set; }
-    }
-
-    public class TripTimerAppConfig : ScheduledAppConfig 
-    {
-
-        public string StopIdOrigin { get; set; } = string.Empty;
-
-        public string StopIdDestination { get; set; } = string.Empty;
-
-
-        /// <summary>
-        /// Travel time to get to origin
-        /// </summary>
-        public TimeSpan TimeToOrigin { get; set; }
-
-        /// <summary>
-        /// How much time to get ready before leaving
-        /// </summary>
-        public TimeSpan  TimeToPrepare { get; set; }
     }
 }

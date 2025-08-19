@@ -1,4 +1,4 @@
-﻿using AwtrixSharpWeb.Domain;
+﻿using AwtrixSharpWeb.Apps.Configs;
 using System;
 using System.Collections.Generic;
 using System.Linq;

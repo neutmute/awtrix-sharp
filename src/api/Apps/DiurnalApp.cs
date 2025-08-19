@@ -1,4 +1,5 @@
-﻿using AwtrixSharpWeb.Domain;
+﻿using AwtrixSharpWeb.Apps.Configs;
+using AwtrixSharpWeb.Domain;
 using AwtrixSharpWeb.HostedServices;
 using AwtrixSharpWeb.Interfaces;
 using AwtrixSharpWeb.Services;

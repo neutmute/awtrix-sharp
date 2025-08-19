@@ -7,20 +7,28 @@ using AwtrixSharpWeb.Domain;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using AwtrixSharpWeb.Interfaces;
 
 namespace AwtrixSharpWeb.HostedServices
 {
-    public class MqttConnector : IHostedService
+    public class MqttConnector : IHostedService, IMqttConnector
     {
         private IMqttClient _client;
         private readonly ILogger<MqttConnector> _log;
         private readonly MqttSettings _settings;
+
+        public event Func<MqttApplicationMessageReceivedEventArgs, Task> MessageReceived
+        {
+            add { _client.ApplicationMessageReceivedAsync += value; }
+            remove { _client.ApplicationMessageReceivedAsync -= value; }
+        }
 
         public MqttConnector(ILogger<MqttConnector> logger, IOptions<MqttSettings> settings)
         {
             _log = logger;
             _settings = settings.Value;
         }
+
 
         public async Task<bool> ConnectAsync(CancellationToken cancellationToken = default)
         {
@@ -47,11 +55,11 @@ namespace AwtrixSharpWeb.HostedServices
                 // Use a timeout for the connection attempt
                 using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
                 using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(
-                    timeoutCts.Token, 
+                    timeoutCts.Token,
                     cancellationToken == default ? CancellationToken.None : cancellationToken);
 
                 var result = await _client.ConnectAsync(clientOptions, linkedCts.Token);
-                
+
                 if (_client.IsConnected)
                 {
                     _log.LogInformation("Connected to MQTT broker");
@@ -82,7 +90,7 @@ namespace AwtrixSharpWeb.HostedServices
             {
                 payloadLog = "<empty>";
             }
-            _log.LogInformation("Publishing MQTT to topic {Topic} with payload {Payload}", topic, payloadLog);  
+            _log.LogInformation("Publishing MQTT to topic {Topic} with payload {Payload}", topic, payloadLog);
 
             var message = new MqttApplicationMessageBuilder()
                 .WithTopic(topic)
@@ -102,9 +110,10 @@ namespace AwtrixSharpWeb.HostedServices
             return _client.DisconnectAsync();
         }
 
-        public async Task SubscribeAsync(string topic)
+        public async Task Subscribe(string topic)
         {
             await _client.SubscribeAsync(topic);
         }
+
     }
 }
