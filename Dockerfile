@@ -3,7 +3,7 @@
 # This stage is used when running from VS in fast mode (Default for Debug configuration)
 FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS base
 USER $APP_UID
-WORKDIR /app
+WORKDIR /app-api
 EXPOSE 8080
 EXPOSE 8081
 
@@ -11,19 +11,19 @@ EXPOSE 8081
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 ARG BUILD_CONFIGURATION=Release
 WORKDIR /src
-COPY src/web/Web.csproj web/
-RUN dotnet restore web/Web.csproj
+COPY src/api/awtrix-api.csproj api/
+RUN dotnet restore api/awtrix-api.csproj
 COPY src/ .
-WORKDIR /src/web
-RUN dotnet build Web.csproj -c $BUILD_CONFIGURATION -o /app/build
+WORKDIR /src/api
+RUN dotnet build awtrix-api.csproj -c $BUILD_CONFIGURATION -o /app-api/build
 
 # This stage is used to publish the service project to be copied to the final stage
 FROM build AS publish
 ARG BUILD_CONFIGURATION=Release
-RUN dotnet publish Web.csproj -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false
+RUN dotnet publish awtrix-api.csproj -c $BUILD_CONFIGURATION -o /app-api/publish /p:UseAppHost=false
 
 # This stage is used in production or when running from VS in regular mode (Default when not using the Debug configuration)
 FROM base AS final
-WORKDIR /app
-COPY --from=publish /app/publish .
-ENTRYPOINT ["dotnet", "Web.dll"]
+WORKDIR /app-api
+COPY --from=publish /app-api/publish .
+ENTRYPOINT ["dotnet", "awtrix-api.dll"]

@@ -3,10 +3,9 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.14.36401.2
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Web", "src\web\Web.csproj", "{E5706BEE-C3FB-E7BE-641A-413C1A61D716}"
-EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{8EC462FD-D22E-90A8-E5CE-7E832BA40C5D}"
 	ProjectSection(SolutionItems) = preProject
+		Dockerfile = Dockerfile
 		readme.md = readme.md
 	EndProjectSection
 EndProject
@@ -18,16 +17,14 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TransportOpenData.Tests", "
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Test", "test\Test\Test.csproj", "{30CF3866-BAE5-48C8-929E-1A7222959C9A}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "awtrix-api", "src\api\awtrix-api.csproj", "{153FED37-1B2A-22FE-561E-85645D802452}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{E5706BEE-C3FB-E7BE-641A-413C1A61D716}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{E5706BEE-C3FB-E7BE-641A-413C1A61D716}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{E5706BEE-C3FB-E7BE-641A-413C1A61D716}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{E5706BEE-C3FB-E7BE-641A-413C1A61D716}.Release|Any CPU.Build.0 = Release|Any CPU
 		{C5188D83-F252-83F0-EC3A-DFBF73B69117}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{C5188D83-F252-83F0-EC3A-DFBF73B69117}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{C5188D83-F252-83F0-EC3A-DFBF73B69117}.Release|Any CPU.ActiveCfg = Release|Any CPU
@@ -40,6 +37,10 @@ Global
 		{30CF3866-BAE5-48C8-929E-1A7222959C9A}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{30CF3866-BAE5-48C8-929E-1A7222959C9A}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{30CF3866-BAE5-48C8-929E-1A7222959C9A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{153FED37-1B2A-22FE-561E-85645D802452}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{153FED37-1B2A-22FE-561E-85645D802452}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{153FED37-1B2A-22FE-561E-85645D802452}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{153FED37-1B2A-22FE-561E-85645D802452}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
