@@ -182,14 +182,19 @@ namespace AwtrixSharpWeb.Apps
 
             var newDepartures = await _tripPlanner.GetNextDepartures(Config.StopIdOrigin, Config.StopIdDestination, earliestDeparture.LocalDateTime);
             NextDepartures.Clear();
-            
+
+            foreach(var departure in newDepartures)
+            {
+                Logger.LogInformation("Raw Departure: {departure}", departure);
+            }
+
             // Round to the minute otherwise we get to alarm time and it isn't aligned to minute boundaries
             NextDepartures.AddRange(newDepartures.Select(d => d.AsRounded()));
             
             var departuresCsv = string.Join(Environment.NewLine, NextDepartures.Select(d => GetAlarmTime(d).ToString()));
 
-            Logger.LogInformation($"{NextDepartures.Count} future depatures found:");
-            Logger.LogInformation($"Prep -> Leave -> Departure -> Arrive");
+            Logger.LogInformation($"{NextDepartures.Count} future departures computed:");
+            Logger.LogInformation($"Prep -> Leave -> Departure");
             NextDepartures.ForEach(d => Logger.LogInformation(GetAlarmTime(d).ToString()));
 
             _timerService.SecondChanged += ClockTickSecond;
