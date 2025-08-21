@@ -1,4 +1,6 @@
 # See https://aka.ms/customizecontainer to learn how to customize your debug container and how Visual Studio uses this Dockerfile to build your images for faster debugging.
+ARG GIT_COMMIT
+LABEL org.opencontainers.image.revision=$GIT_COMMIT
 
 # This stage is used when running from VS in fast mode (Default for Debug configuration)
 FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS base
@@ -20,7 +22,7 @@ RUN dotnet build awtrix-api.csproj -c $BUILD_CONFIGURATION -o /app-api/build
 # This stage is used to publish the service project to be copied to the final stage
 FROM build AS publish
 ARG BUILD_CONFIGURATION=Release
-RUN dotnet publish awtrix-api.csproj -c $BUILD_CONFIGURATION -o /app-api/publish /p:UseAppHost=false
+RUN dotnet publish awtrix-api.csproj -c $BUILD_CONFIGURATION -o /app-api/publish /p:UseAppHost=false /p:GIT_COMMIT=$GIT_COMMIT /p:GIT_COMMIT_SHORT:$GIT_COMMIT_SHORT
 
 # This stage is used in production or when running from VS in regular mode (Default when not using the Debug configuration)
 FROM base AS final

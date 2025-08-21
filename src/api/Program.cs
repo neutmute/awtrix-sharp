@@ -5,6 +5,7 @@ using AwtrixSharpWeb.Services;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.OpenApi.Models;
+using System.Reflection;
 using TransportOpenData;
 using TransportOpenData.TripPlanner;
 
@@ -86,7 +87,16 @@ namespace AwtrixSharpWeb
 
             var app = builder.Build();
 
-           // if (app.Environment.IsDevelopment()) always show swagger
+
+            // Get logger for startup information
+            var logger = app.Services.GetRequiredService<ILogger<Program>>();
+
+            // Log startup information
+            var version = Assembly.GetExecutingAssembly().GetName().Version;
+            logger.LogInformation("Starting AwtrixSharpWeb v{Version}, {Commit}", version, GetGitCommitShort());
+            logger.LogInformation("Environment: {Environment}", app.Environment.EnvironmentName);
+
+            // if (app.Environment.IsDevelopment()) always show swagger
             {
                 app.UseDeveloperExceptionPage();
 
@@ -100,5 +110,12 @@ namespace AwtrixSharpWeb
 
             app.Run();
         }
+
+
+        public static string? GetGitCommitShort() =>
+            Assembly.GetExecutingAssembly()
+                .GetCustomAttributes<AssemblyMetadataAttribute>()
+                .FirstOrDefault(a => a.Key == "GitCommitShort")?.Value;
     }
+
 }

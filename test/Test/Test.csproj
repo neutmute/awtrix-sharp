@@ -17,7 +17,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\api\awtrix-api.csproj" />
-    <ProjectReference Include="..\..\src\web\Web.csproj" />
   </ItemGroup>
 
   <ItemGroup>

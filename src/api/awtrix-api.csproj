@@ -7,7 +7,12 @@
     <UserSecretsId>19dd21e0-c64a-420c-9920-c7709d94f4a1</UserSecretsId>
     <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
     <RootNamespace>AwtrixSharpWeb</RootNamespace>
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
   </PropertyGroup>
+  <ItemGroup>
+    <AssemblyMetadata Include="GitCommitShort" Value="$(GIT_COMMIT_SHORT)" />
+    <AssemblyMetadata Include="GitCommit" Value="$(GIT_COMMIT)" />
+  </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="Test" />
   </ItemGroup>
