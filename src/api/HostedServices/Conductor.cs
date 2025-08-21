@@ -110,7 +110,7 @@ namespace AwtrixSharpWeb.HostedServices
                     break;
 
                 case AppNames.SlackStatusApp:
-                    var slackStatusConfig = appConfig.As<AppConfig>();
+                    var slackStatusConfig = appConfig.As<SlackStatusAppConfig>();
                     app = new SlackStatusApp(_logger, slackStatusConfig, device, awtrixService, _slackConnector);
                     break;
 

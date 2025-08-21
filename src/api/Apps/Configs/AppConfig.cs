@@ -32,6 +32,19 @@ namespace AwtrixSharpWeb.Apps.Configs
             return null;
         }
 
+        /// <summary>
+        /// Try and get, fall back to env var override
+        /// </summary>
+        public string Get(string key, string environmentVariable)
+        {
+            var value = Get(key);
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                value = Environment.GetEnvironmentVariable(environmentVariable);
+            }
+            return value;
+        }
+
         public string Name => Get("Name");
 
         /// <summary>
