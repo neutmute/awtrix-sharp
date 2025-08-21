@@ -29,6 +29,9 @@ namespace AwtrixSharpWeb.Apps
         public void Init()
         {
             _ = AppClear().Result;
+
+            Logger.LogInformation("Initializing app for Awtrix {AwtrixAddress} with {Config}", AwtrixAddress, Config.ToString());
+
             Initialize();
         }
 

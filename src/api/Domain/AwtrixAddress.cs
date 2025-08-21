@@ -19,5 +19,6 @@ namespace AwtrixSharpWeb.Domain
         /// </summary>
         public string BaseTopic { get; set; }
 
+        public override string ToString() => BaseTopic;
     }
 }

@@ -135,5 +135,14 @@ namespace AwtrixSharpWeb.Apps.Configs
             // For complex types, you might want to use JSON deserialization or other methods
             throw new NotSupportedException($"Conversion from string to {targetType} is not supported.");
         }
+
+        public override string ToString()
+        {
+            return string.Join(
+                "; ",
+                this.OrderBy(kvp => kvp.Key == "Name" ? "" : kvp.Key)       // always name first
+                    .Select(kvp => $"{kvp.Key}={kvp.Value}")
+            );
+        }
     }
 }
