@@ -1,4 +1,5 @@
 ﻿using AwtrixSharpWeb.Apps;
+using AwtrixSharpWeb.Domain;
 using AwtrixSharpWeb.HostedServices;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.OpenApi.Attributes;
@@ -34,9 +35,9 @@ namespace AwtrixSharpWeb.Controllers
         /// Start now
         /// </summary>
         [HttpPost("test/alarm-timings")]
-        public IActionResult TestTimingConfig([FromQuery] string timestamp = "2025-09-01 06:41")
+        public IActionResult TestTimingConfig([FromQuery] string departureTime = "2025-09-01 06:41")
         {
-            var dateTime = DateTimeOffset.Parse(timestamp);
+            var dateTime = DateTimeOffset.Parse(departureTime);
 
             var app = _conductor
                             .FindApps(AppNames.TripTimerApp)
@@ -44,7 +45,7 @@ namespace AwtrixSharpWeb.Controllers
 
 
             var tripTimer = (TripTimerApp)app;
-            var alarmSegments = tripTimer.GetAlarmTime(dateTime);
+            var alarmSegments = tripTimer.GetAlarmTime(TripSummary.Factory(dateTime));
 
             return Ok(alarmSegments);
         }

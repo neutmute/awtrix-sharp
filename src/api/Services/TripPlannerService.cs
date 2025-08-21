@@ -1,9 +1,11 @@
 ﻿using AwtrixSharpWeb.Controllers;
+using AwtrixSharpWeb.Domain;
 using AwtrixSharpWeb.Interfaces;
 using TransportOpenData.TripPlanner;
 
 namespace AwtrixSharpWeb.Services
 {
+
     public class TripPlannerService : ITripPlannerService
     {
         private readonly StopfinderClient _stopFinderClient;
@@ -65,17 +67,36 @@ namespace AwtrixSharpWeb.Services
             return result;
         }
 
-        public async Task<List<DateTimeOffset>> GetNextDepartures(string originStopId, string destinationStopId, DateTime fromWhen)
+        public async Task<List<TripSummary>> GetNextDepartures(string originStopId, string destinationStopId, DateTime fromWhen)
         {
             var trips = await GetTrips(originStopId, destinationStopId, fromWhen);
 
-            var output = new List<DateTimeOffset>();
+            var output = new List<TripSummary>();
+
+
+            DateTimeOffset ParseTime(string s)
+            {
+                var datetime = DateTimeOffset.Parse(s);
+                return TimeZoneInfo.ConvertTime(datetime, TimeZoneInfo.Local);
+            }
+
             foreach (var journey in trips.Journeys)
             {
-                var departString = journey.Legs.First().Origin.DepartureTimeEstimated;
-                var utcTime = DateTimeOffset.Parse(departString);
-                var localTime = TimeZoneInfo.ConvertTime(utcTime, TimeZoneInfo.Local);
-                output.Add(localTime);
+                var firstLeg = journey.Legs.First();
+                var lastLeg = journey.Legs.Last();
+
+                var origin = firstLeg.Origin;
+                var destination = lastLeg.Destination;
+
+                var departs = ParseTime(origin.DepartureTimeEstimated);
+                var arrives = ParseTime(destination.ArrivalTimeEstimated);
+
+                var summary = new TripSummary
+                {
+                    Origin = TimePlace.Factory(departs, origin.DisassembledName) ,
+                    Destination = TimePlace.Factory(arrives, destination.DisassembledName)
+                };
+                output.Add(summary);
             }
 
             return output;

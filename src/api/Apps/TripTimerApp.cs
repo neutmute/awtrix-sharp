@@ -12,7 +12,7 @@ namespace AwtrixSharpWeb.Apps
         private readonly ITripPlannerService _tripPlanner;
         private readonly ITimerService _timerService;
 
-        internal List<DateTimeOffset> NextDepartures { get; set; }
+        internal List<TripSummary> NextDepartures { get; set; }
 
         /// <summary>
         /// How long before the alarm actually triggers do we show the visual alert 
@@ -54,7 +54,7 @@ namespace AwtrixSharpWeb.Apps
         {
             _tripPlanner = tripPlanner;
             _timerService = timerService;
-            NextDepartures = new List<DateTimeOffset>();
+            NextDepartures = new List<TripSummary>();
 
             VisualAlertBuffer = TimeSpan.FromSeconds(20);
         }
@@ -158,7 +158,7 @@ namespace AwtrixSharpWeb.Apps
         {
             const int ZeroFromMinutes = 5;
 
-            var countFromSecs = (TimeSpan.FromMinutes(ZeroFromMinutes) - VisualAlertBuffer).Seconds; // enure full progress bar
+            var countFromSecs = (int) (TimeSpan.FromMinutes(ZeroFromMinutes) - VisualAlertBuffer).TotalSeconds; // enure full progress bar
             var secondsSinceCountFrom = (int)(clock.Now - nextAlarm.AddMinutes(-ZeroFromMinutes)).TotalSeconds;
             var progress = secondsSinceCountFrom * 100 / countFromSecs;
 
@@ -166,11 +166,11 @@ namespace AwtrixSharpWeb.Apps
             return quantizedProgress;
         }
 
-        internal AlarmStages GetAlarmTime(DateTimeOffset originDepartTime)
+        internal AlarmStages GetAlarmTime(TripSummary originDepartTime)
         {
-            var departForOriginTime = originDepartTime.Add(-Config.TimeToOrigin);
+            var departForOriginTime = originDepartTime.Origin.Time.Add(-Config.TimeToOrigin);
             var prepareForDepartTime = departForOriginTime.Add(-Config.TimeToPrepare);
-            return new AlarmStages { OriginDepartTime = originDepartTime, DepartForOriginTime = departForOriginTime, PrepareForDepartTime = prepareForDepartTime };
+            return new AlarmStages { OriginDepartTime = originDepartTime.Origin.Time, DepartForOriginTime = departForOriginTime, PrepareForDepartTime = prepareForDepartTime };
         }
 
         protected override async Task ActivateScheduledWork(CancellationTokenSource cts)
@@ -183,13 +183,13 @@ namespace AwtrixSharpWeb.Apps
             var newDepartures = await _tripPlanner.GetNextDepartures(Config.StopIdOrigin, Config.StopIdDestination, earliestDeparture.LocalDateTime);
             NextDepartures.Clear();
             
-            // Round to the minute otherwise we get to alarm time and it
-            NextDepartures.AddRange(newDepartures.Select(d => d.AddSeconds(-d.Second)));
+            // Round to the minute otherwise we get to alarm time and it isn't aligned to minute boundaries
+            NextDepartures.AddRange(newDepartures.Select(d => d.AsRounded()));
             
             var departuresCsv = string.Join(Environment.NewLine, NextDepartures.Select(d => GetAlarmTime(d).ToString()));
 
             Logger.LogInformation($"{NextDepartures.Count} future depatures found:");
-            Logger.LogInformation($"Prep -> Leave -> Departure");
+            Logger.LogInformation($"Prep -> Leave -> Departure -> Arrive");
             NextDepartures.ForEach(d => Logger.LogInformation(GetAlarmTime(d).ToString()));
 
             _timerService.SecondChanged += ClockTickSecond;

@@ -11,6 +11,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using Test.Domain;
 
 namespace Test.Apps
 {
@@ -34,12 +35,15 @@ namespace Test.Apps
             _mockTimerService = new Mock<ITimerService>();
             _mockTripPlannerService = new Mock<ITripPlannerService>();
 
+
+            var baseTime = DateTimeOffset.Parse("2025-08-19T06:00:00+10:00");
+
             _mockTripPlannerService.Setup(x => x.GetNextDepartures(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<DateTime>()))
-                .ReturnsAsync(new List<DateTimeOffset>
+                .ReturnsAsync(new List<TripSummary>
                 {
-                    DateTimeOffset.Parse("2025-08-19T06:28:00+10:00"),
-                    DateTimeOffset.Parse("2025-08-19T06:41:00+10:00"),
-                    DateTimeOffset.Parse("2025-08-19T06:53:00+10:00")
+                    TripSummaryTests.Create(baseTime)
+                    ,TripSummaryTests.Create(baseTime.AddMinutes(5))
+                    ,TripSummaryTests.Create(baseTime.AddMinutes(10))
                 });
 
             _mockLog
@@ -83,7 +87,7 @@ namespace Test.Apps
             // Arrange
             var sut = GetSystemUnderTest();
             var departureTime = DateTimeOffset.Parse("2025-08-19T06:41:00+10:00");
-            var actualAlarmTime = sut.GetAlarmTime(departureTime);
+            var actualAlarmTime = sut.GetAlarmTime(TripSummaryTests.Create(departureTime));
 
             var expectedPrepareForDepartTime = DateTimeOffset.Parse("2025-08-19T06:19:00+10:00");
             var expectedDepartTime = DateTimeOffset.Parse("2025-08-19T06:27:00+10:00");
@@ -162,8 +166,8 @@ namespace Test.Apps
 
         [Theory]
         [InlineData(0, 100, "")] // 0% progress
-        [InlineData(175, 41, "")] // 25% progress
-        [InlineData(150, 50, "")] // 50% progress
+        [InlineData(175, 44, "")] // 25% progress
+        [InlineData(150, 53, "")] // 50% progress
         [InlineData(300, 0, "")] // 100% progress
         public void GetProgress_ReturnsExpectedProgressValue(int secondsToAlarm, int expectedProgess, string rationale)
         {
@@ -181,3 +185,4 @@ namespace Test.Apps
         
     }
 }
+
