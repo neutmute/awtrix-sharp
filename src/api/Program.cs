@@ -6,6 +6,7 @@ using AwtrixSharpWeb.Services;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.OpenApi.Models;
+using Swashbuckle.AspNetCore.Annotations;
 using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -98,7 +99,29 @@ namespace AwtrixSharpWeb
             services.AddHostedService(sp => sp.GetService<TimerService>());
 
             services.AddEndpointsApiExplorer();
-            services.AddSwaggerGen();
+            services.AddSwaggerGen(c =>
+            {
+                c.SwaggerDoc("v1", new OpenApiInfo { Title = "Awtrix API", Version = "v1" });
+                c.EnableAnnotations();
+
+                //c.TagActionsBy(api =>
+                //{
+                //    // If you used [SwaggerOperation(Tags=...)] it will already take effect.
+                //    // This fallback groups by controller name only when no custom tags exist.
+                //    var hasCustom = api.ActionDescriptor.EndpointMetadata
+                //        .OfType<SwaggerOperationAttribute>().Any(a => a.Tags?.Length > 0);
+                //    var output = hasCustom
+                //        ? api.ActionDescriptor.EndpointMetadata
+                //            .OfType<SwaggerOperationAttribute>()
+                //            .SelectMany(a => a.Tags)
+                //        : new[] { api.GroupName ?? api.ActionDescriptor.RouteValues["controller"]! };
+
+                //    return output.ToList();
+                //});
+
+            });
+
+
 
             var app = builder.Build();
 
@@ -116,7 +139,10 @@ namespace AwtrixSharpWeb
                 app.UseDeveloperExceptionPage();
 
                 app.UseSwagger();
-                app.UseSwaggerUI();
+                app.UseSwaggerUI(c => {
+
+                    c.SwaggerEndpoint("/swagger/v1/swagger.json", "My API v1");
+                });
             }
 
             app.UseHttpsRedirection();

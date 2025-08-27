@@ -3,9 +3,11 @@ using AwtrixSharpWeb.HostedServices;
 using AwtrixSharpWeb.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
+using Swashbuckle.AspNetCore.Annotations;
 
 namespace AwtrixSharpWeb.Controllers
 {
+    [SwaggerTag("ddfs")]
     [ApiController]
     [Route("[controller]")]
     public class DiagnosticsController : ControllerBase

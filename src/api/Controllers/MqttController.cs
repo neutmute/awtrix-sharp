@@ -1,8 +1,10 @@
-using Microsoft.AspNetCore.Mvc;
 using AwtrixSharpWeb.HostedServices;
+using Microsoft.AspNetCore.Mvc;
+using Swashbuckle.AspNetCore.Annotations;
 
 namespace AwtrixSharpWeb.Controllers
 {
+    [SwaggerTag("Services")]
     [ApiController]
     [Route("[controller]")]
     public class MqttController : ControllerBase

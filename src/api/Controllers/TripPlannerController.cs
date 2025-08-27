@@ -4,12 +4,14 @@ using AwtrixSharpWeb.Domain;
 using AwtrixSharpWeb.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
+using Swashbuckle.AspNetCore.Annotations;
 using TransportOpenData.TripPlanner;
 
 namespace AwtrixSharpWeb.Controllers
 {
     [ApiController]
     [Route("api/[controller]")]
+    [SwaggerTag("Services")]
     public class TripPlannerController : ControllerBase
     {
         private readonly TripPlannerService _tripPlannerService;
@@ -24,6 +26,7 @@ namespace AwtrixSharpWeb.Controllers
         }
 
         [HttpGet("stops")]
+        [SwaggerOperation(Summary = "Find stops matching a query")]
         public async Task<IActionResult> FindStops([FromQuery] string query)
         {
             try
@@ -39,6 +42,7 @@ namespace AwtrixSharpWeb.Controllers
         }
 
         [HttpGet("departures")]
+        [SwaggerOperation(Summary = "Get upcoming departures between stops")]
         public async Task<IActionResult> GetDepartures([FromQuery] string originId, [FromQuery] string destinationId, [FromQuery] string fromDateTime)
         {
             try
@@ -59,6 +63,7 @@ namespace AwtrixSharpWeb.Controllers
         /// Very detailed trip data
         /// </summary>
         [HttpGet("trip")]
+        [SwaggerOperation(Summary = "Get detailed trip information")]
         public async Task<IActionResult> GetTrip([FromQuery] string originId, [FromQuery] string destinationId, [FromQuery] string fromDateTime)
         {
             try

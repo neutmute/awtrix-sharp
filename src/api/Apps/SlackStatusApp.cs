@@ -35,34 +35,37 @@ namespace AwtrixSharpWeb.Apps
                 else
                 {
                     var message = new AwtrixAppMessage();
-                    
-                    // Look for a matching value map
-                    var valueMap = Config.FindMatchingValueMap(e.StatusText);
-                    
-                    if (valueMap != null)
-                    {
-                        Logger.LogInformation("Found matching value map for status: {StatusText}", e.StatusText);
 
-                        valueMap.Decorate(message, Logger);
-                        
-                        // If no text is set in the mapping, use the original status text
-                        if (message.Text == null)
+                    // Look for a matching value map
+                    if (!TryValueMatch(e.StatusText, message))
+                    {
+                        if (!TryValueMatch(e.StatusEmoji, message))
                         {
+                            // No mapping found, use default behavior
                             message.SetText(e.StatusText);
+                            message.SetDuration(50);
                         }
                     }
-                    else
-                    {
-                        // No mapping found, use default behavior
-                        message.SetText(e.StatusText);
-                        message.SetDuration(50);
-                    }
-                    
+
                     Logger.LogInformation(message.ToString());
                     result = AppUpdate(message).Result;
                 }
             }
         }
-        
+
+        private bool TryValueMatch(string value, AwtrixAppMessage message)
+        {
+            var valueMap = Config.FindMatchingValueMap(value);
+
+            if (valueMap != null)
+            {
+                Logger.LogInformation("Found matching value map for valueRegex='{value}'", value);
+
+                valueMap.Decorate(message, Logger);
+
+                return true;
+            }
+            return false;
+        }
     }
 }

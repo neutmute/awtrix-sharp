@@ -1,19 +1,17 @@
 ﻿using AwtrixSharpWeb.Apps;
 using AwtrixSharpWeb.HostedServices;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.OpenApi.Attributes;
-using System.ComponentModel;
-
-// For more information on enabling Web API for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
+using Swashbuckle.AspNetCore.Annotations;
 
 namespace AwtrixSharpWeb.Controllers
 {
-    [DisplayName("Apps")]
+
+    [SwaggerTag("Apps")]
     [Route("api/app/[controller]")]
     [ApiController]
     public class MqttRenderController : ControllerBase
     {
-        Conductor _conductor;
+        private readonly Conductor _conductor;
 
         public MqttRenderController(Conductor conductor)
         {
@@ -21,12 +19,26 @@ namespace AwtrixSharpWeb.Controllers
         }
 
         /// <summary>
-        /// Start now
+        /// Triggers an app to execute immediately
         /// </summary>
+        /// <param name="deviceAddress">The Awtrix device address (topic)</param>
+        /// <param name="appName">The name of the app to execute</param>
         [HttpPost("start")]
-        public void StartNow([FromQuery] string deviceAddress = "awtrix/clock1", [FromQuery] string appName = AppNames.MqttRenderApp)
+        [SwaggerOperation(
+            Summary = "Start an app immediately",
+            Description = "Triggers the specified app to execute immediately on the specified Awtrix device",
+            OperationId = "StartApp"
+        )]
+        [SwaggerResponse(200, "App started successfully")]
+        public IActionResult StartNow(
+            [FromQuery, SwaggerParameter("The Awtrix device address/topic")] 
+            string deviceAddress = "awtrix/clock1", 
+            
+            [FromQuery, SwaggerParameter("The name of the app to execute")] 
+            string appName = AppNames.MqttRenderApp)
         {
             _conductor.ExecuteNow(deviceAddress, appName);
+            return Ok(new { message = $"App '{appName}' started on device '{deviceAddress}'" });
         }
     }
 }
