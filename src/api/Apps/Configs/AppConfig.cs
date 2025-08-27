@@ -1,10 +1,18 @@
-﻿using AwtrixSharpWeb.Interfaces;
+﻿using System.Text.Json;
+using AwtrixSharpWeb.Interfaces;
 
 namespace AwtrixSharpWeb.Apps.Configs
 {
+
     public class AppConfig : Dictionary<string, string>, IAppConfig
     {
         public const string EnvironmentKey = "Environment";
+        private List<ValueMap> _valueMaps;
+
+        public AppConfig()
+        {
+            _valueMaps = new List<ValueMap>();
+        }
 
         public static AppConfig Empty(string environment = "")
         {
@@ -48,6 +56,52 @@ namespace AwtrixSharpWeb.Apps.Configs
         public string Name => Get("Name");
 
         /// <summary>
+        /// Get the list of ValueMaps defined for this configuration
+        /// </summary>
+        public List<ValueMap> ValueMaps 
+        { 
+            get => _valueMaps;
+            set => _valueMaps = value;
+        }
+
+        /// <summary>
+        /// Find the first ValueMap that matches the input value
+        /// </summary>
+        /// <param name="input">The input string to match against ValueMatcher patterns</param>
+        /// <returns>The first matching ValueMap or null if no match found</returns>
+        public ValueMap FindMatchingValueMap(string input)
+        {
+            return _valueMaps?.FirstOrDefault(map => map.IsMatch(input));
+        }
+
+        /// <summary>
+        /// Add a ValueMap to the collection
+        /// </summary>
+        public AppConfig AddValueMap(ValueMap valueMap)
+        {
+            if (valueMap != null && !string.IsNullOrEmpty(valueMap.ValueMatcher))
+            {
+                _valueMaps.Add(valueMap);
+            }
+            return this;
+        }
+
+        /// <summary>
+        /// Add multiple ValueMaps to the collection
+        /// </summary>
+        public AppConfig AddValueMaps(IEnumerable<ValueMap> valueMaps)
+        {
+            if (valueMaps != null)
+            {
+                foreach (var map in valueMaps.Where(m => !string.IsNullOrEmpty(m.ValueMatcher)))
+                {
+                    _valueMaps.Add(map);
+                }
+            }
+            return this;
+        }
+
+        /// <summary>
         /// Creates a new instance of the specified type and populates its properties from this AppConfig.
         /// </summary>
         /// <typeparam name="T">The type to convert to, must be a subclass of AppConfig</typeparam>
@@ -74,9 +128,15 @@ namespace AwtrixSharpWeb.Apps.Configs
                 target[kvp.Key] = kvp.Value;
             }
 
+            // Copy ValueMaps if present
+            if (source._valueMaps != null && source._valueMaps.Count > 0)
+            {
+                target.ValueMaps = new List<ValueMap>(source._valueMaps);
+            }
+
             // Get all properties of the target type that can be written to
             var properties = typeof(T).GetProperties()
-                .Where(p => p.CanWrite && p.Name != "Item" && p.Name != "Keys" && p.Name != "Values")
+                .Where(p => p.CanWrite && p.Name != "Item" && p.Name != "Keys" && p.Name != "Values" && p.Name != "ValueMaps")
                 .ToList();
 
             foreach (var property in properties)
@@ -143,10 +203,30 @@ namespace AwtrixSharpWeb.Apps.Configs
             if (targetType.IsEnum)
                 return Enum.Parse(targetType, value, ignoreCase: true);
 
+            if (targetType == typeof(List<ValueMap>))
+            {
+                try
+                {
+                    return JsonSerializer.Deserialize<List<ValueMap>>(value);
+                }
+                catch
+                {
+                    return new List<ValueMap>();
+                }
+            }
+
             // Add more type conversions as needed
 
             // For complex types, you might want to use JSON deserialization or other methods
             throw new NotSupportedException($"Conversion from string to {targetType} is not supported.");
+        }
+
+        public void SetEnvironment(string environment)
+        {
+            if (!string.IsNullOrWhiteSpace(environment))
+            {
+                this[EnvironmentKey] = environment;
+            }
         }
 
         public override string ToString()

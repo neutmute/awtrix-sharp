@@ -232,6 +232,7 @@ namespace AwtrixSharpWeb.Domain
             foreach (var kvp in this)
             {
                 // Check if it's the text property and if it starts with "[
+                // In which case its an encoded JSON object
                 if (kvp.Key == "text" && kvp.Value != null && kvp.Value.StartsWith("["))
                 {
                     try

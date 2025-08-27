@@ -1,4 +1,5 @@
 using AwtrixSharpWeb.Apps;
+using AwtrixSharpWeb.Apps.Configs;
 using AwtrixSharpWeb.Domain;
 using AwtrixSharpWeb.HostedServices;
 using AwtrixSharpWeb.Services;
@@ -6,6 +7,8 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.OpenApi.Models;
 using System.Reflection;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using TransportOpenData;
 using TransportOpenData.TripPlanner;
 
@@ -17,6 +20,12 @@ namespace AwtrixSharpWeb
         {
             var builder = WebApplication.CreateBuilder(args);
 
+            // Configure JSON serialization options for ValueMap support
+            builder.Services.Configure<JsonSerializerOptions>(options =>
+            {
+                options.Converters.Add(new ValueMapJsonConverter());
+                options.PropertyNameCaseInsensitive = true;
+            });
 
             // Configure environment variables with AwtrixSharp prefix
             builder
@@ -49,7 +58,13 @@ namespace AwtrixSharpWeb
                 config.BaseUrl = builder.Configuration.GetSection("TransportOpenData:BaseUrl").Value ?? "https://api.transport.nsw.gov.au/v1/tp";
             });
 
-            services.AddControllers();
+            services
+                .AddControllers()
+                .AddJsonOptions(options =>
+                {
+                    options.JsonSerializerOptions.Converters.Add(new ValueMapJsonConverter());
+                    options.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
+                });
 
             services.AddTransient<AwtrixService>();
             services.AddTransient<TripPlannerService>();
@@ -110,7 +125,6 @@ namespace AwtrixSharpWeb
 
             app.Run();
         }
-
 
         public static string? GetGitCommitShort() =>
             Assembly.GetExecutingAssembly()

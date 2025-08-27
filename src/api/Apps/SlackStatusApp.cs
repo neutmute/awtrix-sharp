@@ -5,7 +5,6 @@ using AwtrixSharpWeb.Services;
 
 namespace AwtrixSharpWeb.Apps
 {
-
     public class SlackStatusApp : AwtrixApp<SlackStatusAppConfig>
     {
         SlackConnector _slackConnector;
@@ -35,15 +34,35 @@ namespace AwtrixSharpWeb.Apps
                 }
                 else
                 {
-                    var message = new AwtrixAppMessage()
-                            .SetText(e.StatusText)
-                            .SetDuration(50);
+                    var message = new AwtrixAppMessage();
+                    
+                    // Look for a matching value map
+                    var valueMap = Config.FindMatchingValueMap(e.StatusText);
+                    
+                    if (valueMap != null)
+                    {
+                        Logger.LogInformation("Found matching value map for status: {StatusText}", e.StatusText);
 
+                        valueMap.Decorate(message, Logger);
+                        
+                        // If no text is set in the mapping, use the original status text
+                        if (message.Text == null)
+                        {
+                            message.SetText(e.StatusText);
+                        }
+                    }
+                    else
+                    {
+                        // No mapping found, use default behavior
+                        message.SetText(e.StatusText);
+                        message.SetDuration(50);
+                    }
+                    
                     Logger.LogInformation(message.ToString());
-
                     result = AppUpdate(message).Result;
                 }
             }
         }
+        
     }
 }

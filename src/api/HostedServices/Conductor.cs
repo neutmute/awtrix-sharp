@@ -5,6 +5,7 @@ using AwtrixSharpWeb.Interfaces;
 using AwtrixSharpWeb.Services;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
+using System.Text.Json;
 
 namespace AwtrixSharpWeb.HostedServices
 {
@@ -26,6 +27,7 @@ namespace AwtrixSharpWeb.HostedServices
         private readonly TripPlannerService _tripPlanner;
         private readonly TimerService _timerService;
         private readonly IHostEnvironment _hostEnvironment;
+        private readonly JsonSerializerOptions _jsonOptions;
         AwtrixConfig _awtrixConfig;
 
         List<IAwtrixApp> _apps;
@@ -35,6 +37,7 @@ namespace AwtrixSharpWeb.HostedServices
             ILogger<Conductor> logger
             , IHostEnvironment env
             , IOptions<AwtrixConfig> awtrixConfig
+            , IOptions<JsonSerializerOptions> jsonOptions
             , TimerService timerService
             , TripPlannerService tripPlanner
             , MqttPublisher mqttPublisher
@@ -51,6 +54,7 @@ namespace AwtrixSharpWeb.HostedServices
             _tripPlanner = tripPlanner;
             _timerService = timerService;
             _hostEnvironment = env;
+            _jsonOptions = jsonOptions?.Value ?? new JsonSerializerOptions();
 
             _apps = new List<IAwtrixApp>();
         }
@@ -64,6 +68,9 @@ namespace AwtrixSharpWeb.HostedServices
 
                 foreach (var appConfig in device.Apps)
                 {
+                    // Process any ValueMaps that might be in the JSON configuration
+                    ProcessValueMaps(appConfig);
+                    
                     var app = AppFactory(device, appConfig);            
                     _apps.Add(app);
                 }
@@ -81,6 +88,34 @@ namespace AwtrixSharpWeb.HostedServices
             }
 
             return Task.CompletedTask;
+        }
+
+        /// <summary>
+        /// Process any ValueMaps entries that might be in the configuration JSON
+        /// </summary>
+        private void ProcessValueMaps(AppConfig appConfig)
+        {
+            try
+            {
+                // Check if this is a configuration that might have ValueMaps
+                if (appConfig.TryGetValue("ValueMaps", out string valueMapsJson))
+                {
+                    if (!string.IsNullOrEmpty(valueMapsJson))
+                    {
+                        // Deserialize the ValueMaps JSON
+                        var valueMaps = JsonSerializer.Deserialize<List<ValueMap>>(valueMapsJson, _jsonOptions);
+                        if (valueMaps != null && valueMaps.Count > 0)
+                        {
+                            _logger.LogInformation("Loaded {Count} ValueMaps for {AppName}", valueMaps.Count, appConfig.Name);
+                            appConfig.AddValueMaps(valueMaps);
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error processing ValueMaps for {AppName}", appConfig.Name);
+            }
         }
 
         private IAwtrixApp AppFactory(DeviceConfig device, AppConfig appConfig)

@@ -37,13 +37,14 @@ namespace AwtrixSharpWeb.Apps
             }
             finally
             {
-                Deactivate();
+                await Deactivate();
             }
         }
 
-        private void Deactivate()
+        private async Task Deactivate()
         {
             _mqttConnector.MessageReceived -= MessageReceived;
+            await AppClear();
         }
 
         private Task MessageReceived(MqttApplicationMessageReceivedEventArgs arg)
