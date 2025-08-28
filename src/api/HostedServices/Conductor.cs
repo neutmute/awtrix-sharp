@@ -126,7 +126,7 @@ namespace AwtrixSharpWeb.HostedServices
             var clock = new Clock();
 
             var isDev = _hostEnvironment.IsDevelopment();
-            _logger.LogInformation("Environment: {EnvName}, isDev={isDev}", _hostEnvironment.EnvironmentName, isDev);
+            _logger.LogInformation("Creating {AppName} for Environment: {EnvName}, isDev={isDev}", appConfig.Name, _hostEnvironment.EnvironmentName, isDev);
 
             switch (appConfig.Name)
             {

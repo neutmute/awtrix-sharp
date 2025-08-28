@@ -30,7 +30,7 @@ namespace AwtrixSharpWeb.Apps
         {
             _ = AppClear().Result;
 
-            Logger.LogInformation("Initializing app for Awtrix {AwtrixAddress} with {Config}", AwtrixAddress, Config.ToString());
+            Logger.LogInformation("Initializing {Config} for {AwtrixAddress}", Config.Name, AwtrixAddress);
 
             Initialize();
         }
