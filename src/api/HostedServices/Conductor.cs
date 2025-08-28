@@ -37,7 +37,7 @@ namespace AwtrixSharpWeb.HostedServices
             ILogger<Conductor> logger
             , IHostEnvironment env
             , IOptions<AwtrixConfig> awtrixConfig
-            , IOptions<JsonSerializerOptions> jsonOptions
+            , JsonSerializerOptions jsonOptions
             , TimerService timerService
             , TripPlannerService tripPlanner
             , MqttPublisher mqttPublisher
@@ -54,7 +54,7 @@ namespace AwtrixSharpWeb.HostedServices
             _tripPlanner = tripPlanner;
             _timerService = timerService;
             _hostEnvironment = env;
-            _jsonOptions = jsonOptions?.Value ?? new JsonSerializerOptions();
+            _jsonOptions = jsonOptions;
 
             _apps = new List<IAwtrixApp>();
         }
@@ -63,14 +63,11 @@ namespace AwtrixSharpWeb.HostedServices
         {
             foreach (var device in _awtrixConfig.Devices)
             {
-                var diurnalConfig = AppConfig.Empty(_hostEnvironment.EnvironmentName).SetName(AppNames.DiurnalApp);
+                var diurnalConfig = AppConfig.Empty(_hostEnvironment.EnvironmentName).WithName(AppNames.DiurnalApp);
                 _apps.Add(AppFactory(device, diurnalConfig));
 
                 foreach (var appConfig in device.Apps)
                 {
-                    // Process any ValueMaps that might be in the JSON configuration
-                    ProcessValueMaps(appConfig);
-                    
                     var app = AppFactory(device, appConfig);            
                     _apps.Add(app);
                 }
@@ -90,34 +87,6 @@ namespace AwtrixSharpWeb.HostedServices
             return Task.CompletedTask;
         }
 
-        /// <summary>
-        /// Process any ValueMaps entries that might be in the configuration JSON
-        /// </summary>
-        private void ProcessValueMaps(AppConfig appConfig)
-        {
-            try
-            {
-                // Check if this is a configuration that might have ValueMaps
-                if (appConfig.TryGetValue("ValueMaps", out string valueMapsJson))
-                {
-                    if (!string.IsNullOrEmpty(valueMapsJson))
-                    {
-                        // Deserialize the ValueMaps JSON
-                        var valueMaps = JsonSerializer.Deserialize<List<ValueMap>>(valueMapsJson, _jsonOptions);
-                        if (valueMaps != null && valueMaps.Count > 0)
-                        {
-                            _logger.LogInformation("Loaded {Count} ValueMaps for {AppName}", valueMaps.Count, appConfig.Name);
-                            appConfig.AddValueMaps(valueMaps);
-                        }
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error processing ValueMaps for {AppName}", appConfig.Name);
-            }
-        }
-
         private IAwtrixApp AppFactory(DeviceConfig device, AppConfig appConfig)
         {
             IAwtrixApp app;
@@ -126,7 +95,13 @@ namespace AwtrixSharpWeb.HostedServices
             var clock = new Clock();
 
             var isDev = _hostEnvironment.IsDevelopment();
-            _logger.LogInformation("Environment: {EnvName}, isDev={isDev}", _hostEnvironment.EnvironmentName, isDev);
+            _logger.LogInformation("Creating {AppName} for Environment: {EnvName}, isDev={isDev}", appConfig.Name, _hostEnvironment.EnvironmentName, isDev);
+
+            // Log ValueMaps for debugging purposes
+            if (appConfig.ValueMaps != null && appConfig.ValueMaps.Count > 0)
+            {
+                _logger.LogDebug("App {AppName} has {Count} ValueMaps configured", appConfig.Name, appConfig.ValueMaps.Count);
+            }
 
             switch (appConfig.Name)
             {
@@ -158,17 +133,36 @@ namespace AwtrixSharpWeb.HostedServices
 
         public void ExecuteNow(string baseTopic, string appName)
         {
-            var device = _awtrixConfig.Devices.First(d => d.BaseTopic == baseTopic);
-            var config = device.Apps.First(a => a.Name == appName);
+            try
+            {
+                var device = _awtrixConfig.Devices.FirstOrDefault(d => d.BaseTopic == baseTopic);
+                if (device == null)
+                {
+                    _logger.LogWarning("Device with base topic '{BaseTopic}' not found", baseTopic);
+                    return;
+                }
 
-            var app = AppFactory(device, config);
-            app.Init();
-            app.ExecuteNow();
+                var config = device.Apps.FirstOrDefault(a => a.Name == appName);
+                if (config == null)
+                {
+                    _logger.LogWarning("App '{AppName}' not found for device '{BaseTopic}'", appName, baseTopic);
+                    return;
+                }
+
+                var app = AppFactory(device, config);
+                app.Init();
+                app.ExecuteNow();
+                _logger.LogInformation("Successfully executed app '{AppName}' on device '{BaseTopic}'", appName, baseTopic);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error executing app '{AppName}' on device '{BaseTopic}'", appName, baseTopic);
+            }
         }
 
         public List<IAwtrixApp> FindApps(string appName)
         {
-            var app = _apps.FindAll(a => a.GetConfig().Name == appName);
+            var app = _apps.FindAll(a => a.GetConfig().Type == appName);
             return app;
         }
 

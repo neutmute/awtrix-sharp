@@ -1,3 +1,4 @@
+using AwtrixSharpWeb.Apps.Configs;
 using AwtrixSharpWeb.Domain;
 using AwtrixSharpWeb.HostedServices;
 using AwtrixSharpWeb.Services;
@@ -7,7 +8,7 @@ using Swashbuckle.AspNetCore.Annotations;
 
 namespace AwtrixSharpWeb.Controllers
 {
-    [SwaggerTag("ddfs")]
+    [SwaggerTag("Diagnostics")]
     [ApiController]
     [Route("[controller]")]
     public class DiagnosticsController : ControllerBase
@@ -42,6 +43,35 @@ namespace AwtrixSharpWeb.Controllers
             var payload = System.Text.Json.JsonSerializer.Serialize(diagnosticInfo);
 
             return Ok(diagnosticInfo);
+        }
+
+        [HttpGet("config")]
+        [SwaggerOperation(Summary = "Get configuration information", Description = "Returns information about the loaded configuration including ValueMaps")]
+        public IActionResult GetConfig()
+        {
+            //var configInfo = new
+            //{
+            //    Timestamp = DateTime.UtcNow,
+            //    Devices = _awtrixConfig.Devices.Select(device => new
+            //    {
+            //        BaseTopic = device.BaseTopic,
+            //        Apps = device.Apps?.Select(app => new 
+            //        {
+            //            Name = app.Name,
+            //            Properties = app.Keys.ToDictionary(k => k, k => app[k]),
+            //            ValueMapsCount = app.ValueMaps?.Count ?? 0,
+            //            ValueMaps = app.ValueMaps?.Select(vm => new
+            //            {
+            //                ValueMatcher = vm.ValueMatcher,
+            //                Properties = vm.Keys
+            //                    .Where(k => k != "ValueMatcher")
+            //                    .ToDictionary(k => k, k => vm[k])
+            //            }).ToList()
+            //        }).ToList()
+            //    }).ToList()
+            //};
+
+            return Ok(_awtrixConfig.Devices);
         }
 
         [HttpPost("mqtt")]

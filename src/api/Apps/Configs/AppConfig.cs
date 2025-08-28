@@ -4,31 +4,13 @@ using AwtrixSharpWeb.Interfaces;
 namespace AwtrixSharpWeb.Apps.Configs
 {
 
-    public class AppConfig : Dictionary<string, string>, IAppConfig
+    public class AppConfigKeys : Dictionary<string, string>, IAppKeys
     {
-        public const string EnvironmentKey = "Environment";
-        private List<ValueMap> _valueMaps;
+        public const string Name = "Name";
 
-        public AppConfig()
+        public AppConfigKeys()
         {
-            _valueMaps = new List<ValueMap>();
-        }
-
-        public static AppConfig Empty(string environment = "")
-        {
-            // Tell the 
-            var result = new AppConfig();
-            result.SetEnvironment(environment);
-            return result;
-        }
-
-        public AppConfig SetName(string name)
-        {
-            if (!string.IsNullOrWhiteSpace(name))
-            {
-                this["Name"] = name;
-            }
-            return this;
+                
         }
 
         public string Get(string key)
@@ -53,7 +35,64 @@ namespace AwtrixSharpWeb.Apps.Configs
             return value;
         }
 
-        public string Name => Get("Name");
+        public AppConfigKeys Clone()
+        {
+            var clone = new AppConfigKeys();
+            foreach (var key in this.Keys) {
+                clone.Add(key, this[key]);
+            };
+            return clone;
+        }
+
+        public override string ToString()
+        {
+            return string.Join(
+                "; ",
+                this.OrderBy(kvp => kvp.Key == "Name" ? "" : kvp.Key)       // always name first
+                    .Select(kvp => $"{kvp.Key}={kvp.Value}")
+            );
+        }
+    }
+
+    public class AppConfig : IAppConfig
+    {
+        public const string EnvironmentKey = "Environment";
+        private List<ValueMap> _valueMaps;
+
+        public AppConfigKeys Keys { get; set; }
+
+        public string Environment { get; set; }
+
+        public string Type { get; set; }
+
+        /// <summary>
+        /// Redirect for now
+        /// </summary>
+        public string Name { get => Type; }
+
+        public AppConfig()
+        {
+            Keys = new AppConfigKeys();
+            _valueMaps = new List<ValueMap>();
+        }
+
+        public static AppConfig Empty(string environment = "")
+        {
+            // Tell the 
+            var result = new AppConfig();
+            result.SetEnvironment(environment);
+            return result;
+        }
+
+        public AppConfig WithName(string name)
+        {
+            if (!string.IsNullOrWhiteSpace(name))
+            {
+                Type = name;
+            }
+            return this;
+        }
+
 
         /// <summary>
         /// Get the list of ValueMaps defined for this configuration
@@ -74,32 +113,32 @@ namespace AwtrixSharpWeb.Apps.Configs
             return _valueMaps?.FirstOrDefault(map => map.IsMatch(input));
         }
 
-        /// <summary>
-        /// Add a ValueMap to the collection
-        /// </summary>
-        public AppConfig AddValueMap(ValueMap valueMap)
-        {
-            if (valueMap != null && !string.IsNullOrEmpty(valueMap.ValueMatcher))
-            {
-                _valueMaps.Add(valueMap);
-            }
-            return this;
-        }
+        ///// <summary>
+        ///// Add a ValueMap to the collection
+        ///// </summary>
+        //public AppConfig AddValueMap(ValueMap valueMap)
+        //{
+        //    if (valueMap != null && !string.IsNullOrEmpty(valueMap.ValueMatcher))
+        //    {
+        //        _valueMaps.Add(valueMap);
+        //    }
+        //    return this;
+        //}
 
-        /// <summary>
-        /// Add multiple ValueMaps to the collection
-        /// </summary>
-        public AppConfig AddValueMaps(IEnumerable<ValueMap> valueMaps)
-        {
-            if (valueMaps != null)
-            {
-                foreach (var map in valueMaps.Where(m => !string.IsNullOrEmpty(m.ValueMatcher)))
-                {
-                    _valueMaps.Add(map);
-                }
-            }
-            return this;
-        }
+        ///// <summary>
+        ///// Add multiple ValueMaps to the collection
+        ///// </summary>
+        //public AppConfig AddValueMaps(IEnumerable<ValueMap> valueMaps)
+        //{
+        //    if (valueMaps != null)
+        //    {
+        //        foreach (var map in valueMaps.Where(m => !string.IsNullOrEmpty(m.ValueMatcher)))
+        //        {
+        //            _valueMaps.Add(map);
+        //        }
+        //    }
+        //    return this;
+        //}
 
         /// <summary>
         /// Creates a new instance of the specified type and populates its properties from this AppConfig.
@@ -122,11 +161,15 @@ namespace AwtrixSharpWeb.Apps.Configs
             // Create a new instance of the target type
             T target = new T();
 
-            // Copy all key-value pairs from source to target
-            foreach (var kvp in source)
-            {
-                target[kvp.Key] = kvp.Value;
-            }
+            //// Copy all key-value pairs from source to target
+            //foreach (var kvp in source)
+            //{
+            //    target[kvp.Key] = kvp.Value;
+            //}
+
+            target.Keys = source.Keys.Clone();
+            target.Environment = source.Environment;    
+            target.Type = source.Type;
 
             // Copy ValueMaps if present
             if (source._valueMaps != null && source._valueMaps.Count > 0)
@@ -134,33 +177,33 @@ namespace AwtrixSharpWeb.Apps.Configs
                 target.ValueMaps = new List<ValueMap>(source._valueMaps);
             }
 
-            // Get all properties of the target type that can be written to
-            var properties = typeof(T).GetProperties()
-                .Where(p => p.CanWrite && p.Name != "Item" && p.Name != "Keys" && p.Name != "Values" && p.Name != "ValueMaps")
-                .ToList();
+            //// Get all properties of the target type that can be written to
+            //var properties = typeof(T).GetProperties()
+            //    .Where(p => p.CanWrite && p.Name != "Item" && p.Name != "Keys" && p.Name != "Values" && p.Name != "ValueMaps")
+            //    .ToList();
 
-            foreach (var property in properties)
-            {
-                // Try to get the value from the dictionary
-                string key = property.Name;
-                if (source.TryGetValue(key, out string stringValue) && !string.IsNullOrEmpty(stringValue))
-                {
-                    // Convert the string value to the property's type and set it
-                    try
-                    {
-                        object convertedValue = ConvertValue(stringValue, property.PropertyType);
-                        if (convertedValue != null)
-                        {
-                            property.SetValue(target, convertedValue);
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        // Log or handle conversion errors
-                        System.Diagnostics.Debug.WriteLine($"Error converting value '{stringValue}' to type {property.PropertyType} for property {property.Name}: {ex.Message}");
-                    }
-                }
-            }
+            //foreach (var property in properties)
+            //{
+            //    // Try to get the value from the dictionary
+            //    string key = property.Name;
+            //    if (source.TryGetValue(key, out string stringValue) && !string.IsNullOrEmpty(stringValue))
+            //    {
+            //        // Convert the string value to the property's type and set it
+            //        try
+            //        {
+            //            object convertedValue = ConvertValue(stringValue, property.PropertyType);
+            //            if (convertedValue != null)
+            //            {
+            //                property.SetValue(target, convertedValue);
+            //            }
+            //        }
+            //        catch (Exception ex)
+            //        {
+            //            // Log or handle conversion errors
+            //            System.Diagnostics.Debug.WriteLine($"Error converting value '{stringValue}' to type {property.PropertyType} for property {property.Name}: {ex.Message}");
+            //        }
+            //    }
+            //}
 
             return target;
         }
@@ -221,21 +264,9 @@ namespace AwtrixSharpWeb.Apps.Configs
             throw new NotSupportedException($"Conversion from string to {targetType} is not supported.");
         }
 
-        public void SetEnvironment(string environment)
-        {
-            if (!string.IsNullOrWhiteSpace(environment))
-            {
-                this[EnvironmentKey] = environment;
-            }
-        }
-
         public override string ToString()
         {
-            return string.Join(
-                "; ",
-                this.OrderBy(kvp => kvp.Key == "Name" ? "" : kvp.Key)       // always name first
-                    .Select(kvp => $"{kvp.Key}={kvp.Value}")
-            );
+            return $"{Type}: {Keys.ToString()}";
         }
     }
 }

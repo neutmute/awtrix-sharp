@@ -67,7 +67,7 @@ namespace Test.Apps
                 TimeToPrepare = TimeSpan.FromMinutes(8),
             };
 
-            _timerConfig.Add("Name", "TripTimer");
+            _timerConfig.Type = "TripTimer";
 
             var sut = new TripTimerApp(
                 _mockLog.Object

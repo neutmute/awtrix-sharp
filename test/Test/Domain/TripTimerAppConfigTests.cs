@@ -14,7 +14,7 @@ namespace Test.Domain
         public void As_Method_Converts_Dictionary_To_TripTimerAppConfig_Successfully()
         {
             // Arrange
-            AppConfig basicConfig = new AppConfig
+            var basicKeysConfig = new AppConfigKeys
             {
                 { "Name", "TripPlanner" },
                 { "CronSchedule", "0 30 7 * * 1-5" },
@@ -24,6 +24,9 @@ namespace Test.Domain
                 { "TimeToOrigin", "00:15:00" },
                 { "TimeToPrepare", "00:30:00" }
             };
+
+            var basicConfig = AppConfig.Empty().WithName("TripPlanner");
+            basicConfig.Keys = basicKeysConfig;
 
             // Act
             TripTimerAppConfig tripConfig = basicConfig.As<TripTimerAppConfig>();
@@ -38,26 +41,29 @@ namespace Test.Domain
             Assert.Equal(TimeSpan.FromMinutes(30), tripConfig.TimeToPrepare);
             
             // Verify dictionary values are also preserved
-            Assert.Equal("TripPlanner", tripConfig["Name"]);
-            Assert.Equal("0 30 7 * * 1-5", tripConfig["CronSchedule"]);
-            Assert.Equal("00:05:00", tripConfig["ActiveTime"]);
-            Assert.Equal("200080", tripConfig["StopIdOrigin"]);
-            Assert.Equal("200060", tripConfig["StopIdDestination"]);
-            Assert.Equal("00:15:00", tripConfig["TimeToOrigin"]);
-            Assert.Equal("00:30:00", tripConfig["TimeToPrepare"]);
+            Assert.Equal("TripPlanner", tripConfig.Name);
+            Assert.Equal("0 30 7 * * 1-5", tripConfig.Keys["CronSchedule"]);
+            Assert.Equal("00:05:00", tripConfig.Keys["ActiveTime"]);
+            Assert.Equal("200080", tripConfig.Keys["StopIdOrigin"]);
+            Assert.Equal("200060", tripConfig.Keys["StopIdDestination"]);
+            Assert.Equal("00:15:00", tripConfig.Keys["TimeToOrigin"]);
+            Assert.Equal("00:30:00", tripConfig.Keys["TimeToPrepare"]);
         }
 
         [Fact]
         public void As_Method_Preserves_Dictionary_Keys_Not_Mapped_To_Properties()
         {
             // Arrange
-            AppConfig basicConfig = new AppConfig
+            var keysConfig = new AppConfigKeys
             {
                 { "Name", "TripPlanner" },
                 { "CustomSetting", "CustomValue" }, // This doesn't map to any property
                 { "CronSchedule", "0 30 7 * * 1-5" },
                 { "ActiveTime", "00:05:00" }
             };
+
+            var basicConfig = AppConfig.Empty().WithName("TripPlanner"); 
+            basicConfig.Keys = keysConfig;
 
             // Act
             TripTimerAppConfig tripConfig = basicConfig.As<TripTimerAppConfig>();
@@ -68,20 +74,22 @@ namespace Test.Domain
             Assert.Equal(TimeSpan.FromMinutes(5), tripConfig.ActiveTime);
             
             // Verify the custom setting is preserved in the dictionary
-            Assert.Equal("CustomValue", tripConfig["CustomSetting"]);
+            Assert.Equal("CustomValue", tripConfig.Keys["CustomSetting"]);
         }
 
         [Fact]
         public void As_Method_Handles_TimeSpan_Conversion_Correctly()
         {
             // Arrange
-            AppConfig basicConfig = new AppConfig
+            var keysConfig = new AppConfigKeys
             {
-                { "Name", "TripPlanner" },
                 { "ActiveTime", "01:30:45" },       // 1 hour, 30 minutes, 45 seconds
                 { "TimeToOrigin", "00:45:30" },     // 45 minutes, 30 seconds
                 { "TimeToPrepare", "02:00:00" }     // 2 hours
             };
+
+            var basicConfig = AppConfig.Empty().WithName("TripPlanner");
+            basicConfig.Keys = keysConfig;
 
             // Act
             TripTimerAppConfig tripConfig = basicConfig.As<TripTimerAppConfig>();
@@ -101,12 +109,15 @@ namespace Test.Domain
         public void As_Method_Returns_New_Instance_With_Same_Values()
         {
             // Arrange
-            AppConfig basicConfig = new AppConfig
+            var keysConfig = new AppConfigKeys
             {
                 { "Name", "TripPlanner" },
                 { "CronSchedule", "0 30 7 * * 1-5" },
                 { "ActiveTime", "00:05:00" }
             };
+
+            var basicConfig = AppConfig.Empty().WithName("TripPlanner");
+            basicConfig.Keys = keysConfig;
 
             // Act
             var converted = basicConfig.As<ScheduledAppConfig>();

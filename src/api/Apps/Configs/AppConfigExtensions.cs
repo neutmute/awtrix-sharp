@@ -6,17 +6,13 @@
         {
             if (!string.IsNullOrWhiteSpace(environment))
             {
-                config.TryAdd(AppConfig.EnvironmentKey, environment);
+                config.Environment = environment;
             }
         }
 
         public static bool IsEnvironmentDev(this AppConfig config)
         {
-            if (config.TryGetValue(AppConfig.EnvironmentKey, out var environment))
-            { 
-                return environment.ToLower().StartsWith("dev");
-            }
-            return false;
+            return config.Environment.ToLower().StartsWith("dev");
         }
     }
 }

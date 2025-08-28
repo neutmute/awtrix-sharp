@@ -18,7 +18,7 @@ namespace AwtrixSharpWeb.Apps
         protected override void Initialize()
         {
             _slackConnector.UserStatusChanged += UserStatusChanged;
-            _trackingUserId = Config.Get("SlackUserId", "AWTRIXSHARP_SLACK__USERID");
+            _trackingUserId = Config.Keys.Get("SlackUserId", "AWTRIXSHARP_SLACK__USERID");
             Logger.LogInformation("Slack monitoring userId='{_trackingUserId}'", _trackingUserId);
         }
 

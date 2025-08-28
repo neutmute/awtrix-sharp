@@ -6,7 +6,6 @@ using AwtrixSharpWeb.Services;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.OpenApi.Models;
-using Swashbuckle.AspNetCore.Annotations;
 using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -22,10 +21,20 @@ namespace AwtrixSharpWeb
             var builder = WebApplication.CreateBuilder(args);
 
             // Configure JSON serialization options for ValueMap support
+            var jsonOptions = new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true,
+                AllowTrailingCommas = true
+            };
+            jsonOptions.Converters.Add(new ValueMapJsonConverter());
+            
+            // Register the JSON options as a singleton for use throughout the app
+            builder.Services.AddSingleton(jsonOptions);
             builder.Services.Configure<JsonSerializerOptions>(options =>
             {
                 options.Converters.Add(new ValueMapJsonConverter());
                 options.PropertyNameCaseInsensitive = true;
+                options.AllowTrailingCommas = true;
             });
 
             // Configure environment variables with AwtrixSharp prefix
@@ -50,8 +59,8 @@ namespace AwtrixSharpWeb
             services.Configure<MqttSettings>(
                 builder.Configuration.GetSection("Mqtt"));
 
-            services.Configure<AwtrixConfig>(
-                builder.Configuration.GetSection("Awtrix"));
+            // Configure Awtrix settings with our custom binder
+           // AwtrixConfigBinder.BindAwtrixConfig(services, builder.Configuration, jsonOptions);
                 
             // Configure Trip Planner settings
             services.Configure<TransportOpenDataConfig>(config => {
@@ -65,6 +74,7 @@ namespace AwtrixSharpWeb
                 {
                     options.JsonSerializerOptions.Converters.Add(new ValueMapJsonConverter());
                     options.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
+                    options.JsonSerializerOptions.AllowTrailingCommas = true;
                 });
 
             services.AddTransient<AwtrixService>();
@@ -102,26 +112,10 @@ namespace AwtrixSharpWeb
             services.AddSwaggerGen(c =>
             {
                 c.SwaggerDoc("v1", new OpenApiInfo { Title = "Awtrix API", Version = "v1" });
+                
+                // Enable annotations for Swagger
                 c.EnableAnnotations();
-
-                //c.TagActionsBy(api =>
-                //{
-                //    // If you used [SwaggerOperation(Tags=...)] it will already take effect.
-                //    // This fallback groups by controller name only when no custom tags exist.
-                //    var hasCustom = api.ActionDescriptor.EndpointMetadata
-                //        .OfType<SwaggerOperationAttribute>().Any(a => a.Tags?.Length > 0);
-                //    var output = hasCustom
-                //        ? api.ActionDescriptor.EndpointMetadata
-                //            .OfType<SwaggerOperationAttribute>()
-                //            .SelectMany(a => a.Tags)
-                //        : new[] { api.GroupName ?? api.ActionDescriptor.RouteValues["controller"]! };
-
-                //    return output.ToList();
-                //});
-
             });
-
-
 
             var app = builder.Build();
 
@@ -131,7 +125,7 @@ namespace AwtrixSharpWeb
 
             // Log startup information
             var version = Assembly.GetExecutingAssembly().GetName().Version;
-            logger.LogInformation("Starting AwtrixSharpWeb v{Version}, {Commit}", version, GetGitCommitShort());
+            logger.LogInformation("Starting AwtrixSharp v{Version}, {Commit}", version, GetGitCommitShort());
             logger.LogInformation("Environment: {Environment}", app.Environment.EnvironmentName);
 
             // if (app.Environment.IsDevelopment()) always show swagger
@@ -139,10 +133,7 @@ namespace AwtrixSharpWeb
                 app.UseDeveloperExceptionPage();
 
                 app.UseSwagger();
-                app.UseSwaggerUI(c => {
-
-                    c.SwaggerEndpoint("/swagger/v1/swagger.json", "My API v1");
-                });
+                app.UseSwaggerUI();
             }
 
             app.UseHttpsRedirection();
@@ -157,5 +148,4 @@ namespace AwtrixSharpWeb
                 .GetCustomAttributes<AssemblyMetadataAttribute>()
                 .FirstOrDefault(a => a.Key == "GitCommitShort")?.Value;
     }
-
 }

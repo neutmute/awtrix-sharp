@@ -12,6 +12,17 @@ namespace AwtrixSharpWeb.Apps.Configs
             set => this["ValueMatcher"] = value;
         }
 
+        public ValueMap Clone()
+        {
+            var clone = new ValueMap();
+            foreach (var key in this.Keys)
+            {
+                clone.Add(key, this[key]);
+            }
+            ;
+            return clone;
+        }
+
         public bool IsMatch(string input)
         {
             if (string.IsNullOrEmpty(ValueMatcher) || string.IsNullOrEmpty(input))
