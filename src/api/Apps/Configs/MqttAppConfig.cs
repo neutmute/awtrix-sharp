@@ -2,7 +2,16 @@
 {
     public class MqttAppConfig : ScheduledAppConfig
     {
-        public string Icon { get; set; } = string.Empty;
-        public string ReadTopic { get; set; } = string.Empty;
+        public string Icon
+        {
+            get => GetConfig<string>("Icon");
+            set => SetConfig("Icon", value);
+        }
+
+        public string ReadTopic
+        {
+            get => GetConfig<string>("ReadTopic");
+            set => SetConfig("ReadTopic", value);
+        }
     }
 }

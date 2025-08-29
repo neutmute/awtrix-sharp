@@ -111,6 +111,11 @@ namespace AwtrixSharpWeb.Apps.Configs
             }
         }
 
+        public override string ToString()
+        {
+            return $"ValueMatcher={ValueMatcher}";
+        }
+
         private void ApplyDynamicProperty(AwtrixAppMessage message, string propertyName, string value, ILogger logger)
         {
             try

@@ -59,9 +59,9 @@ namespace AwtrixSharpWeb
             services.Configure<MqttSettings>(
                 builder.Configuration.GetSection("Mqtt"));
 
-            // Configure Awtrix settings with our custom binder
-           // AwtrixConfigBinder.BindAwtrixConfig(services, builder.Configuration, jsonOptions);
-                
+            //Configure Awtrix settings with our custom binder
+            AwtrixConfigBinder.BindAwtrixConfig(services, builder.Configuration, jsonOptions);
+
             // Configure Trip Planner settings
             services.Configure<TransportOpenDataConfig>(config => {
                 config.ApiKey = Environment.GetEnvironmentVariable("TRANSPORTOPENDATA__APIKEY") ?? "";

@@ -28,8 +28,7 @@ namespace AwtrixSharpWeb.HostedServices
             _log = logger;
             _settings = settings.Value;
         }
-
-
+        
         public async Task<bool> ConnectAsync(CancellationToken cancellationToken = default)
         {
             _log.LogInformation("Connecting to MQTT broker at {Host}...", _settings.Host);

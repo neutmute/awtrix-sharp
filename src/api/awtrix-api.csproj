@@ -29,4 +29,8 @@
     <ProjectReference Include="..\transportOpenData\TransportOpenData.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="Configuration\" />
+  </ItemGroup>
+
 </Project>
