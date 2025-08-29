@@ -26,6 +26,7 @@ namespace AwtrixSharpWeb.Apps
         {
             if (_trackingUserId.Equals(e.UserId))
             {
+                Logger.LogInformation(e.ToString());
                 bool result;
                 if (e.StatusText == string.Empty)
                 {
@@ -50,11 +51,6 @@ namespace AwtrixSharpWeb.Apps
                     Logger.LogInformation(message.ToString());
                     result = AppUpdate(message).Result;
                 }
-            }
-            else
-            {
-
-                Logger.LogInformation(e.ToString());
             }
         }
 
