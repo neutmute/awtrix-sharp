@@ -26,7 +26,7 @@ namespace Test.Domain
             };
 
             var basicConfig = AppConfig.Empty().WithName("TripPlanner");
-            basicConfig.Keys = basicKeysConfig;
+            basicConfig.Config = basicKeysConfig;
 
             // Act
             TripTimerAppConfig tripConfig = basicConfig.As<TripTimerAppConfig>();
@@ -42,12 +42,12 @@ namespace Test.Domain
             
             // Verify dictionary values are also preserved
             Assert.Equal("TripPlanner", tripConfig.Name);
-            Assert.Equal("0 30 7 * * 1-5", tripConfig.Keys["CronSchedule"]);
-            Assert.Equal("00:05:00", tripConfig.Keys["ActiveTime"]);
-            Assert.Equal("200080", tripConfig.Keys["StopIdOrigin"]);
-            Assert.Equal("200060", tripConfig.Keys["StopIdDestination"]);
-            Assert.Equal("00:15:00", tripConfig.Keys["TimeToOrigin"]);
-            Assert.Equal("00:30:00", tripConfig.Keys["TimeToPrepare"]);
+            Assert.Equal("0 30 7 * * 1-5", tripConfig.Config["CronSchedule"]);
+            Assert.Equal("00:05:00", tripConfig.Config["ActiveTime"]);
+            Assert.Equal("200080", tripConfig.Config["StopIdOrigin"]);
+            Assert.Equal("200060", tripConfig.Config["StopIdDestination"]);
+            Assert.Equal("00:15:00", tripConfig.Config["TimeToOrigin"]);
+            Assert.Equal("00:30:00", tripConfig.Config["TimeToPrepare"]);
         }
 
         [Fact]
@@ -63,7 +63,7 @@ namespace Test.Domain
             };
 
             var basicConfig = AppConfig.Empty().WithName("TripPlanner"); 
-            basicConfig.Keys = keysConfig;
+            basicConfig.Config = keysConfig;
 
             // Act
             TripTimerAppConfig tripConfig = basicConfig.As<TripTimerAppConfig>();
@@ -74,7 +74,7 @@ namespace Test.Domain
             Assert.Equal(TimeSpan.FromMinutes(5), tripConfig.ActiveTime);
             
             // Verify the custom setting is preserved in the dictionary
-            Assert.Equal("CustomValue", tripConfig.Keys["CustomSetting"]);
+            Assert.Equal("CustomValue", tripConfig.Config["CustomSetting"]);
         }
 
         [Fact]
@@ -89,7 +89,7 @@ namespace Test.Domain
             };
 
             var basicConfig = AppConfig.Empty().WithName("TripPlanner");
-            basicConfig.Keys = keysConfig;
+            basicConfig.Config = keysConfig;
 
             // Act
             TripTimerAppConfig tripConfig = basicConfig.As<TripTimerAppConfig>();
@@ -117,7 +117,7 @@ namespace Test.Domain
             };
 
             var basicConfig = AppConfig.Empty().WithName("TripPlanner");
-            basicConfig.Keys = keysConfig;
+            basicConfig.Config = keysConfig;
 
             // Act
             var converted = basicConfig.As<ScheduledAppConfig>();

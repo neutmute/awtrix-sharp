@@ -9,6 +9,13 @@
     <RootNamespace>AwtrixSharpWeb</RootNamespace>
     <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="Configuration\**" />
+    <Content Remove="Configuration\**" />
+    <EmbeddedResource Remove="Configuration\**" />
+    <None Remove="Configuration\**" />
+  </ItemGroup>
   <ItemGroup>
     <AssemblyMetadata Include="GitCommitShort" Value="$(GIT_COMMIT_SHORT)" />
     <AssemblyMetadata Include="GitCommit" Value="$(GIT_COMMIT)" />
@@ -27,10 +34,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\transportOpenData\TransportOpenData.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Folder Include="Configuration\" />
   </ItemGroup>
 
 </Project>

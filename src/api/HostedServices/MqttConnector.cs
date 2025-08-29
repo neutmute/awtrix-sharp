@@ -96,7 +96,14 @@ namespace AwtrixSharpWeb.HostedServices
                 .WithPayload(Encoding.UTF8.GetBytes(payload))
                 .Build();
 
-            await _client.PublishAsync(message, CancellationToken.None);
+            try
+            {
+                await _client.PublishAsync(message, CancellationToken.None);
+            }
+            catch(Exception e)
+            {
+                _log.LogError($"Failed to publish message {message} ({e.Message})");
+            }
         }
 
         public async Task StartAsync(CancellationToken cancellationToken)

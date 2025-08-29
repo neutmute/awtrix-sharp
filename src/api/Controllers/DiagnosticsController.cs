@@ -49,29 +49,31 @@ namespace AwtrixSharpWeb.Controllers
         [SwaggerOperation(Summary = "Get configuration information", Description = "Returns information about the loaded configuration including ValueMaps")]
         public IActionResult GetConfig()
         {
-            //var configInfo = new
-            //{
-            //    Timestamp = DateTime.UtcNow,
-            //    Devices = _awtrixConfig.Devices.Select(device => new
-            //    {
-            //        BaseTopic = device.BaseTopic,
-            //        Apps = device.Apps?.Select(app => new 
-            //        {
-            //            Name = app.Name,
-            //            Properties = app.Keys.ToDictionary(k => k, k => app[k]),
-            //            ValueMapsCount = app.ValueMaps?.Count ?? 0,
-            //            ValueMaps = app.ValueMaps?.Select(vm => new
-            //            {
-            //                ValueMatcher = vm.ValueMatcher,
-            //                Properties = vm.Keys
-            //                    .Where(k => k != "ValueMatcher")
-            //                    .ToDictionary(k => k, k => vm[k])
-            //            }).ToList()
-            //        }).ToList()
-            //    }).ToList()
-            //};
+            var configInfo = new
+            {
+                Timestamp = DateTime.UtcNow,
+                Devices = _awtrixConfig.Devices.Select(device => new
+                {
+                    BaseTopic = device.BaseTopic,
+                    Apps = device.Apps?.Select(app => new 
+                    {
+                        Name = app.Name,
+                        Type = app.Type,
+                        Environment = app.Environment,
+                        Properties = app.Config?.ToDictionary(k => k.Key, k => k.Value),
+                        ValueMapsCount = app.ValueMaps?.Count ?? 0,
+                        ValueMaps = app.ValueMaps?.Select(vm => new
+                        {
+                            ValueMatcher = vm.ValueMatcher,
+                            Properties = vm.Keys
+                                .Where(k => k != "ValueMatcher")
+                                .ToDictionary(k => k, k => vm[k])
+                        }).ToList()
+                    }).ToList()
+                }).ToList()
+            };
 
-            return Ok(_awtrixConfig.Devices);
+            return Ok(configInfo);
         }
 
         [HttpPost("mqtt")]

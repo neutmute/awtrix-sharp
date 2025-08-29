@@ -14,8 +14,16 @@ namespace AwtrixSharpWeb.HostedServices
     public class SlackUserStatusChangedEventArgs : EventArgs
     {
         public string UserId { get; set; } = string.Empty;
+
+        public string Name { get; set; } = string.Empty;
+
         public string StatusText { get; set; } = string.Empty;
         public string StatusEmoji { get; set; } = string.Empty;
+
+        public override string ToString()
+        {
+            return $"{Name} ({UserId}): {StatusEmoji} {StatusText}";
+        }
     }
 
     public class SlackConnector : IHostedService
@@ -210,6 +218,7 @@ namespace AwtrixSharpWeb.HostedServices
                 var user = ev.GetProperty("user");
                 var id = user.GetProperty("id").GetString();
                 var profile = user.GetProperty("profile");
+                var name = profile.GetProperty("real_name").GetString() ?? string.Empty;
 
                 // Extract relevant user data
                 string statusText = string.Empty;
@@ -221,16 +230,17 @@ namespace AwtrixSharpWeb.HostedServices
                 if (profile.TryGetProperty("status_emoji", out var statusEmojiElement))
                     statusEmoji = statusEmojiElement.GetString() ?? string.Empty;
 
-                _logger.LogInformation("User status change -> {UserId}: {Emoji} {StatusText}",
-                    id, statusEmoji, statusText);
-
-                // Fire the event for subscribers to handle
-                UserStatusChanged?.Invoke(this, new SlackUserStatusChangedEventArgs
+                var statusChangedEvent = new SlackUserStatusChangedEventArgs
                 {
                     UserId = id ?? string.Empty,
+                    Name = name,
                     StatusText = statusText,
                     StatusEmoji = statusEmoji
-                });
+                };
+
+                _logger.LogInformation("User status change -> {statusChangedEvent}", statusChangedEvent);
+
+                UserStatusChanged?.Invoke(this, statusChangedEvent);
             }
             catch (Exception ex)
             {

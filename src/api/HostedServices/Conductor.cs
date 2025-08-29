@@ -68,6 +68,9 @@ namespace AwtrixSharpWeb.HostedServices
 
                 foreach (var appConfig in device.Apps)
                 {
+                    // Log the app configuration to debug configuration binding issues
+                    LogAppConfigDetails(appConfig);
+
                     var app = AppFactory(device, appConfig);            
                     _apps.Add(app);
                 }
@@ -87,6 +90,45 @@ namespace AwtrixSharpWeb.HostedServices
             return Task.CompletedTask;
         }
 
+        private void LogAppConfigDetails(AppConfig appConfig)
+        {
+            try
+            {
+                var keysCount = appConfig.Config?.Count ?? 0;
+                var valueMapsCount = appConfig.ValueMaps?.Count ?? 0;
+
+                _logger.LogInformation(
+                    "App configuration: Type={Type}, Name={Name}, Keys.Count={KeysCount}, ValueMaps.Count={ValueMapsCount}",
+                    appConfig.Type,
+                    appConfig.Name,
+                    keysCount,
+                    valueMapsCount
+                );
+
+                // Log the first few keys for debugging
+                if (keysCount > 0)
+                {
+                    var keyValues = string.Join(", ", appConfig.Config.Take(5).Select(k => $"{k.Key}={k.Value}"));
+                    _logger.LogDebug("App {Name} keys (sample): {KeyValues}", appConfig.Name, keyValues);
+                }
+
+                // Log ValueMaps for debugging purposes
+                if (valueMapsCount > 0)
+                {
+                    foreach (var valueMap in appConfig.ValueMaps.Take(3))
+                    {
+                        _logger.LogDebug("ValueMap: Matcher={Matcher}, PropertyCount={Count}", 
+                            valueMap.ValueMatcher, 
+                            valueMap.Count);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error logging app config details for {AppName}", appConfig.Name);
+            }
+        }
+
         private IAwtrixApp AppFactory(DeviceConfig device, AppConfig appConfig)
         {
             IAwtrixApp app;
@@ -95,15 +137,12 @@ namespace AwtrixSharpWeb.HostedServices
             var clock = new Clock();
 
             var isDev = _hostEnvironment.IsDevelopment();
-            _logger.LogInformation("Creating {AppName} for Environment: {EnvName}, isDev={isDev}", appConfig.Name, _hostEnvironment.EnvironmentName, isDev);
+            _logger.LogInformation("Creating {AppName} for Environment: {EnvName}, isDev={isDev}", 
+                appConfig.Name, 
+                _hostEnvironment.EnvironmentName, 
+                isDev);
 
-            // Log ValueMaps for debugging purposes
-            if (appConfig.ValueMaps != null && appConfig.ValueMaps.Count > 0)
-            {
-                _logger.LogDebug("App {AppName} has {Count} ValueMaps configured", appConfig.Name, appConfig.ValueMaps.Count);
-            }
-
-            switch (appConfig.Name)
+            switch (appConfig.Type)
             {
                 case AppNames.DiurnalApp:
                     app = new DiurnalApp(_logger, _timerService, appConfig, device, awtrixService);
@@ -125,7 +164,7 @@ namespace AwtrixSharpWeb.HostedServices
                     break;
 
                 default:
-                   throw new NotImplementedException(appConfig.Name);
+                   throw new NotImplementedException(appConfig.Type);
             }
 
             return app;
@@ -142,7 +181,7 @@ namespace AwtrixSharpWeb.HostedServices
                     return;
                 }
 
-                var config = device.Apps.FirstOrDefault(a => a.Name == appName);
+                var config = device.Apps.FirstOrDefault(a => a.Type == appName);
                 if (config == null)
                 {
                     _logger.LogWarning("App '{AppName}' not found for device '{BaseTopic}'", appName, baseTopic);

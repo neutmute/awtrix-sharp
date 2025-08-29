@@ -9,7 +9,7 @@ namespace AwtrixSharpWeb.Apps.Configs
         public const string EnvironmentKey = "Environment";
         private List<ValueMap> _valueMaps;
 
-        public AppConfigKeys Keys { get; set; }
+        public AppConfigKeys Config { get; set; }
 
         public string Environment { get; set; }
 
@@ -22,7 +22,7 @@ namespace AwtrixSharpWeb.Apps.Configs
 
         public AppConfig()
         {
-            Keys = new AppConfigKeys();
+            Config = new AppConfigKeys();
             _valueMaps = new List<ValueMap>();
         }
 
@@ -46,18 +46,18 @@ namespace AwtrixSharpWeb.Apps.Configs
         
         public T GetConfig<T>(string key)
         {
-            return (T)ConvertValue(Keys.Get(key), typeof(T));
+            return (T)ConvertValue(Config.Get(key), typeof(T));
         }
 
         public void SetConfig<T>(string key, T value)
         {
-            if (Keys.ContainsKey(key))
+            if (Config.ContainsKey(key))
             {
-                Keys[key] = value?.ToString();
+                Config[key] = value?.ToString();
             }
             else
             {
-                Keys.Add(key, value?.ToString());
+                Config.Add(key, value?.ToString());
             }
         }
 
@@ -67,7 +67,7 @@ namespace AwtrixSharpWeb.Apps.Configs
         public List<ValueMap> ValueMaps 
         { 
             get => _valueMaps;
-            set => _valueMaps = value;
+            set => _valueMaps = value ?? new List<ValueMap>();
         }
 
         /// <summary>
@@ -80,32 +80,32 @@ namespace AwtrixSharpWeb.Apps.Configs
             return _valueMaps?.FirstOrDefault(map => map.IsMatch(input));
         }
 
-        ///// <summary>
-        ///// Add a ValueMap to the collection
-        ///// </summary>
-        //public AppConfig AddValueMap(ValueMap valueMap)
-        //{
-        //    if (valueMap != null && !string.IsNullOrEmpty(valueMap.ValueMatcher))
-        //    {
-        //        _valueMaps.Add(valueMap);
-        //    }
-        //    return this;
-        //}
+        /// <summary>
+        /// Add a ValueMap to the collection
+        /// </summary>
+        public AppConfig AddValueMap(ValueMap valueMap)
+        {
+            if (valueMap != null && !string.IsNullOrEmpty(valueMap.ValueMatcher))
+            {
+                _valueMaps.Add(valueMap);
+            }
+            return this;
+        }
 
-        ///// <summary>
-        ///// Add multiple ValueMaps to the collection
-        ///// </summary>
-        //public AppConfig AddValueMaps(IEnumerable<ValueMap> valueMaps)
-        //{
-        //    if (valueMaps != null)
-        //    {
-        //        foreach (var map in valueMaps.Where(m => !string.IsNullOrEmpty(m.ValueMatcher)))
-        //        {
-        //            _valueMaps.Add(map);
-        //        }
-        //    }
-        //    return this;
-        //}
+        /// <summary>
+        /// Add multiple ValueMaps to the collection
+        /// </summary>
+        public AppConfig AddValueMaps(IEnumerable<ValueMap> valueMaps)
+        {
+            if (valueMaps != null)
+            {
+                foreach (var map in valueMaps.Where(m => !string.IsNullOrEmpty(m.ValueMatcher)))
+                {
+                    _valueMaps.Add(map);
+                }
+            }
+            return this;
+        }
 
         /// <summary>
         /// Creates a new instance of the specified type and populates its properties from this AppConfig.
@@ -128,13 +128,7 @@ namespace AwtrixSharpWeb.Apps.Configs
             // Create a new instance of the target type
             T target = new T();
 
-            //// Copy all key-value pairs from source to target
-            //foreach (var kvp in source)
-            //{
-            //    target[kvp.Key] = kvp.Value;
-            //}
-
-            target.Keys = source.Keys.Clone();
+            target.Config = source.Config.Clone();
             target.Environment = source.Environment;    
             target.Type = source.Type;
 
@@ -143,34 +137,6 @@ namespace AwtrixSharpWeb.Apps.Configs
             {
                 target.ValueMaps = new List<ValueMap>(source._valueMaps);
             }
-
-            //// Get all properties of the target type that can be written to
-            //var properties = typeof(T).GetProperties()
-            //    .Where(p => p.CanWrite && p.Name != "Item" && p.Name != "Keys" && p.Name != "Values" && p.Name != "ValueMaps")
-            //    .ToList();
-
-            //foreach (var property in properties)
-            //{
-            //    // Try to get the value from the dictionary
-            //    string key = property.Name;
-            //    if (source.TryGetValue(key, out string stringValue) && !string.IsNullOrEmpty(stringValue))
-            //    {
-            //        // Convert the string value to the property's type and set it
-            //        try
-            //        {
-            //            object convertedValue = ConvertValue(stringValue, property.PropertyType);
-            //            if (convertedValue != null)
-            //            {
-            //                property.SetValue(target, convertedValue);
-            //            }
-            //        }
-            //        catch (Exception ex)
-            //        {
-            //            // Log or handle conversion errors
-            //            System.Diagnostics.Debug.WriteLine($"Error converting value '{stringValue}' to type {property.PropertyType} for property {property.Name}: {ex.Message}");
-            //        }
-            //    }
-            //}
 
             return target;
         }
@@ -231,9 +197,14 @@ namespace AwtrixSharpWeb.Apps.Configs
             throw new NotSupportedException($"Conversion from string to {targetType} is not supported.");
         }
 
+        public void SetEnvironment(string environment)
+        {
+            Environment = environment;
+        }
+
         public override string ToString()
         {
-            return $"{Type}: {Keys.ToString()}";
+            return $"{Type}: {Config.ToString()}";
         }
     }
 }
