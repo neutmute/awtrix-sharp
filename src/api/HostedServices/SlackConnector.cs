@@ -234,9 +234,6 @@ namespace AwtrixSharpWeb.HostedServices
         {
             try
             {
-                //var u = ev.GetProperty("user").GetString();
-                //var dnd = ev.GetProperty("dnd_status").GetProperty("dnd_enabled").GetBoolean();
-                //_logger.LogInformation("DND -> {UserId}: {Status}", u, dnd ? "ON" : "OFF");
                 var slackEvent = CreateEvent<SlackDndChangedEventArgs>(ev);
 
                 _logger.LogInformation("User DND change -> {statusChangedEvent}", slackEvent);
@@ -278,14 +275,35 @@ namespace AwtrixSharpWeb.HostedServices
                 eventArgs.UserId = user.GetProperty("id").GetString();
 
                 var profile = user.GetProperty("profile");
-                statusChanged.Name = profile.GetProperty("real_name").GetString() ?? string.Empty;
-                statusChanged.StatusText = profile.GetProperty("status_text").GetString() ?? string.Empty;
-                statusChanged.StatusEmoji = profile.GetProperty("status_emoji").GetString() ?? string.Empty;
+
+                try
+                {
+                    statusChanged.Name = profile.GetProperty("real_name").GetString() ?? string.Empty;
+                    statusChanged.StatusText = profile.GetProperty("status_text").GetString() ?? string.Empty;
+                    statusChanged.StatusEmoji = profile.GetProperty("status_emoji").GetString() ?? string.Empty;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error parsing dnd_updated event");
+                }
             }
             else if (eventArgs is SlackDndChangedEventArgs dndChanged)
             {
                 dndChanged.UserId = user.GetString();
-                dndChanged.IsDoNotDisturbEnabled = user.GetProperty("dnd_status").GetProperty("dnd_enabled").GetBoolean();
+                var dndStatus = ev.GetProperty("dnd_status");
+                dndChanged.IsDoNotDisturbEnabled = dndStatus.GetProperty("dnd_enabled").GetBoolean();
+
+                try
+                {
+                    var next_dnd_start_ts = dndStatus.GetProperty("next_dnd_start_ts").GetInt64();
+                    var next_dnd_end_ts = dndStatus.GetProperty("next_dnd_end_ts").GetInt64();
+                    var next_dnd_start = DateTimeOffset.FromUnixTimeSeconds(next_dnd_start_ts).ToLocalTime();
+                    var next_dnd_end = DateTimeOffset.FromUnixTimeSeconds(next_dnd_end_ts).ToLocalTime();
+                }
+                catch(Exception ex)
+                {
+                    _logger.LogError(ex, "Error parsing dnd_updated event");
+                }
             }
 
             return eventArgs;

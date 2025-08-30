@@ -7,6 +7,7 @@ namespace AwtrixSharpWeb.Apps.Configs
     public class AppConfig : IAppConfig
     {
         public const string EnvironmentKey = "Environment";
+
         private List<ValueMap> _valueMaps;
 
         public AppConfigKeys Config { get; set; }

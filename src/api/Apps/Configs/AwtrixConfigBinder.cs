@@ -52,7 +52,8 @@ namespace AwtrixSharpWeb.Apps.Configs
                 }
 
                 // Get all keys from the configuration section
-                foreach (var child in appConfigSection.GetChildren())
+                var children = appConfigSection.GetChildren().ToList();
+                foreach (var child in children)
                 {
                     string key = child.Key;
                     string value = child.Value;

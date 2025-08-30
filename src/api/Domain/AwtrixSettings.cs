@@ -19,5 +19,12 @@ namespace AwtrixSharpWeb.Domain
             var json = System.Text.Json.JsonSerializer.Serialize(this);
             return json;
         }
+
+        public override string ToString()
+        {
+            return Keys
+                .Select(k => $"{k}={this[k]}")
+                .Aggregate((a, b) => $"{a};{b}");   
+        }
     }
 }

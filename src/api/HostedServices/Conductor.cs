@@ -63,8 +63,8 @@ namespace AwtrixSharpWeb.HostedServices
         {
             foreach (var device in _awtrixConfig.Devices)
             {
-                var diurnalConfig = AppConfig.Empty(_hostEnvironment.EnvironmentName).WithName(AppNames.DiurnalApp);
-                _apps.Add(AppFactory(device, diurnalConfig));
+                //var diurnalConfig = AppConfig.Empty(_hostEnvironment.EnvironmentName).WithName(AppNames.DiurnalApp);
+                //_apps.Add(AppFactory(device, diurnalConfig));
 
                 foreach (var appConfig in device.Apps)
                 {
