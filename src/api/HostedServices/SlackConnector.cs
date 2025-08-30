@@ -10,19 +10,37 @@ using Microsoft.Extensions.Logging;
 
 namespace AwtrixSharpWeb.HostedServices
 {
-    // Event args for user status changes
-    public class SlackUserStatusChangedEventArgs : EventArgs
+    public class SlackUserEventArgs : EventArgs
     {
         public string UserId { get; set; } = string.Empty;
 
+
+        public override string ToString()
+        {
+            return $"UserId={UserId}";
+        }
+    }
+    public class SlackDndChangedEventArgs : SlackUserEventArgs
+    {
+        public bool IsDoNotDisturbEnabled { get; set; }
+
+        public override string ToString()
+        {
+            return $"{base.ToString()}: IsDoNotDisturb={IsDoNotDisturbEnabled}";
+        }
+    }
+
+    public class SlackUserStatusChangedEventArgs : SlackUserEventArgs
+    {
         public string Name { get; set; } = string.Empty;
 
         public string StatusText { get; set; } = string.Empty;
+
         public string StatusEmoji { get; set; } = string.Empty;
 
         public override string ToString()
         {
-            return $"{Name} ({UserId}): {StatusEmoji} {StatusText}";
+            return $"{base.ToString()}, Name={Name}: {StatusEmoji} {StatusText}";
         }
     }
 
@@ -34,6 +52,8 @@ namespace AwtrixSharpWeb.HostedServices
         private CancellationTokenSource? _stoppingCts;
 
         public event EventHandler<SlackUserStatusChangedEventArgs>? UserStatusChanged;
+
+        public event EventHandler<SlackDndChangedEventArgs>? UserDnChanged;
 
         public SlackConnector(ILogger<SlackConnector> logger)
         {
@@ -158,14 +178,13 @@ namespace AwtrixSharpWeb.HostedServices
 
                     switch (evType)
                     {
+                        case "dnd_updated": // DND toggled
                         case "dnd_updated_user": // DND toggled
-                            var u = ev.GetProperty("user").GetString();
-                            var dnd = ev.GetProperty("dnd_status").GetProperty("dnd_enabled").GetBoolean();
-                            _logger.LogInformation("DND -> {UserId}: {Status}", u, dnd ? "ON" : "OFF");
+                            HandleUserDndEvent(ev);
                             break;
 
                         case "user_change": // profile status changed
-                            await HandleUserChangeEvent(ev);
+                            HandleUserChangeEvent(ev);
                             break;
 
                         default:
@@ -211,32 +230,30 @@ namespace AwtrixSharpWeb.HostedServices
             _logger.LogInformation("Slack connector service stopped");
         }
 
-        private Task HandleUserChangeEvent(JsonElement ev)
+        private void HandleUserDndEvent(JsonElement ev)
         {
             try
             {
-                var user = ev.GetProperty("user");
-                var id = user.GetProperty("id").GetString();
-                var profile = user.GetProperty("profile");
-                var name = profile.GetProperty("real_name").GetString() ?? string.Empty;
+                //var u = ev.GetProperty("user").GetString();
+                //var dnd = ev.GetProperty("dnd_status").GetProperty("dnd_enabled").GetBoolean();
+                //_logger.LogInformation("DND -> {UserId}: {Status}", u, dnd ? "ON" : "OFF");
+                var slackEvent = CreateEvent<SlackDndChangedEventArgs>(ev);
 
-                // Extract relevant user data
-                string statusText = string.Empty;
-                string statusEmoji = string.Empty;
+                _logger.LogInformation("User DND change -> {statusChangedEvent}", slackEvent);
 
-                if (profile.TryGetProperty("status_text", out var statusTextElement))
-                    statusText = statusTextElement.GetString() ?? string.Empty;
+                UserDnChanged?.Invoke(this, slackEvent);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error handling user_change event");
+            }
+        }
 
-                if (profile.TryGetProperty("status_emoji", out var statusEmojiElement))
-                    statusEmoji = statusEmojiElement.GetString() ?? string.Empty;
-
-                var statusChangedEvent = new SlackUserStatusChangedEventArgs
-                {
-                    UserId = id ?? string.Empty,
-                    Name = name,
-                    StatusText = statusText,
-                    StatusEmoji = statusEmoji
-                };
+        private void HandleUserChangeEvent(JsonElement ev)
+        {
+            try
+            {
+                var statusChangedEvent = CreateEvent<SlackUserStatusChangedEventArgs>(ev);
 
                 _logger.LogInformation("User status change -> {statusChangedEvent}", statusChangedEvent);
 
@@ -246,8 +263,33 @@ namespace AwtrixSharpWeb.HostedServices
             {
                 _logger.LogError(ex, "Error handling user_change event");
             }
+        }
 
-            return Task.CompletedTask;
+        private T CreateEvent<T>(JsonElement ev) where T : SlackUserEventArgs, new()
+        {
+            T eventArgs = new T();
+
+
+            var user = ev.GetProperty("user");
+
+
+            if (eventArgs is SlackUserStatusChangedEventArgs statusChanged)
+            {
+                eventArgs.UserId = user.GetProperty("id").GetString();
+
+                var profile = user.GetProperty("profile");
+                statusChanged.Name = profile.GetProperty("real_name").GetString() ?? string.Empty;
+                statusChanged.StatusText = profile.GetProperty("status_text").GetString() ?? string.Empty;
+                statusChanged.StatusEmoji = profile.GetProperty("status_emoji").GetString() ?? string.Empty;
+            }
+            else if (eventArgs is SlackDndChangedEventArgs dndChanged)
+            {
+                dndChanged.UserId = user.GetString();
+                dndChanged.IsDoNotDisturbEnabled = user.GetProperty("dnd_status").GetProperty("dnd_enabled").GetBoolean();
+            }
+
+            return eventArgs;
         }
     }
+
 }
