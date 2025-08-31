@@ -59,7 +59,7 @@ namespace AwtrixSharpWeb
             services.Configure<MqttSettings>(
                 builder.Configuration.GetSection("Mqtt"));
 
-            //Configure Awtrix settings with our custom binder
+            // Configure Awtrix settings with our custom binder
             AwtrixConfigBinder.BindAwtrixConfig(services, builder.Configuration, jsonOptions);
 
             // Configure Trip Planner settings
@@ -125,7 +125,7 @@ namespace AwtrixSharpWeb
 
             // Log startup information
             var version = Assembly.GetExecutingAssembly().GetName().Version;
-            logger.LogInformation("Starting AwtrixSharp v{Version}, {Commit}", version, GetGitCommitShort());
+            logger.LogInformation("Starting AwtrixSharpWeb v{Version}, {Commit}", version, GetGitCommitShort());
             logger.LogInformation("Environment: {Environment}", app.Environment.EnvironmentName);
 
             // if (app.Environment.IsDevelopment()) always show swagger
