@@ -29,7 +29,6 @@ namespace AwtrixSharpWeb.Apps
         protected override void Initialize()
         {
             _timerService.MinuteChanged += ClockTickMinute;
-            Logger.LogInformation("DiurnalApp initialized and listening for minute changes");
 
             // Check if Config dictionary is populated
             if (Config.Config == null || Config.Config.Count == 0)
@@ -38,7 +37,7 @@ namespace AwtrixSharpWeb.Apps
                 return;
             }
 
-            Logger.LogInformation("DiurnalApp initializing with {Count} time entries", Config.Config.Count);
+            Logger.LogDebug("DiurnalApp initializing with {Count} time entries", Config.Config.Count);
 
             foreach(var time in Config.Config.Keys)
             {
@@ -85,7 +84,7 @@ namespace AwtrixSharpWeb.Apps
                 }
             }
 
-            if (Config.Environment?.ToLowerInvariant() == "development" || string.IsNullOrEmpty(Config.Environment))
+           // if (Config.Environment?.ToLowerInvariant() == "development" || string.IsNullOrEmpty(Config.Environment))
             {
                 var currentTime = DateTime.Now.TimeOfDay;
                 var nextSetting = _hourMap
@@ -94,7 +93,7 @@ namespace AwtrixSharpWeb.Apps
                                     .Where(t => t < currentTime)
                                     .ToList();
 
-                Logger.LogInformation("Development mode: Triggering {Count} previous time entries", nextSetting.Count);
+                Logger.LogInformation("Replaying {Count} previous time entry settings", nextSetting.Count);
 
                 foreach(var setting in nextSetting)
                 {
