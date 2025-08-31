@@ -22,56 +22,16 @@ namespace AwtrixSharpWeb
             var builder = WebApplication.CreateBuilder(args);
             var configuration = builder.Configuration;
 
-            //// Configure JSON serialization options for ValueMap support
-            //var jsonOptions = new JsonSerializerOptions
-            //{
-            //    PropertyNameCaseInsensitive = true,
-            //    AllowTrailingCommas = true,
-            //    WriteIndented = true // Easier to debug
-            //};
-            
-            // Add our custom converters
-            //jsonOptions.Converters.Add(new ValueMapJsonConverter());
-            //jsonOptions.Converters.Add(new AppConfigKeysJsonConverter());
-            //jsonOptions.Converters.Add(new AppConfigJsonConverter());
-            
-            // Register the JSON options as a singleton for use throughout the app
-           // builder.Services.AddSingleton(jsonOptions);
-            //builder.Services.Configure<JsonSerializerOptions>(options =>
-            //{
-            //    //options.Converters.Add(new ValueMapJsonConverter());
-            //    //options.Converters.Add(new AppConfigKeysJsonConverter());
-            //    //options.Converters.Add(new AppConfigJsonConverter());
-            //    options.PropertyNameCaseInsensitive = true;
-            //    options.AllowTrailingCommas = true;
-            //    options.WriteIndented = true; // Easier to debug
-            //});
-
-            // Configure environment variables with AwtrixSharp prefix
-            configuration
-                .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
-                .AddEnvironmentVariables("AWTRIXSHARP_");
-
-            // Configure logging
-            var logging = builder.Logging;
-            logging.ClearProviders();
-            logging.AddSimpleConsole(options =>
-            {
-                options.TimestampFormat = "HH:mm:ss ";
-                options.SingleLine = true;
-            });
-            logging.AddDebug();
-
             var services = builder.Services;
 
-            services.Configure<MqttSettings>(configuration.GetSection("Mqtt"));
-            services.Configure<AwtrixConfig>(configuration.GetSection("Awtrix"));
+            SetupConfiguration(configuration, services);
 
-            // Configure Awtrix settings with our custom binder
-            //AwtrixConfigBinder.BindAwtrixConfig(services, builder.Configuration, jsonOptions);
+            ConfigureLogging(builder);
+
 
             // Configure Trip Planner settings
-            services.Configure<TransportOpenDataConfig>(config => {
+            services.Configure<TransportOpenDataConfig>(config =>
+            {
                 config.ApiKey = Environment.GetEnvironmentVariable("TRANSPORTOPENDATA__APIKEY") ?? "";
                 config.BaseUrl = builder.Configuration.GetSection("TransportOpenData:BaseUrl").Value ?? "https://api.transport.nsw.gov.au/v1/tp";
             });
@@ -89,16 +49,18 @@ namespace AwtrixSharpWeb
             services.AddSingleton<TimerService>();
 
             // Register the Trip Planner clients with HTTP client factory
-            services.AddHttpClient<StopfinderClient>((serviceProvider, client) => {
+            services.AddHttpClient<StopfinderClient>((serviceProvider, client) =>
+            {
                 var config = serviceProvider.GetRequiredService<IOptions<TransportOpenDataConfig>>();
-                
+
                 // Set the authorization header
                 client.DefaultRequestHeaders.Add("Authorization", $"apikey {config.Value.ApiKey}");
             });
-            
-            services.AddHttpClient<TripClient>((serviceProvider, client) => {
+
+            services.AddHttpClient<TripClient>((serviceProvider, client) =>
+            {
                 var config = serviceProvider.GetRequiredService<IOptions<TransportOpenDataConfig>>();
-                
+
                 // Set the authorization header
                 client.DefaultRequestHeaders.Add("Authorization", $"apikey {config.Value.ApiKey}");
             });
@@ -108,25 +70,11 @@ namespace AwtrixSharpWeb
             services.AddHostedService(sp => sp.GetService<Conductor>());
             services.AddHostedService(sp => sp.GetService<TimerService>());
 
-            services.AddEndpointsApiExplorer();
-            services.AddSwaggerGen(c =>
-            {
-                c.SwaggerDoc("v1", new OpenApiInfo { Title = "Awtrix API", Version = "v1" });
-                
-                // Enable annotations for Swagger
-                c.EnableAnnotations();
-            });
+            RegisterSwagger(services);
 
             var app = builder.Build();
 
-
-            // Get logger for startup information
-            var logger = app.Services.GetRequiredService<ILogger<Program>>();
-
-            // Log startup information
-            var version = Assembly.GetExecutingAssembly().GetName().Version;
-            logger.LogInformation("Starting AwtrixSharp v{Version}, {Commit}", version, GetGitCommitShort());
-            logger.LogInformation("Environment: {Environment}", app.Environment.EnvironmentName);
+            LogStartup(app);
 
             // if (app.Environment.IsDevelopment()) always show swagger
             {
@@ -141,6 +89,48 @@ namespace AwtrixSharpWeb
             app.MapControllers();
 
             app.Run();
+        }
+
+        private static void SetupConfiguration(ConfigurationManager configuration, IServiceCollection services)
+        {
+            configuration
+                .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
+                .AddEnvironmentVariables("AWTRIXSHARP_");
+
+            services.Configure<MqttSettings>(configuration.GetSection("Mqtt"));
+            services.Configure<AwtrixConfig>(configuration.GetSection("Awtrix"));
+        }
+
+        private static void ConfigureLogging(WebApplicationBuilder builder)
+        {
+            var logging = builder.Logging;
+            logging.ClearProviders();
+            logging.AddSimpleConsole(options =>
+            {
+                options.TimestampFormat = "HH:mm:ss ";
+                options.SingleLine = true;
+            });
+            logging.AddDebug();
+        }
+
+        private static void RegisterSwagger(IServiceCollection services)
+        {
+            services.AddEndpointsApiExplorer();
+            services.AddSwaggerGen(c =>
+            {
+                c.SwaggerDoc("v1", new OpenApiInfo { Title = "Awtrix API", Version = "v1" });
+
+                // Enable annotations for Swagger
+                c.EnableAnnotations();
+            });
+        }
+
+        private static void LogStartup(WebApplication app)
+        {
+            var logger = app.Services.GetRequiredService<ILogger<Program>>();
+            var version = Assembly.GetExecutingAssembly().GetName().Version;
+            logger.LogInformation("Starting AwtrixSharp v{Version}, {Commit}", version, GetGitCommitShort());
+            logger.LogInformation("Environment: {Environment}", app.Environment.EnvironmentName);
         }
 
         public static string? GetGitCommitShort() =>
