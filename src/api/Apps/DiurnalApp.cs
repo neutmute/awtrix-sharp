@@ -29,7 +29,7 @@ namespace AwtrixSharpWeb.Apps
         protected override void Initialize()
         {
             _timerService.MinuteChanged += ClockTickMinute;
-            Logger.LogInformation("DirunalDecorator initialized and listening for minute changes.");
+            Logger.LogInformation("DiurnalApp initialized and listening for minute changes");
 
             // Check if Config dictionary is populated
             if (Config.Config == null || Config.Config.Count == 0)
@@ -46,8 +46,6 @@ namespace AwtrixSharpWeb.Apps
                 {
                     var timeSpan = TimeSpan.ParseExact(time, "hhmm", CultureInfo.InvariantCulture);
                     var value = Config.Config[time];
-
-                    Logger.LogDebug("Processing time entry {Time}: {Value}", time, value);
 
                     var valueParts = value.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
                     foreach(var keyPair in valueParts)
@@ -79,15 +77,13 @@ namespace AwtrixSharpWeb.Apps
                         }
                     }
 
-                    Logger.LogInformation("Config Key: {Key} = {Value}", time, Config.Config[time]);
+                    Logger.LogDebug("Config Key: {Key} = {Value}", time, Config.Config[time]);
                 }
                 catch (Exception ex)
                 {
                     Logger.LogError(ex, "Error processing time entry {Time}", time);
                 }
             }
-
-            Logger.LogInformation("DiurnalApp initialized with {Count} time entries in _hourMap", _hourMap.Count);
 
             if (Config.Environment?.ToLowerInvariant() == "development" || string.IsNullOrEmpty(Config.Environment))
             {

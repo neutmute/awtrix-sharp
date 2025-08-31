@@ -87,7 +87,6 @@ namespace AwtrixSharpWeb
             services.AddSingleton<MqttPublisher>();
             services.AddSingleton<Conductor>();
             services.AddSingleton<TimerService>();
-            
 
             // Register the Trip Planner clients with HTTP client factory
             services.AddHttpClient<StopfinderClient>((serviceProvider, client) => {
@@ -126,7 +125,7 @@ namespace AwtrixSharpWeb
 
             // Log startup information
             var version = Assembly.GetExecutingAssembly().GetName().Version;
-            logger.LogInformation("Starting AwtrixSharpWeb v{Version}, {Commit}", version, GetGitCommitShort());
+            logger.LogInformation("Starting AwtrixSharp v{Version}, {Commit}", version, GetGitCommitShort());
             logger.LogInformation("Environment: {Environment}", app.Environment.EnvironmentName);
 
             // if (app.Environment.IsDevelopment()) always show swagger

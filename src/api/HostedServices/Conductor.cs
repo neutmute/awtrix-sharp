@@ -86,23 +86,16 @@ namespace AwtrixSharpWeb.HostedServices
 
         private void LogAppConfigDetails(AppConfig appConfig)
         {
-            try
-            {
-                var keysCount = appConfig.Config?.Count ?? 0;
-                var valueMapsCount = appConfig.ValueMaps?.Count ?? 0;
+            var keysCount = appConfig.Config?.Count ?? 0;
+            var valueMapsCount = appConfig.ValueMaps?.Count ?? 0;
 
-                _logger.LogInformation(
-                    "App configuration: Type={Type}, Name={Name}, Keys.Count={KeysCount}, ValueMaps.Count={ValueMapsCount}",
-                    appConfig.Type,
-                    appConfig.Name,
-                    keysCount,
-                    valueMapsCount
-                );
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Error logging app config details for {AppName}", appConfig.Name);
-            }
+            _logger.LogDebug(
+                "App configuration: Type={Type}, Name={Name}, Keys.Count={KeysCount}, ValueMaps.Count={ValueMapsCount}",
+                appConfig.Type,
+                appConfig.Name,
+                keysCount,
+                valueMapsCount
+            );
         }
 
         private IAwtrixApp AppFactory(DeviceConfig device, AppConfig appConfig)

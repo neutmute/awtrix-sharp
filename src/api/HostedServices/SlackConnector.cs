@@ -79,7 +79,7 @@ namespace AwtrixSharpWeb.HostedServices
 
         public Task StartAsync(CancellationToken cancellationToken)
         {
-            _logger.LogInformation("Starting Slack connector service");
+            _logger.LogDebug("Starting Slack connector service");
 
             // Create a linked token source so we can cancel when the app is stopping
             _stoppingCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
