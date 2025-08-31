@@ -2,26 +2,6 @@ using System.Text.Json.Serialization;
 
 namespace AwtrixSharpWeb.Domain
 {
-    public class AwtrixSettings : Dictionary<string, string>
-    {
-        public AwtrixSettings SetGlobalTextColor(string value)
-        {
-            this["TCOL"] = value;
-            return this;
-        }
-
-        public AwtrixSettings SetBrightness(byte value)
-        {
-            this["BRI"] = value.ToString();
-            return this;
-        }
-
-        public string ToJson()
-        {
-            var json = System.Text.Json.JsonSerializer.Serialize(this);
-            return json;
-        }
-    }
 
     /// <summary>
     /// Dictionary-based implementation of an Awtrix application message
@@ -234,6 +214,15 @@ namespace AwtrixSharpWeb.Domain
             return this;
         }
 
+        public override string ToString()
+        {
+            return string.Join(
+                "; ",
+                this.OrderBy(kvp => kvp.Key == "Text" ? "" : kvp.Key)       // always name first
+                    .Select(kvp => $"{kvp.Key}={kvp.Value}")
+            );
+        }
+
         public string ToJson()
         {
             // Create a new dictionary to modify if needed
@@ -243,6 +232,7 @@ namespace AwtrixSharpWeb.Domain
             foreach (var kvp in this)
             {
                 // Check if it's the text property and if it starts with "[
+                // In which case its an encoded JSON object
                 if (kvp.Key == "text" && kvp.Value != null && kvp.Value.StartsWith("["))
                 {
                     try

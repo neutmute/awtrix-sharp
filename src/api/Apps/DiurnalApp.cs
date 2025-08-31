@@ -3,6 +3,8 @@ using AwtrixSharpWeb.Domain;
 using AwtrixSharpWeb.HostedServices;
 using AwtrixSharpWeb.Interfaces;
 using AwtrixSharpWeb.Services;
+using System;
+using System.Globalization;
 
 namespace AwtrixSharpWeb.Apps
 {
@@ -10,7 +12,7 @@ namespace AwtrixSharpWeb.Apps
     {
         ITimerService _timerService;
 
-        Dictionary<int, AwtrixSettings> _hourMap;
+        Dictionary<TimeSpan, List<Action<AwtrixSettings>>> _hourMap;
 
         public DiurnalApp(
             ILogger logger
@@ -21,44 +23,107 @@ namespace AwtrixSharpWeb.Apps
             : base(logger, config, awtrixAddress, awtrixService)
         {
             _timerService = timerService;
+            _hourMap = new Dictionary<TimeSpan, List<Action<AwtrixSettings>>>();
         }
 
         protected override void Initialize()
         {
             _timerService.MinuteChanged += ClockTickMinute;
-            Logger.LogInformation("DirunalDecorator initialized and listening for minute changes.");
 
-            _hourMap = new()
+            // Check if Config dictionary is populated
+            if (Config.Config == null || Config.Config.Count == 0)
             {
-                { 6, new AwtrixSettings().SetBrightness(8) },
-                { 7, new AwtrixSettings().SetGlobalTextColor("#FFFFFF") },
-                { 19, new AwtrixSettings().SetGlobalTextColor("#FF0000") },
-                { 21, new AwtrixSettings().SetBrightness(1) },
-            };
+                Logger.LogWarning("DiurnalApp Config is empty. Make sure it's properly configured in appsettings.json");
+                return;
+            }
 
-            if (Config.IsEnvironmentDev())
+            Logger.LogDebug("DiurnalApp initializing with {Count} time entries", Config.Config.Count);
+
+            foreach(var time in Config.Config.Keys)
             {
-                // Tick straight away for testing
-                var fakeClockTick = new ClockTickEventArgs(DateTime.Now.AddMinutes(-DateTime.Now.Minute));
-                ClockTickMinute(this, fakeClockTick);
+                try
+                {
+                    var timeSpan = TimeSpan.ParseExact(time, "hhmm", CultureInfo.InvariantCulture);
+                    var value = Config.Config[time];
+
+                    var valueParts = value.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                    foreach(var keyPair in valueParts)
+                    {
+                        var keyPairParts = keyPair.Split('=', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                        if (keyPairParts.Length == 2)
+                        {
+                            var settingKey = keyPairParts[0].ToLower();
+                            var settingValue = keyPairParts[1];
+                            if (!_hourMap.ContainsKey(timeSpan))
+                            {
+                                _hourMap[timeSpan] = new List<Action<AwtrixSettings>>();
+                            }
+
+                            var actions = _hourMap[timeSpan];
+
+                            switch (settingKey)
+                            {
+                                case "brightness":
+                                    actions.Add(a => a.SetBrightness(byte.Parse(settingValue))); 
+                                    break;
+                                case "globaltextcolor":
+                                    actions.Add(a => a.SetGlobalTextColor(settingValue));
+                                    break;
+                                default:
+                                    Logger.LogWarning("Unknown setting key '{SettingKey}' in config for hour {Hour}", settingKey, time);
+                                    break;
+                            }
+                        }
+                    }
+
+                    Logger.LogDebug("Config Key: {Key} = {Value}", time, Config.Config[time]);
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogError(ex, "Error processing time entry {Time}", time);
+                }
+            }
+
+           // if (Config.Environment?.ToLowerInvariant() == "development" || string.IsNullOrEmpty(Config.Environment))
+            {
+                var currentTime = DateTime.Now.TimeOfDay;
+                var nextSetting = _hourMap
+                                    .Keys
+                                    .Order()
+                                    .Where(t => t < currentTime)
+                                    .ToList();
+
+                Logger.LogInformation("Replaying {Count} previous time entry settings", nextSetting.Count);
+
+                foreach(var setting in nextSetting)
+                {
+                    // Tick straight away for testing
+                    var triggerTime = DateTime.Now.Date.Add(setting);
+                    var fakeClockTick = new ClockTickEventArgs(triggerTime);
+
+                    ClockTickMinute(this, fakeClockTick);
+                }
             }
         }
 
         private void ClockTickMinute(object? sender, ClockTickEventArgs e)
         {
-            var newTime = e.Time.ToLocalTime();
+            var currentTime = e.Time.ToLocalTime().TimeOfDay;
 
-            if (newTime.Minute == 0)
+            if (_hourMap.ContainsKey(currentTime))
             {
-                if (_hourMap.ContainsKey(newTime.Hour))
+                var actions = _hourMap[currentTime];
+                var awtrixSetting = new AwtrixSettings();
+
+                foreach(var action in actions)
                 {
-                    var message = _hourMap[newTime.Hour];
-                    Logger.LogInformation($"Setting global settings");
-                    _ = Set(message).Result;
-                }
+                    action(awtrixSetting);
+                }   
+
+                Logger.LogInformation($"{AwtrixAddress.BaseTopic} @ {currentTime}: Applying global setting {awtrixSetting}");
+                _ = Set(awtrixSetting).Result;
             }
         }
-
         
     }
 }

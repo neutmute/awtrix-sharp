@@ -9,6 +9,13 @@
     <RootNamespace>AwtrixSharpWeb</RootNamespace>
     <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="Configuration\**" />
+    <Content Remove="Configuration\**" />
+    <EmbeddedResource Remove="Configuration\**" />
+    <None Remove="Configuration\**" />
+  </ItemGroup>
   <ItemGroup>
     <AssemblyMetadata Include="GitCommitShort" Value="$(GIT_COMMIT_SHORT)" />
     <AssemblyMetadata Include="GitCommit" Value="$(GIT_COMMIT)" />
@@ -22,6 +29,7 @@
     <PackageReference Include="MQTTnet" Version="5.0.1.1416" />
     <PackageReference Include="NCrontab" Version="3.3.3" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="9.0.3" />
+    <PackageReference Include="Swashbuckle.AspNetCore.Annotations" Version="9.0.4" />
   </ItemGroup>
 
   <ItemGroup>

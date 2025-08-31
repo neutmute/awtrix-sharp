@@ -1,38 +1,85 @@
-﻿using AwtrixSharpWeb.Interfaces;
+﻿using System.Text.Json;
+using System.Text.Json.Serialization;
+using AwtrixSharpWeb.Interfaces;
 
 namespace AwtrixSharpWeb.Apps.Configs
 {
-    public class AppConfig : Dictionary<string, string>, IAppConfig
+
+    public class AppConfig : IAppConfig
     {
-        public const string EnvironmentKey = "Environment";
+        private List<ValueMap> _valueMaps;
+
+        public AppConfigKeys Config { get; set; }
+
+        [JsonIgnore]
+        public string Environment { get; set; }
+
+        public string Type { get; set; }
+
+        /// <summary>
+        /// Redirect for now
+        /// </summary>
+        public string Name { get => Type; }
+
+        public AppConfig()
+        {
+            Config = new AppConfigKeys();
+            _valueMaps = new List<ValueMap>();
+        }
 
         public static AppConfig Empty(string environment = "")
         {
             // Tell the 
             var result = new AppConfig();
-            result.SetEnvironment(environment);
+            result.Environment = environment;
             return result;
         }
 
-        public AppConfig SetName(string name)
+        public AppConfig WithName(string name)
         {
             if (!string.IsNullOrWhiteSpace(name))
             {
-                this["Name"] = name;
+                Type = name;
             }
             return this;
         }
 
-        public string Get(string key)
+        
+        public T GetConfig<T>(string key)
         {
-            if (TryGetValue(key, out var value))
-            {
-                return value;
-            }
-            return null;
+            return (T)ConvertValue(Config.Get(key), typeof(T));
         }
 
-        public string Name => Get("Name");
+        public void SetConfig<T>(string key, T value)
+        {
+            if (Config.ContainsKey(key))
+            {
+                Config[key] = value?.ToString();
+            }
+            else
+            {
+                Config.Add(key, value?.ToString());
+            }
+        }
+
+        /// <summary>
+        /// Get the list of ValueMaps defined for this configuration
+        /// </summary>
+        public List<ValueMap> ValueMaps 
+        { 
+            get => _valueMaps;
+            set => _valueMaps = value ?? new List<ValueMap>();
+        }
+
+        /// <summary>
+        /// Find the first ValueMap that matches the input value
+        /// </summary>
+        /// <param name="input">The input string to match against ValueMatcher patterns</param>
+        /// <returns>The first matching ValueMap or null if no match found</returns>
+        public ValueMap FindMatchingValueMap(string input)
+        {
+            return _valueMaps?.FirstOrDefault(map => map.IsMatch(input));
+        }
 
         /// <summary>
         /// Creates a new instance of the specified type and populates its properties from this AppConfig.
@@ -55,38 +102,14 @@ namespace AwtrixSharpWeb.Apps.Configs
             // Create a new instance of the target type
             T target = new T();
 
-            // Copy all key-value pairs from source to target
-            foreach (var kvp in source)
-            {
-                target[kvp.Key] = kvp.Value;
-            }
+            target.Config = source.Config.Clone();
+            target.Environment = source.Environment;    
+            target.Type = source.Type;
 
-            // Get all properties of the target type that can be written to
-            var properties = typeof(T).GetProperties()
-                .Where(p => p.CanWrite && p.Name != "Item" && p.Name != "Keys" && p.Name != "Values")
-                .ToList();
-
-            foreach (var property in properties)
+            // Copy ValueMaps if present
+            if (source._valueMaps != null && source._valueMaps.Count > 0)
             {
-                // Try to get the value from the dictionary
-                string key = property.Name;
-                if (source.TryGetValue(key, out string stringValue) && !string.IsNullOrEmpty(stringValue))
-                {
-                    // Convert the string value to the property's type and set it
-                    try
-                    {
-                        object convertedValue = ConvertValue(stringValue, property.PropertyType);
-                        if (convertedValue != null)
-                        {
-                            property.SetValue(target, convertedValue);
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        // Log or handle conversion errors
-                        System.Diagnostics.Debug.WriteLine($"Error converting value '{stringValue}' to type {property.PropertyType} for property {property.Name}: {ex.Message}");
-                    }
-                }
+                target.ValueMaps = new List<ValueMap>(source._valueMaps);
             }
 
             return target;
@@ -130,19 +153,27 @@ namespace AwtrixSharpWeb.Apps.Configs
             if (targetType.IsEnum)
                 return Enum.Parse(targetType, value, ignoreCase: true);
 
+            if (targetType == typeof(List<ValueMap>))
+            {
+                try
+                {
+                    return JsonSerializer.Deserialize<List<ValueMap>>(value);
+                }
+                catch
+                {
+                    return new List<ValueMap>();
+                }
+            }
+
             // Add more type conversions as needed
 
             // For complex types, you might want to use JSON deserialization or other methods
             throw new NotSupportedException($"Conversion from string to {targetType} is not supported.");
         }
-
+       
         public override string ToString()
         {
-            return string.Join(
-                "; ",
-                this.OrderBy(kvp => kvp.Key == "Name" ? "" : kvp.Key)       // always name first
-                    .Select(kvp => $"{kvp.Key}={kvp.Value}")
-            );
+            return $"{Type}, Config={Config.ToString()}";
         }
     }
 }

@@ -37,31 +37,36 @@ namespace AwtrixSharpWeb.Apps
             }
             finally
             {
-                Deactivate();
+                await Deactivate();
             }
         }
 
-        private void Deactivate()
+        private async Task Deactivate()
         {
             _mqttConnector.MessageReceived -= MessageReceived;
+            await AppClear();
         }
 
         private Task MessageReceived(MqttApplicationMessageReceivedEventArgs arg)
         {
-            string payload = Encoding.UTF8.GetString(arg.ApplicationMessage.Payload);
-
+            string textPayload = Encoding.UTF8.GetString(arg.ApplicationMessage.Payload);
 
             var message = new AwtrixAppMessage()
-                            .SetText(payload)
-                            .SetIcon(Config.Icon);
+                            .SetText(textPayload);
 
-            if (payload.StartsWith("-"))
+            var valueMap = Config.FindMatchingValueMap(textPayload);
+
+            if (valueMap != null)
             {
-                message.SetColor("#FF0000");
-            }
-            else
-            {
-                message.SetColor("#FFFF00");
+                Logger.LogInformation("Found matching value map for status: {StatusText}", textPayload);
+
+                valueMap.Decorate(message, Logger);
+
+                // If no text is set in the mapping, use the original status text
+                if (message.Text == null)
+                {
+                    message.SetText(textPayload);
+                }
             }
 
             return AppUpdate(message);

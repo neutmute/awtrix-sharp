@@ -3,13 +3,15 @@ using AwtrixSharpWeb.Domain;
 using AwtrixSharpWeb.HostedServices;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.OpenApi.Attributes;
+using Swashbuckle.AspNetCore.Annotations;
 using System.ComponentModel;
 
 // For more information on enabling Web API for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
 
 namespace AwtrixSharpWeb.Controllers
 {
-    [DisplayName("Apps")]
+    [SwaggerTag("Apps")]
+    //[ApiExplorerSettings(GroupName = "v1-custom")]
     [Route("api/app/[controller]")]
     [ApiController]
     public class TripTimerController : ControllerBase

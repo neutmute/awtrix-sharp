@@ -45,6 +45,7 @@ services:
   awtrix:
     container_name: awtrix
     image: ghcr.io/neutmute/awtrix-sharp:master
+    restart: always
     ports:
       - 80:8080
     volumes:

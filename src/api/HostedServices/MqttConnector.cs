@@ -28,11 +28,10 @@ namespace AwtrixSharpWeb.HostedServices
             _log = logger;
             _settings = settings.Value;
         }
-
-
+        
         public async Task<bool> ConnectAsync(CancellationToken cancellationToken = default)
         {
-            _log.LogInformation("Connecting to MQTT broker at {Host}...", _settings.Host);
+            _log.LogDebug("Connecting to MQTT broker at {Host}...", _settings.Host);
             var mqttClientFactory = new MqttClientFactory();
 
             var clientOptionsBuilder = mqttClientFactory.CreateClientOptionsBuilder()
@@ -62,7 +61,7 @@ namespace AwtrixSharpWeb.HostedServices
 
                 if (_client.IsConnected)
                 {
-                    _log.LogInformation("Connected to MQTT broker");
+                    _log.LogInformation("Connected to MQTT broker at {Host}...", _settings.Host);
                     return true;
                 }
                 else
@@ -90,14 +89,21 @@ namespace AwtrixSharpWeb.HostedServices
             {
                 payloadLog = "<empty>";
             }
-            _log.LogInformation("Publishing MQTT to topic {Topic} with payload {Payload}", topic, payloadLog);
+            _log.LogDebug("Publishing MQTT to topic {Topic} with payload {Payload}", topic, payloadLog);
 
             var message = new MqttApplicationMessageBuilder()
                 .WithTopic(topic)
                 .WithPayload(Encoding.UTF8.GetBytes(payload))
                 .Build();
 
-            await _client.PublishAsync(message, CancellationToken.None);
+            try
+            {
+                await _client.PublishAsync(message, CancellationToken.None);
+            }
+            catch(Exception e)
+            {
+                _log.LogError($"Failed to publish message {message} ({e.Message})");
+            }
         }
 
         public async Task StartAsync(CancellationToken cancellationToken)

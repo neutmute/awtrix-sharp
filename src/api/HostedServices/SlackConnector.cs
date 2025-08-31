@@ -10,12 +10,38 @@ using Microsoft.Extensions.Logging;
 
 namespace AwtrixSharpWeb.HostedServices
 {
-    // Event args for user status changes
-    public class SlackUserStatusChangedEventArgs : EventArgs
+    public class SlackUserEventArgs : EventArgs
     {
         public string UserId { get; set; } = string.Empty;
+
+
+        public override string ToString()
+        {
+            return $"UserId={UserId}";
+        }
+    }
+    public class SlackDndChangedEventArgs : SlackUserEventArgs
+    {
+        public bool IsDoNotDisturbEnabled { get; set; }
+
+        public override string ToString()
+        {
+            return $"{base.ToString()}: IsDoNotDisturb={IsDoNotDisturbEnabled}";
+        }
+    }
+
+    public class SlackUserStatusChangedEventArgs : SlackUserEventArgs
+    {
+        public string Name { get; set; } = string.Empty;
+
         public string StatusText { get; set; } = string.Empty;
+
         public string StatusEmoji { get; set; } = string.Empty;
+
+        public override string ToString()
+        {
+            return $"{base.ToString()}, Name={Name}: {StatusEmoji} {StatusText}";
+        }
     }
 
     public class SlackConnector : IHostedService
@@ -26,6 +52,8 @@ namespace AwtrixSharpWeb.HostedServices
         private CancellationTokenSource? _stoppingCts;
 
         public event EventHandler<SlackUserStatusChangedEventArgs>? UserStatusChanged;
+
+        public event EventHandler<SlackDndChangedEventArgs>? UserDnChanged;
 
         public SlackConnector(ILogger<SlackConnector> logger)
         {
@@ -51,7 +79,7 @@ namespace AwtrixSharpWeb.HostedServices
 
         public Task StartAsync(CancellationToken cancellationToken)
         {
-            _logger.LogInformation("Starting Slack connector service");
+            _logger.LogDebug("Starting Slack connector service");
 
             // Create a linked token source so we can cancel when the app is stopping
             _stoppingCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -65,54 +93,53 @@ namespace AwtrixSharpWeb.HostedServices
 
         private async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            await Task.CompletedTask;
-            //try
-            //{
-            //    var appToken = Environment.GetEnvironmentVariable("AWTRIXSHARP_SLACK__APPTOKEN"); // xapp-***
+            try
+            {
+                var appToken = Environment.GetEnvironmentVariable("AWTRIXSHARP_SLACK__APPTOKEN"); // xapp-***
 
-            //    if (string.IsNullOrEmpty(appToken))
-            //    {
-            //        _logger.LogWarning("Slack AppToken not configured. Slack integration disabled.");
-            //        return;
-            //    }
+                if (string.IsNullOrEmpty(appToken))
+                {
+                    _logger.LogWarning("Slack AppToken not configured. Slack integration disabled.");
+                    return;
+                }
 
-            //    _logger.LogInformation("Connecting to Slack");
+                _logger.LogInformation("Connecting to Slack");
 
-            //    while (!stoppingToken.IsCancellationRequested)
-            //    {
-            //        try
-            //        {
-            //            await ConnectAndProcessEventsAsync(appToken, stoppingToken);
-            //        }
-            //        catch (WebSocketException wsEx)
-            //        {
-            //            _logger.LogError(wsEx, "WebSocket error, reconnecting in 5 seconds...");
-            //        }
-            //        catch (Exception ex)
-            //        {
-            //            _logger.LogError(ex, "Error in Slack connection, reconnecting in 5 seconds...");
-            //        }
+                while (!stoppingToken.IsCancellationRequested)
+                {
+                    try
+                    {
+                        await ConnectAndProcessEventsAsync(appToken, stoppingToken);
+                    }
+                    catch (WebSocketException wsEx)
+                    {
+                        _logger.LogError(wsEx, "WebSocket error, reconnecting in 5 seconds...");
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Error in Slack connection, reconnecting in 5 seconds...");
+                    }
 
-            //        // Wait before reconnecting to avoid hammering the Slack API
-            //        if (!stoppingToken.IsCancellationRequested)
-            //        {
-            //            await Task.Delay(5000, stoppingToken);
-            //        }
-            //    }
-            //}
-            //catch (OperationCanceledException)
-            //{
-            //    // Normal during shutdown, just log and exit
-            //    _logger.LogInformation("Slack connector stopping due to cancellation");
-            //}
-            //catch (Exception ex)
-            //{
-            //    _logger.LogError(ex, "Unhandled exception in Slack connector");
-            //}
-            //finally
-            //{
-            //    _logger.LogInformation("Slack connector stopped");
-            //}
+                    // Wait before reconnecting to avoid hammering the Slack API
+                    if (!stoppingToken.IsCancellationRequested)
+                    {
+                        await Task.Delay(5000, stoppingToken);
+                    }
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                // Normal during shutdown, just log and exit
+                _logger.LogInformation("Slack connector stopping due to cancellation");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Unhandled exception in Slack connector");
+            }
+            finally
+            {
+                _logger.LogInformation("Slack connector stopped");
+            }
         }
 
         private async Task ConnectAndProcessEventsAsync(string appToken, CancellationToken stoppingToken)
@@ -151,14 +178,17 @@ namespace AwtrixSharpWeb.HostedServices
 
                     switch (evType)
                     {
+                        case "dnd_updated": // DND toggled
                         case "dnd_updated_user": // DND toggled
-                            var u = ev.GetProperty("user").GetString();
-                            var dnd = ev.GetProperty("dnd_status").GetProperty("dnd_enabled").GetBoolean();
-                            _logger.LogInformation("DND -> {UserId}: {Status}", u, dnd ? "ON" : "OFF");
+                            HandleUserDndEvent(ev);
                             break;
 
                         case "user_change": // profile status changed
-                            await HandleUserChangeEvent(ev);
+                            HandleUserChangeEvent(ev);
+                            break;
+
+                        default:
+                            _logger.LogInformation("Event Type {evType} not handled", evType);
                             break;
                     }
                 }
@@ -200,41 +230,84 @@ namespace AwtrixSharpWeb.HostedServices
             _logger.LogInformation("Slack connector service stopped");
         }
 
-        private Task HandleUserChangeEvent(JsonElement ev)
+        private void HandleUserDndEvent(JsonElement ev)
         {
             try
             {
-                var user = ev.GetProperty("user");
-                var id = user.GetProperty("id").GetString();
-                var profile = user.GetProperty("profile");
+                var slackEvent = CreateEvent<SlackDndChangedEventArgs>(ev);
 
-                // Extract relevant user data
-                string statusText = string.Empty;
-                string statusEmoji = string.Empty;
+                _logger.LogInformation("User DND change -> {statusChangedEvent}", slackEvent);
 
-                if (profile.TryGetProperty("status_text", out var statusTextElement))
-                    statusText = statusTextElement.GetString() ?? string.Empty;
-
-                if (profile.TryGetProperty("status_emoji", out var statusEmojiElement))
-                    statusEmoji = statusEmojiElement.GetString() ?? string.Empty;
-
-                _logger.LogInformation("User status change -> {UserId}: {Emoji} {StatusText}",
-                    id, statusEmoji, statusText);
-
-                // Fire the event for subscribers to handle
-                UserStatusChanged?.Invoke(this, new SlackUserStatusChangedEventArgs
-                {
-                    UserId = id ?? string.Empty,
-                    StatusText = statusText,
-                    StatusEmoji = statusEmoji
-                });
+                UserDnChanged?.Invoke(this, slackEvent);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error handling user_change event");
             }
+        }
 
-            return Task.CompletedTask;
+        private void HandleUserChangeEvent(JsonElement ev)
+        {
+            try
+            {
+                var statusChangedEvent = CreateEvent<SlackUserStatusChangedEventArgs>(ev);
+
+                _logger.LogInformation("User status change -> {statusChangedEvent}", statusChangedEvent);
+
+                UserStatusChanged?.Invoke(this, statusChangedEvent);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error handling user_change event");
+            }
+        }
+
+        private T CreateEvent<T>(JsonElement ev) where T : SlackUserEventArgs, new()
+        {
+            T eventArgs = new T();
+
+
+            var user = ev.GetProperty("user");
+
+
+            if (eventArgs is SlackUserStatusChangedEventArgs statusChanged)
+            {
+                eventArgs.UserId = user.GetProperty("id").GetString();
+
+                var profile = user.GetProperty("profile");
+
+                try
+                {
+                    statusChanged.Name = profile.GetProperty("real_name").GetString() ?? string.Empty;
+                    statusChanged.StatusText = profile.GetProperty("status_text").GetString() ?? string.Empty;
+                    statusChanged.StatusEmoji = profile.GetProperty("status_emoji").GetString() ?? string.Empty;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error parsing dnd_updated event");
+                }
+            }
+            else if (eventArgs is SlackDndChangedEventArgs dndChanged)
+            {
+                dndChanged.UserId = user.GetString();
+                var dndStatus = ev.GetProperty("dnd_status");
+                dndChanged.IsDoNotDisturbEnabled = dndStatus.GetProperty("dnd_enabled").GetBoolean();
+
+                try
+                {
+                    var next_dnd_start_ts = dndStatus.GetProperty("next_dnd_start_ts").GetInt64();
+                    var next_dnd_end_ts = dndStatus.GetProperty("next_dnd_end_ts").GetInt64();
+                    var next_dnd_start = DateTimeOffset.FromUnixTimeSeconds(next_dnd_start_ts).ToLocalTime();
+                    var next_dnd_end = DateTimeOffset.FromUnixTimeSeconds(next_dnd_end_ts).ToLocalTime();
+                }
+                catch(Exception ex)
+                {
+                    _logger.LogError(ex, "Error parsing dnd_updated event");
+                }
+            }
+
+            return eventArgs;
         }
     }
+
 }

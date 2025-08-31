@@ -5,6 +5,7 @@ using AwtrixSharpWeb.Interfaces;
 using AwtrixSharpWeb.Services;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
+using System.Text.Json;
 
 namespace AwtrixSharpWeb.HostedServices
 {
@@ -26,6 +27,7 @@ namespace AwtrixSharpWeb.HostedServices
         private readonly TripPlannerService _tripPlanner;
         private readonly TimerService _timerService;
         private readonly IHostEnvironment _hostEnvironment;
+        private readonly ILoggerFactory _loggerFactory;
         AwtrixConfig _awtrixConfig;
 
         List<IAwtrixApp> _apps;
@@ -40,7 +42,8 @@ namespace AwtrixSharpWeb.HostedServices
             , MqttPublisher mqttPublisher
             , HttpPublisher httpPublisher
             , SlackConnector slackConnector
-            , MqttConnector mqttConnector)
+            , MqttConnector mqttConnector
+            , ILoggerFactory loggerFactory)
         {
             _logger = logger;
             _awtrixConfig = awtrixConfig.Value;
@@ -51,6 +54,7 @@ namespace AwtrixSharpWeb.HostedServices
             _tripPlanner = tripPlanner;
             _timerService = timerService;
             _hostEnvironment = env;
+            _loggerFactory = loggerFactory;
 
             _apps = new List<IAwtrixApp>();
         }
@@ -59,11 +63,11 @@ namespace AwtrixSharpWeb.HostedServices
         {
             foreach (var device in _awtrixConfig.Devices)
             {
-                var diurnalConfig = AppConfig.Empty(_hostEnvironment.EnvironmentName).SetName(AppNames.DiurnalApp);
-                _apps.Add(AppFactory(device, diurnalConfig));
-
                 foreach (var appConfig in device.Apps)
                 {
+                    // Log the app configuration to debug configuration binding issues
+                    LogAppConfigDetails(appConfig);
+
                     var app = AppFactory(device, appConfig);            
                     _apps.Add(app);
                 }
@@ -74,13 +78,21 @@ namespace AwtrixSharpWeb.HostedServices
                 }
             }
 
-            if (_hostEnvironment.IsDevelopment())
-            {
-                // Execute the TripTimerApp immediately in development mode
-                //((TripTimerApp)_apps.First(a => a is TripTimerApp)).ExecuteNow();
-            }
-
             return Task.CompletedTask;
+        }
+
+        private void LogAppConfigDetails(AppConfig appConfig)
+        {
+            var keysCount = appConfig.Config?.Count ?? 0;
+            var valueMapsCount = appConfig.ValueMaps?.Count ?? 0;
+
+            _logger.LogDebug(
+                "App configuration: Type={Type}, Name={Name}, Keys.Count={KeysCount}, ValueMaps.Count={ValueMapsCount}",
+                appConfig.Type,
+                appConfig.Name,
+                keysCount,
+                valueMapsCount
+            );
         }
 
         private IAwtrixApp AppFactory(DeviceConfig device, AppConfig appConfig)
@@ -91,31 +103,46 @@ namespace AwtrixSharpWeb.HostedServices
             var clock = new Clock();
 
             var isDev = _hostEnvironment.IsDevelopment();
-            _logger.LogInformation("Environment: {EnvName}, isDev={isDev}", _hostEnvironment.EnvironmentName, isDev);
+            _logger.LogInformation(
+                "Creating {AppName} for {device}"
+                ,appConfig.Name
+                ,device.BaseTopic);
 
-            switch (appConfig.Name)
+            switch (appConfig.Type)
             {
                 case AppNames.DiurnalApp:
-                    app = new DiurnalApp(_logger, _timerService, appConfig, device, awtrixService);
+                    {
+                        var appLogger = _loggerFactory.CreateLogger<DiurnalApp>();
+                        app = new DiurnalApp(appLogger, _timerService, appConfig, device, awtrixService);
+                    }
                     break;
 
                 case AppNames.TripTimerApp:
-                    var tripTimerConfig = appConfig.As<TripTimerAppConfig>();
-                    app = new TripTimerApp(_logger, clock, device, awtrixService, _timerService, tripTimerConfig, _tripPlanner);
+                    {
+                        var appLogger = _loggerFactory.CreateLogger<TripTimerApp>();
+                        var tripTimerConfig = appConfig.As<TripTimerAppConfig>();
+                        app = new TripTimerApp(appLogger, clock, device, awtrixService, _timerService, tripTimerConfig, _tripPlanner);
+                    }
                     break;
 
                 case AppNames.MqttRenderApp:
-                    var mqttConfig = appConfig.As<MqttAppConfig>();
-                    app = new MqttRenderApp(_logger, clock, mqttConfig, device, awtrixService, _mqttConnector);
+                    {
+                        var appLogger = _loggerFactory.CreateLogger<MqttRenderApp>();
+                        var mqttConfig = appConfig.As<MqttAppConfig>();
+                        app = new MqttRenderApp(appLogger, clock, mqttConfig, device, awtrixService, _mqttConnector);
+                    }
                     break;
 
                 case AppNames.SlackStatusApp:
-                    var slackStatusConfig = appConfig.As<AppConfig>();
-                    app = new SlackStatusApp(_logger, slackStatusConfig, device, awtrixService, _slackConnector);
+                    {
+                        var appLogger = _loggerFactory.CreateLogger<SlackStatusApp>();
+                        var slackStatusConfig = appConfig.As<SlackStatusAppConfig>();
+                        app = new SlackStatusApp(appLogger, slackStatusConfig, device, awtrixService, _slackConnector);
+                    }
                     break;
 
                 default:
-                   throw new NotImplementedException(appConfig.Name);
+                   throw new NotImplementedException(appConfig.Type);
             }
 
             return app;
@@ -123,17 +150,36 @@ namespace AwtrixSharpWeb.HostedServices
 
         public void ExecuteNow(string baseTopic, string appName)
         {
-            var device = _awtrixConfig.Devices.First(d => d.BaseTopic == baseTopic);
-            var config = device.Apps.First(a => a.Name == appName);
+            try
+            {
+                var device = _awtrixConfig.Devices.FirstOrDefault(d => d.BaseTopic == baseTopic);
+                if (device == null)
+                {
+                    _logger.LogWarning("Device with base topic '{BaseTopic}' not found", baseTopic);
+                    return;
+                }
 
-            var app = AppFactory(device, config);
-            app.Init();
-            app.ExecuteNow();
+                var config = device.Apps.FirstOrDefault(a => a.Type == appName);
+                if (config == null)
+                {
+                    _logger.LogWarning("App '{AppName}' not found for device '{BaseTopic}'", appName, baseTopic);
+                    return;
+                }
+
+                var app = AppFactory(device, config);
+                app.Init();
+                app.ExecuteNow();
+                _logger.LogInformation("Successfully executed app '{AppName}' on device '{BaseTopic}'", appName, baseTopic);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error executing app '{AppName}' on device '{BaseTopic}'", appName, baseTopic);
+            }
         }
 
         public List<IAwtrixApp> FindApps(string appName)
         {
-            var app = _apps.FindAll(a => a.GetConfig().Name == appName);
+            var app = _apps.FindAll(a => a.GetConfig().Type == appName);
             return app;
         }
 

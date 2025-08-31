@@ -1,11 +1,15 @@
+using AwtrixSharpWeb.Apps.Configs;
 using AwtrixSharpWeb.Domain;
 using AwtrixSharpWeb.HostedServices;
 using AwtrixSharpWeb.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
+using Swashbuckle.AspNetCore.Annotations;
+using System.Text.Json;
 
 namespace AwtrixSharpWeb.Controllers
 {
+    [SwaggerTag("Diagnostics")]
     [ApiController]
     [Route("[controller]")]
     public class DiagnosticsController : ControllerBase
@@ -14,18 +18,24 @@ namespace AwtrixSharpWeb.Controllers
         private readonly AwtrixConfig _awtrixConfig;
         private readonly MqttConnector _mqttService;
         private readonly AwtrixService _awtrixService;
+        private readonly Conductor _conductor;
+        private readonly JsonSerializerOptions _jsonOptions;
 
         public DiagnosticsController(
             ILogger<DiagnosticsController> logger
             , IOptions<AwtrixConfig> devices
             , MqttConnector mqttService
             , AwtrixService awtrixService
+            , Conductor conductor
+            , JsonSerializerOptions jsonOptions
             )
         {
             _awtrixConfig = devices.Value;
             _logger = logger;
             _mqttService = mqttService;
             _awtrixService = awtrixService;
+            _conductor = conductor;
+            _jsonOptions = jsonOptions;
         }
 
         [HttpGet("")]
@@ -37,10 +47,11 @@ namespace AwtrixSharpWeb.Controllers
                 Message = "Hello, world"
             };
 
-            var payload = System.Text.Json.JsonSerializer.Serialize(diagnosticInfo);
+            var payload = JsonSerializer.Serialize(diagnosticInfo);
 
             return Ok(diagnosticInfo);
         }
+
 
         [HttpPost("mqtt")]
         public async Task<IActionResult> Mqtt()
@@ -106,7 +117,6 @@ namespace AwtrixSharpWeb.Controllers
             return Ok();
         }
 
-
         [HttpPost("awtrix/rtttl")]
         public async Task<IActionResult> AwtrixRtttl(string rtttl)
         {
@@ -123,7 +133,6 @@ namespace AwtrixSharpWeb.Controllers
 
             return Ok();
         }
-
 
         [HttpPost("awtrix/settings/text-color")]
         public async Task<IActionResult> SetGlobalTextColor(string hexColor = "#00FF00")
