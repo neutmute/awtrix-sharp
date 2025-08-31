@@ -3112,12 +3112,13 @@ namespace TransportOpenData.TripPlanner
         [System.Text.Json.Serialization.JsonPropertyName("duration")]
         public int? Duration { get; set; }
 
-        /// <summary>
-        /// If the leg corresponds to a walking leg, this element contains walking directions.
-        /// <br/>
-        /// </summary>
-        [System.Text.Json.Serialization.JsonPropertyName("footPathInfo")]
-        public System.Collections.Generic.ICollection<TripRequestResponseJourneyLegStopFootpathInfo> FootPathInfo { get; set; }
+        // BUGGY SWAGGER SPEC MEANS THIS BLOWS UP SOMETIMES
+        ///// <summary>
+        ///// If the leg corresponds to a walking leg, this element contains walking directions.
+        ///// <br/>
+        ///// </summary>
+        //[System.Text.Json.Serialization.JsonPropertyName("footPathInfo")]
+        //public System.Collections.Generic.ICollection<TripRequestResponseJourneyLegStopFootpathInfo> FootPathInfo { get; set; }
 
         /// <summary>
         /// Contains a number of additional informational messages that may be useful for travellers.
