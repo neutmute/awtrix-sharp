@@ -27,6 +27,7 @@ namespace AwtrixSharpWeb.HostedServices
         private readonly TripPlannerService _tripPlanner;
         private readonly TimerService _timerService;
         private readonly IHostEnvironment _hostEnvironment;
+        private readonly ILoggerFactory _loggerFactory;
         AwtrixConfig _awtrixConfig;
 
         List<IAwtrixApp> _apps;
@@ -41,7 +42,8 @@ namespace AwtrixSharpWeb.HostedServices
             , MqttPublisher mqttPublisher
             , HttpPublisher httpPublisher
             , SlackConnector slackConnector
-            , MqttConnector mqttConnector)
+            , MqttConnector mqttConnector
+            , ILoggerFactory loggerFactory)
         {
             _logger = logger;
             _awtrixConfig = awtrixConfig.Value;
@@ -52,6 +54,7 @@ namespace AwtrixSharpWeb.HostedServices
             _tripPlanner = tripPlanner;
             _timerService = timerService;
             _hostEnvironment = env;
+            _loggerFactory = loggerFactory;
 
             _apps = new List<IAwtrixApp>();
         }
@@ -108,22 +111,34 @@ namespace AwtrixSharpWeb.HostedServices
             switch (appConfig.Type)
             {
                 case AppNames.DiurnalApp:
-                    app = new DiurnalApp(_logger, _timerService, appConfig, device, awtrixService);
+                    {
+                        var appLogger = _loggerFactory.CreateLogger<DiurnalApp>();
+                        app = new DiurnalApp(appLogger, _timerService, appConfig, device, awtrixService);
+                    }
                     break;
 
                 case AppNames.TripTimerApp:
-                    var tripTimerConfig = appConfig.As<TripTimerAppConfig>();
-                    app = new TripTimerApp(_logger, clock, device, awtrixService, _timerService, tripTimerConfig, _tripPlanner);
+                    {
+                        var appLogger = _loggerFactory.CreateLogger<TripTimerApp>();
+                        var tripTimerConfig = appConfig.As<TripTimerAppConfig>();
+                        app = new TripTimerApp(appLogger, clock, device, awtrixService, _timerService, tripTimerConfig, _tripPlanner);
+                    }
                     break;
 
                 case AppNames.MqttRenderApp:
-                    var mqttConfig = appConfig.As<MqttAppConfig>();
-                    app = new MqttRenderApp(_logger, clock, mqttConfig, device, awtrixService, _mqttConnector);
+                    {
+                        var appLogger = _loggerFactory.CreateLogger<MqttRenderApp>();
+                        var mqttConfig = appConfig.As<MqttAppConfig>();
+                        app = new MqttRenderApp(appLogger, clock, mqttConfig, device, awtrixService, _mqttConnector);
+                    }
                     break;
 
                 case AppNames.SlackStatusApp:
-                    var slackStatusConfig = appConfig.As<SlackStatusAppConfig>();
-                    app = new SlackStatusApp(_logger, slackStatusConfig, device, awtrixService, _slackConnector);
+                    {
+                        var appLogger = _loggerFactory.CreateLogger<SlackStatusApp>();
+                        var slackStatusConfig = appConfig.As<SlackStatusAppConfig>();
+                        app = new SlackStatusApp(appLogger, slackStatusConfig, device, awtrixService, _slackConnector);
+                    }
                     break;
 
                 default:
