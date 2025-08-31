@@ -3,6 +3,7 @@ using AwtrixSharpWeb.Apps.Configs;
 using AwtrixSharpWeb.Domain;
 using AwtrixSharpWeb.HostedServices;
 using AwtrixSharpWeb.Services;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.OpenApi.Models;
@@ -19,27 +20,35 @@ namespace AwtrixSharpWeb
         public static void Main(string[] args)
         {
             var builder = WebApplication.CreateBuilder(args);
+            var configuration = builder.Configuration;
 
-            // Configure JSON serialization options for ValueMap support
-            var jsonOptions = new JsonSerializerOptions
-            {
-                PropertyNameCaseInsensitive = true,
-                AllowTrailingCommas = true
-            };
-            jsonOptions.Converters.Add(new ValueMapJsonConverter());
+            //// Configure JSON serialization options for ValueMap support
+            //var jsonOptions = new JsonSerializerOptions
+            //{
+            //    PropertyNameCaseInsensitive = true,
+            //    AllowTrailingCommas = true,
+            //    WriteIndented = true // Easier to debug
+            //};
+            
+            // Add our custom converters
+            //jsonOptions.Converters.Add(new ValueMapJsonConverter());
+            //jsonOptions.Converters.Add(new AppConfigKeysJsonConverter());
+            //jsonOptions.Converters.Add(new AppConfigJsonConverter());
             
             // Register the JSON options as a singleton for use throughout the app
-            builder.Services.AddSingleton(jsonOptions);
-            builder.Services.Configure<JsonSerializerOptions>(options =>
-            {
-                options.Converters.Add(new ValueMapJsonConverter());
-                options.PropertyNameCaseInsensitive = true;
-                options.AllowTrailingCommas = true;
-            });
+           // builder.Services.AddSingleton(jsonOptions);
+            //builder.Services.Configure<JsonSerializerOptions>(options =>
+            //{
+            //    //options.Converters.Add(new ValueMapJsonConverter());
+            //    //options.Converters.Add(new AppConfigKeysJsonConverter());
+            //    //options.Converters.Add(new AppConfigJsonConverter());
+            //    options.PropertyNameCaseInsensitive = true;
+            //    options.AllowTrailingCommas = true;
+            //    options.WriteIndented = true; // Easier to debug
+            //});
 
             // Configure environment variables with AwtrixSharp prefix
-            builder
-                .Configuration
+            configuration
                 .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
                 .AddEnvironmentVariables("AWTRIXSHARP_");
 
@@ -55,12 +64,11 @@ namespace AwtrixSharpWeb
 
             var services = builder.Services;
 
-            // Configure MQTT settings
-            services.Configure<MqttSettings>(
-                builder.Configuration.GetSection("Mqtt"));
+            services.Configure<MqttSettings>(configuration.GetSection("Mqtt"));
+            services.Configure<AwtrixConfig>(configuration.GetSection("Awtrix"));
 
             // Configure Awtrix settings with our custom binder
-            AwtrixConfigBinder.BindAwtrixConfig(services, builder.Configuration, jsonOptions);
+            //AwtrixConfigBinder.BindAwtrixConfig(services, builder.Configuration, jsonOptions);
 
             // Configure Trip Planner settings
             services.Configure<TransportOpenDataConfig>(config => {
@@ -68,14 +76,7 @@ namespace AwtrixSharpWeb
                 config.BaseUrl = builder.Configuration.GetSection("TransportOpenData:BaseUrl").Value ?? "https://api.transport.nsw.gov.au/v1/tp";
             });
 
-            services
-                .AddControllers()
-                .AddJsonOptions(options =>
-                {
-                    options.JsonSerializerOptions.Converters.Add(new ValueMapJsonConverter());
-                    options.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
-                    options.JsonSerializerOptions.AllowTrailingCommas = true;
-                });
+            services.AddControllers();
 
             services.AddTransient<AwtrixService>();
             services.AddTransient<TripPlannerService>();

@@ -27,7 +27,6 @@ namespace AwtrixSharpWeb.HostedServices
         private readonly TripPlannerService _tripPlanner;
         private readonly TimerService _timerService;
         private readonly IHostEnvironment _hostEnvironment;
-        private readonly JsonSerializerOptions _jsonOptions;
         AwtrixConfig _awtrixConfig;
 
         List<IAwtrixApp> _apps;
@@ -37,7 +36,6 @@ namespace AwtrixSharpWeb.HostedServices
             ILogger<Conductor> logger
             , IHostEnvironment env
             , IOptions<AwtrixConfig> awtrixConfig
-            , JsonSerializerOptions jsonOptions
             , TimerService timerService
             , TripPlannerService tripPlanner
             , MqttPublisher mqttPublisher
@@ -54,7 +52,6 @@ namespace AwtrixSharpWeb.HostedServices
             _tripPlanner = tripPlanner;
             _timerService = timerService;
             _hostEnvironment = env;
-            _jsonOptions = jsonOptions;
 
             _apps = new List<IAwtrixApp>();
         }
@@ -63,9 +60,6 @@ namespace AwtrixSharpWeb.HostedServices
         {
             foreach (var device in _awtrixConfig.Devices)
             {
-                //var diurnalConfig = AppConfig.Empty(_hostEnvironment.EnvironmentName).WithName(AppNames.DiurnalApp);
-                //_apps.Add(AppFactory(device, diurnalConfig));
-
                 foreach (var appConfig in device.Apps)
                 {
                     // Log the app configuration to debug configuration binding issues
@@ -104,24 +98,6 @@ namespace AwtrixSharpWeb.HostedServices
                     keysCount,
                     valueMapsCount
                 );
-
-                // Log the first few keys for debugging
-                if (keysCount > 0)
-                {
-                    var keyValues = string.Join(", ", appConfig.Config.Take(5).Select(k => $"{k.Key}={k.Value}"));
-                    _logger.LogDebug("App {Name} keys (sample): {KeyValues}", appConfig.Name, keyValues);
-                }
-
-                // Log ValueMaps for debugging purposes
-                if (valueMapsCount > 0)
-                {
-                    foreach (var valueMap in appConfig.ValueMaps.Take(3))
-                    {
-                        _logger.LogDebug("ValueMap: Matcher={Matcher}, PropertyCount={Count}", 
-                            valueMap.ValueMatcher, 
-                            valueMap.Count);
-                    }
-                }
             }
             catch (Exception ex)
             {

@@ -4,8 +4,6 @@ namespace AwtrixSharpWeb.Apps.Configs
 {
     public class AppConfigKeys : Dictionary<string, string>, IAppKeys
     {
-        public const string Name = "Name";
-
         public AppConfigKeys()
         {
                 
@@ -44,10 +42,13 @@ namespace AwtrixSharpWeb.Apps.Configs
 
         public override string ToString()
         {
+            if (this.Keys.Count == 0)
+            {
+                return "<empty>";
+            }
             return string.Join(
                 "; ",
-                this.OrderBy(kvp => kvp.Key == "Name" ? "" : kvp.Key)       // always name first
-                    .Select(kvp => $"{kvp.Key}={kvp.Value}")
+                this.Select(kvp => $"{kvp.Key}={kvp.Value}")
             );
         }
     }

@@ -1,4 +1,5 @@
 ﻿using System.Text.Json;
+using System.Text.Json.Serialization;
 using AwtrixSharpWeb.Interfaces;
 
 namespace AwtrixSharpWeb.Apps.Configs
@@ -6,12 +7,13 @@ namespace AwtrixSharpWeb.Apps.Configs
 
     public class AppConfig : IAppConfig
     {
-        public const string EnvironmentKey = "Environment";
+        //public const string EnvironmentKey = "Environment";
 
         private List<ValueMap> _valueMaps;
 
         public AppConfigKeys Config { get; set; }
 
+        [JsonIgnore]
         public string Environment { get; set; }
 
         public string Type { get; set; }
@@ -81,32 +83,32 @@ namespace AwtrixSharpWeb.Apps.Configs
             return _valueMaps?.FirstOrDefault(map => map.IsMatch(input));
         }
 
-        /// <summary>
-        /// Add a ValueMap to the collection
-        /// </summary>
-        public AppConfig AddValueMap(ValueMap valueMap)
-        {
-            if (valueMap != null && !string.IsNullOrEmpty(valueMap.ValueMatcher))
-            {
-                _valueMaps.Add(valueMap);
-            }
-            return this;
-        }
+        ///// <summary>
+        ///// Add a ValueMap to the collection
+        ///// </summary>
+        //public AppConfig AddValueMap(ValueMap valueMap)
+        //{
+        //    if (valueMap != null && !string.IsNullOrEmpty(valueMap.ValueMatcher))
+        //    {
+        //        _valueMaps.Add(valueMap);
+        //    }
+        //    return this;
+        //}
 
-        /// <summary>
-        /// Add multiple ValueMaps to the collection
-        /// </summary>
-        public AppConfig AddValueMaps(IEnumerable<ValueMap> valueMaps)
-        {
-            if (valueMaps != null)
-            {
-                foreach (var map in valueMaps.Where(m => !string.IsNullOrEmpty(m.ValueMatcher)))
-                {
-                    _valueMaps.Add(map);
-                }
-            }
-            return this;
-        }
+        ///// <summary>
+        ///// Add multiple ValueMaps to the collection
+        ///// </summary>
+        //public AppConfig AddValueMaps(IEnumerable<ValueMap> valueMaps)
+        //{
+        //    if (valueMaps != null)
+        //    {
+        //        foreach (var map in valueMaps.Where(m => !string.IsNullOrEmpty(m.ValueMatcher)))
+        //        {
+        //            _valueMaps.Add(map);
+        //        }
+        //    }
+        //    return this;
+        //}
 
         /// <summary>
         /// Creates a new instance of the specified type and populates its properties from this AppConfig.
@@ -205,7 +207,7 @@ namespace AwtrixSharpWeb.Apps.Configs
 
         public override string ToString()
         {
-            return $"{Type}: {Config.ToString()}";
+            return $"{Type}, Config={Config.ToString()}";
         }
     }
 }

@@ -4,6 +4,7 @@ using AwtrixSharpWeb.HostedServices;
 using AwtrixSharpWeb.Interfaces;
 using AwtrixSharpWeb.Services;
 using System;
+using System.Globalization;
 
 namespace AwtrixSharpWeb.Apps
 {
@@ -43,7 +44,7 @@ namespace AwtrixSharpWeb.Apps
             {
                 try
                 {
-                    var timeSpan = TimeSpan.Parse(time);
+                    var timeSpan = TimeSpan.ParseExact(time, "hhmm", CultureInfo.InvariantCulture);
                     var value = Config.Config[time];
 
                     Logger.LogDebug("Processing time entry {Time}: {Value}", time, value);
