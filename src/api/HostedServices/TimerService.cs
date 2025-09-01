@@ -43,8 +43,6 @@ namespace AwtrixSharpWeb.HostedServices
 
         public Task StartAsync(CancellationToken cancellationToken)
         {
-            _logger.LogInformation("Timer service starting");
-
             // Create a linked token source so we can cancel when the app is stopping
             _stoppingCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
@@ -59,7 +57,7 @@ namespace AwtrixSharpWeb.HostedServices
         {
             try
             {
-                _logger.LogInformation("Timer service executing");
+                _logger.LogDebug("Timer service executing");
 
                 // Create a timer that fires every 100ms to check for second changes
                 // This gives us good granularity to detect second changes without missing any
