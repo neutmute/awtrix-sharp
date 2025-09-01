@@ -58,7 +58,7 @@ namespace AwtrixSharpWeb.Apps
 
             if (valueMap != null)
             {
-                Logger.LogInformation("Found matching value map for status: {StatusText}", textPayload);
+                Logger.LogDebug("Found matching value map for status: {StatusText}", textPayload);
 
                 valueMap.Decorate(message, Logger);
 
