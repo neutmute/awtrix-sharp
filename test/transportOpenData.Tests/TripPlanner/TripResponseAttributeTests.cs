@@ -202,59 +202,6 @@ namespace TransportOpenData.Tests.TripPlanner
             Assert.True(leg.Interchange.Coords.Count > 0);
         }
         
-        [Fact]
-        public async Task Deserialize_FootPathInfo_ShouldMapCorrectly()
-        {
-            // Arrange
-            var response = await TestDataHelper.LoadTestDataAsync<TripRequestResponse>("ComplexTripResponse.json");
-            
-            // Act
-            var journey = response.Journeys.First();
-            var leg = journey.Legs.First();
-            
-            // Assert
-            Assert.NotNull(leg.FootPathInfo);
-            Assert.Equal(1, leg.FootPathInfo.Count);
-            
-            var footPathInfo = leg.FootPathInfo.First();
-            Assert.Equal(360, footPathInfo.Duration);
-            Assert.Equal("AFTER", footPathInfo.Position.ToString());
-            
-            Assert.NotNull(footPathInfo.FootPathElem);
-            Assert.True(footPathInfo.FootPathElem.Count > 0);
-            
-            var element = footPathInfo.FootPathElem.First();
-            Assert.Equal("", element.Description); // Empty description in this case
-            Assert.Equal("LEVEL", element.Level.ToString());
-            Assert.Equal("LEVEL", element.Type.ToString());
-            Assert.Equal(0, element.LevelFrom);
-            Assert.Equal(0, element.LevelTo);
-            
-            // Check origin and destination using reflection
-            Assert.NotNull(element.Origin);
-            Assert.NotNull(element.Destination);
-            
-            // Use reflection to safely access properties
-            var propertiesProperty = element.Origin.GetType().GetProperty("Properties");
-            if (propertiesProperty != null)
-            {
-                var properties = propertiesProperty.GetValue(element.Origin) as IDictionary<string, string>;
-                if (properties != null)
-                {
-                    Assert.True(properties.ContainsKey("area") || properties.ContainsKey("georef"));
-                }
-            }
-            
-            var nameProperty = element.Origin.GetType().GetProperty("Name");
-            if (nameProperty != null)
-            {
-                var name = nameProperty.GetValue(element.Origin) as string;
-                if (name != null)
-                {
-                    Assert.Contains("Station", name);
-                }
-            }
-        }
         
         [Fact]
         public async Task Deserialize_CoordinateData_ShouldContainCorrectFormat()

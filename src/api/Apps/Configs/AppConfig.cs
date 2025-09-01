@@ -17,9 +17,19 @@ namespace AwtrixSharpWeb.Apps.Configs
         public string Type { get; set; }
 
         /// <summary>
-        /// Redirect for now
+        /// Redirect for now. Reserved for future use if we want to differentiate between two apps of the same type on the same clock
         /// </summary>
         public string Name { get => Type; }
+
+        /// <summary>
+        /// Override values received based on a regex 
+        /// </summary>
+        public List<ValueMap> ValueMaps
+        {
+            get => _valueMaps;
+            set => _valueMaps = value ?? new List<ValueMap>();
+        }
+
 
         public AppConfig()
         {
@@ -60,15 +70,6 @@ namespace AwtrixSharpWeb.Apps.Configs
             {
                 Config.Add(key, value?.ToString());
             }
-        }
-
-        /// <summary>
-        /// Get the list of ValueMaps defined for this configuration
-        /// </summary>
-        public List<ValueMap> ValueMaps 
-        { 
-            get => _valueMaps;
-            set => _valueMaps = value ?? new List<ValueMap>();
         }
 
         /// <summary>

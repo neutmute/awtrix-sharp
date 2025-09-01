@@ -1,9 +1,8 @@
 ﻿using AwtrixSharpWeb.Controllers;
-using AwtrixSharpWeb.Domain;
 using AwtrixSharpWeb.Interfaces;
 using TransportOpenData.TripPlanner;
 
-namespace AwtrixSharpWeb.Services
+namespace AwtrixSharpWeb.Services.TripPlanner
 {
 
     public class TripPlannerService : ITripPlannerService

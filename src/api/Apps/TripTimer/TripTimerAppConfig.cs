@@ -1,4 +1,6 @@
-﻿namespace AwtrixSharpWeb.Apps.Configs
+﻿using AwtrixSharpWeb.Apps.Configs;
+
+namespace AwtrixSharpWeb.Apps.TripTimer
 {
 
     public class TripTimerAppConfig : ScheduledAppConfig 

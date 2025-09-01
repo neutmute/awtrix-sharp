@@ -1,6 +1,6 @@
-﻿using AwtrixSharpWeb.Apps;
-using AwtrixSharpWeb.Domain;
+﻿using AwtrixSharpWeb.Apps.TripTimer;
 using AwtrixSharpWeb.HostedServices;
+using AwtrixSharpWeb.Services.TripPlanner;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.OpenApi.Attributes;
 using Swashbuckle.AspNetCore.Annotations;

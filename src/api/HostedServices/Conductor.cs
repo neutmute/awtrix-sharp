@@ -1,8 +1,12 @@
-﻿using AwtrixSharpWeb.Apps;
-using AwtrixSharpWeb.Apps.Configs;
+﻿using AwtrixSharpWeb.Apps.Configs;
+using AwtrixSharpWeb.Apps.Diurnal;
+using AwtrixSharpWeb.Apps.MqttRender;
+using AwtrixSharpWeb.Apps.SlackStatus;
+using AwtrixSharpWeb.Apps.TripTimer;
 using AwtrixSharpWeb.Domain;
 using AwtrixSharpWeb.Interfaces;
 using AwtrixSharpWeb.Services;
+using AwtrixSharpWeb.Services.TripPlanner;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using System.Text.Json;
@@ -103,6 +107,7 @@ namespace AwtrixSharpWeb.HostedServices
             var clock = new Clock();
 
             var isDev = _hostEnvironment.IsDevelopment();
+
             _logger.LogInformation(
                 "Creating {AppName} for {device}"
                 ,appConfig.Name

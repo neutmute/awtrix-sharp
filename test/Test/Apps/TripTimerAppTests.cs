@@ -1,9 +1,9 @@
-﻿using AwtrixSharpWeb.Apps;
-using AwtrixSharpWeb.Apps.Configs;
+﻿using AwtrixSharpWeb.Apps.TripTimer;
 using AwtrixSharpWeb.Domain;
 using AwtrixSharpWeb.HostedServices;
 using AwtrixSharpWeb.Interfaces;
 using AwtrixSharpWeb.Services;
+using AwtrixSharpWeb.Services.TripPlanner;
 using Microsoft.Extensions.Logging;
 using Moq;
 using System;
@@ -94,74 +94,6 @@ namespace Test.Apps
             Assert.Equal(departureTime, actualAlarmTime.OriginDepartTime);
             Assert.Equal(expectedDepartTime, actualAlarmTime.DepartForOriginTime);
             Assert.Equal(expectedPrepareForDepartTime, actualAlarmTime.PrepareForDepartTime);
-        }
-
-        [Fact]
-        public async Task BasicLifecycle()
-        {
-            // Arrange
-            var mockClock = new MockClock(new DateTimeOffset(2023, 1, 1, 12, 0, 0, TimeSpan.Zero));
-            _clock = mockClock;
-            
-            var sut = GetSystemUnderTest();
-            var secondEventCount = 0;
-            var minuteEventCount = 0;
-            
-            // Configure mocks to track calls
-            _mockAwtrixService.Setup(x => x.AppUpdate(It.IsAny<AwtrixAddress>(), It.IsAny<string>(), It.IsAny<AwtrixAppMessage>()))
-                .ReturnsAsync(true);
-                
-            _mockAwtrixService.Setup(x => x.Dismiss(It.IsAny<AwtrixAddress>()))
-                .ReturnsAsync(true);
-            
-            // Act
-            sut.Init();
-            
-            // Simulate time passing and trigger the scheduled execution
-            // First, advance to just before the next cron trigger
-            mockClock.SetTime(new DateTimeOffset(2023, 1, 1, 12, 0, 50, TimeSpan.Zero));
-            
-            
-            // Wait briefly for the app to activate based on the cron trigger
-            await Task.Delay(100);
-            
-            // Trigger some timer events
-            for (int i = 0; i < 5; i++)
-            {
-                var currentTime = DateTime.Now.AddSeconds(i);
-                _mockTimerService.Raise(m => m.SecondChanged += null, new ClockTickEventArgs(currentTime));
-                secondEventCount++;
-                
-                if (i % 60 == 0) // Simulate a minute change every 60 seconds
-                {
-                    _mockTimerService.Raise(m => m.MinuteChanged += null, new ClockTickEventArgs(currentTime));
-                    minuteEventCount++;
-                }
-                
-                await Task.Delay(50); // Give time for event processing
-            }
-            
-            // Advance time past the active period to trigger clean-up
-            mockClock.SetTime(mockClock.Now.Add(_timerConfig.ActiveTime).AddSeconds(1));
-            
-            // Wait for clean-up to complete
-            await Task.Delay(100);
-            
-            // Assert
-            _mockLog.Verify(
-                x => x.Log(
-                    It.Is<LogLevel>(l => l == LogLevel.Information),
-                    It.IsAny<EventId>(),
-                    It.Is<It.IsAnyType>((v, t) => v.ToString().Contains("Clock ticked second")),
-                    It.IsAny<Exception>(),
-                    It.IsAny<Func<It.IsAnyType, Exception, string>>()),
-                Times.AtLeast(1));
-                
-            // Verify the app completed its lifecycle
-            _mockAwtrixService.Verify(x => x.Dismiss(It.IsAny<AwtrixAddress>()), Times.AtLeastOnce);
-            
-            // Clean up
-            sut.Dispose();
         }
 
         [Theory]

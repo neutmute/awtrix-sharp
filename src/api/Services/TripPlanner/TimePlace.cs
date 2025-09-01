@@ -1,4 +1,4 @@
-﻿namespace AwtrixSharpWeb.Domain
+﻿namespace AwtrixSharpWeb.Services.TripPlanner
 {
     public class TimePlace
     {

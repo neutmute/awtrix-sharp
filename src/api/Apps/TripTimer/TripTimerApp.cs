@@ -1,11 +1,11 @@
-using AwtrixSharpWeb.Apps.Configs;
 using AwtrixSharpWeb.Domain;
 using AwtrixSharpWeb.HostedServices;
 using AwtrixSharpWeb.Interfaces;
 using AwtrixSharpWeb.Services;
+using AwtrixSharpWeb.Services.TripPlanner;
 using System.Xml.Linq;
 
-namespace AwtrixSharpWeb.Apps
+namespace AwtrixSharpWeb.Apps.TripTimer
 {
     public class TripTimerApp : ScheduledApp<TripTimerAppConfig>
     {

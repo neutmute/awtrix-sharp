@@ -6,8 +6,11 @@ using AwtrixSharpWeb.Services;
 using System;
 using System.Globalization;
 
-namespace AwtrixSharpWeb.Apps
+namespace AwtrixSharpWeb.Apps.Diurnal
 {
+    /// <summary>
+    /// Change brightness and colour based on time of day
+    /// </summary>
     public class DiurnalApp : AwtrixApp<AppConfig>
     {
         ITimerService _timerService;

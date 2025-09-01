@@ -1,11 +1,10 @@
-﻿using AwtrixSharpWeb.Apps.Configs;
-using AwtrixSharpWeb.Domain;
+﻿using AwtrixSharpWeb.Domain;
 using AwtrixSharpWeb.Interfaces;
 using AwtrixSharpWeb.Services;
 using MQTTnet;
 using System.Text;
 
-namespace AwtrixSharpWeb.Apps
+namespace AwtrixSharpWeb.Apps.MqttRender
 {
     public class MqttRenderApp : ScheduledApp<MqttAppConfig>
     {
