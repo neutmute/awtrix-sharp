@@ -1,9 +1,8 @@
-﻿using AwtrixSharpWeb.Apps.Configs;
-using AwtrixSharpWeb.Domain;
+﻿using AwtrixSharpWeb.Domain;
 using AwtrixSharpWeb.HostedServices;
 using AwtrixSharpWeb.Services;
 
-namespace AwtrixSharpWeb.Apps
+namespace AwtrixSharpWeb.Apps.SlackStatus
 {
     public class SlackStatusApp : AwtrixApp<SlackStatusAppConfig>
     {

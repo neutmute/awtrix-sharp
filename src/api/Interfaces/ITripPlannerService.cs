@@ -1,4 +1,4 @@
-﻿using AwtrixSharpWeb.Domain;
+﻿using AwtrixSharpWeb.Services.TripPlanner;
 using TransportOpenData.TripPlanner;
 
 namespace AwtrixSharpWeb.Interfaces

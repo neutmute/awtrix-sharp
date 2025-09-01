@@ -1,4 +1,6 @@
-﻿namespace AwtrixSharpWeb.Apps.Configs
+﻿using AwtrixSharpWeb.Apps.Configs;
+
+namespace AwtrixSharpWeb.Apps.SlackStatus
 {
     public class SlackStatusAppConfig : AppConfig 
     {

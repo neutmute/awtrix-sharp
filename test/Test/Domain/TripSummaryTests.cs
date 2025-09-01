@@ -1,4 +1,4 @@
-﻿using AwtrixSharpWeb.Domain;
+﻿using AwtrixSharpWeb.Services.TripPlanner;
 using System;
 using System.Collections.Generic;
 using System.Linq;

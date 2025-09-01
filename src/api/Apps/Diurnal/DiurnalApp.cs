@@ -6,13 +6,16 @@ using AwtrixSharpWeb.Services;
 using System;
 using System.Globalization;
 
-namespace AwtrixSharpWeb.Apps
+namespace AwtrixSharpWeb.Apps.Diurnal
 {
+    /// <summary>
+    /// Change brightness and colour based on time of day
+    /// </summary>
     public class DiurnalApp : AwtrixApp<AppConfig>
     {
         ITimerService _timerService;
 
-        Dictionary<TimeSpan, List<Action<AwtrixSettings>>> _hourMap;
+        Dictionary<TimeSpan, List<Action<AwtrixSettings>>> _timeActionMap;
 
         public DiurnalApp(
             ILogger logger
@@ -23,7 +26,7 @@ namespace AwtrixSharpWeb.Apps
             : base(logger, config, awtrixAddress, awtrixService)
         {
             _timerService = timerService;
-            _hourMap = new Dictionary<TimeSpan, List<Action<AwtrixSettings>>>();
+            _timeActionMap = new Dictionary<TimeSpan, List<Action<AwtrixSettings>>>();
         }
 
         protected override void Initialize()
@@ -54,12 +57,12 @@ namespace AwtrixSharpWeb.Apps
                         {
                             var settingKey = keyPairParts[0].ToLower();
                             var settingValue = keyPairParts[1];
-                            if (!_hourMap.ContainsKey(timeSpan))
+                            if (!_timeActionMap.ContainsKey(timeSpan))
                             {
-                                _hourMap[timeSpan] = new List<Action<AwtrixSettings>>();
+                                _timeActionMap[timeSpan] = new List<Action<AwtrixSettings>>();
                             }
 
-                            var actions = _hourMap[timeSpan];
+                            var actions = _timeActionMap[timeSpan];
 
                             switch (settingKey)
                             {
@@ -87,7 +90,7 @@ namespace AwtrixSharpWeb.Apps
            // if (Config.Environment?.ToLowerInvariant() == "development" || string.IsNullOrEmpty(Config.Environment))
             {
                 var currentTime = DateTime.Now.TimeOfDay;
-                var nextSetting = _hourMap
+                var nextSetting = _timeActionMap
                                     .Keys
                                     .Order()
                                     .Where(t => t < currentTime)
@@ -110,9 +113,9 @@ namespace AwtrixSharpWeb.Apps
         {
             var currentTime = e.Time.ToLocalTime().TimeOfDay;
 
-            if (_hourMap.ContainsKey(currentTime))
+            if (_timeActionMap.ContainsKey(currentTime))
             {
-                var actions = _hourMap[currentTime];
+                var actions = _timeActionMap[currentTime];
                 var awtrixSetting = new AwtrixSettings();
 
                 foreach(var action in actions)

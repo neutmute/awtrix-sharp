@@ -88,23 +88,26 @@ namespace AwtrixSharpWeb.HostedServices
 
         private void CheckTimeChange(object? state)
         {
-            var currentTime = DateTime.Now;
+            var now = DateTime.Now;
 
+            // remove all ms/small precision
+            var trimmedCurrent = new DateTime(now.Year, now.Month, now.Day, now.Hour, now.Minute, now.Second, now.Kind);
+            
             // Check if second has changed
-            if (currentTime.Second != _lastTime.Second)
+            if (trimmedCurrent.Second != _lastTime.Second)
             {
-                _logger.LogDebug("Second changed: {Second}", currentTime.ToString("HH:mm:ss"));
-                OnSecondChanged(currentTime);
+                _logger.LogDebug("Second changed: {Second}", trimmedCurrent.ToString("HH:mm:ss"));
+                OnSecondChanged(trimmedCurrent);
 
                 // Check if minute has changed as well
-                if (currentTime.Minute != _lastTime.Minute)
+                if (trimmedCurrent.Minute != _lastTime.Minute)
                 {
-                    _logger.LogDebug("Minute changed: {Minute}", currentTime.ToString("HH:mm:ss"));
-                    OnMinuteChanged(currentTime);
+                    _logger.LogDebug("Minute changed: {Minute}", trimmedCurrent.ToString("HH:mm:ss"));
+                    OnMinuteChanged(trimmedCurrent);
                 }
 
                 // Update last time
-                _lastTime = currentTime;
+                _lastTime = trimmedCurrent;
             }
         }
 
