@@ -141,12 +141,22 @@ namespace AwtrixSharpWeb.Apps.TripTimer
 
                 if (timeToAlarm < VisualAlertBuffer)
                 {
-                    text = "GO!";
-                    Logger.LogInformation($"{text}");
-                    message
-                        .SetText(text)
-                        .SetRainbow()
-                        .SetProgress(100);
+                    if (Config.ValueMaps.Any())
+                    {
+                        Config
+                            .ValueMaps[0]
+                            .Decorate(message, Logger);
+                    }
+                    else
+                    {
+                        text = "GO!";
+                        message
+                            .SetText(text)
+                            .SetRainbow()
+                            .SetProgress(100);
+
+                        Logger.LogInformation($"{message.Text}");
+                    }
                 }
 
                 return message;
