@@ -83,10 +83,7 @@ namespace AwtrixSharpWeb.Apps.Configs
                             message.SetIcon(kvp.Value);
                             break;
                         case "color":
-                            if (TryParseColorArray(kvp.Value, out int[] colorArray))
-                                message.SetColor(colorArray);
-                            else
-                                message.SetColor(kvp.Value);
+                            message.SetColor(kvp.Value);
                             break;
                         case "duration":
                             // Handle Duration specifically to avoid ambiguity

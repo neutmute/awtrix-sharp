@@ -190,7 +190,8 @@ namespace AwtrixSharpWeb.HostedServices
 
         public Task StopAsync(CancellationToken cancellationToken)
         {
-            _logger.LogInformation("Conductor stopped.");
+            _logger.LogInformation("Conductor stopping");
+            _apps.ForEach(a => a.Dispose());
             return Task.CompletedTask;
         }
     }

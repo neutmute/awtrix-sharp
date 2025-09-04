@@ -69,12 +69,6 @@ namespace AwtrixSharpWeb.Domain
             return this;
         }
 
-        public AwtrixAppMessage SetColor(int[] value)
-        {
-            this["color"] = string.Join(',', value);
-            return this;
-        }
-
         public AwtrixAppMessage SetGradient(int[][] value)
         {
             if (value != null && value.Length > 0)
@@ -96,11 +90,12 @@ namespace AwtrixSharpWeb.Domain
             return this;
         }
 
-        public AwtrixAppMessage SetBackground(int[] value)
+        public AwtrixAppMessage SetBackground(string value)
         {
-            this["background"] = string.Join(',', value);
+            this["background"] = value;
             return this;
         }
+
 
         public AwtrixAppMessage SetRainbow(bool value = true)
         {

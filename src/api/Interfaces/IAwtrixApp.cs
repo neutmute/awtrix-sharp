@@ -2,7 +2,7 @@
 
 namespace AwtrixSharpWeb.Interfaces
 {
-    public interface IAwtrixApp
+    public interface IAwtrixApp : IDisposable
     {
         public AwtrixAddress AwtrixAddress { get; }
 

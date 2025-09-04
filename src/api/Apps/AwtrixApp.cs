@@ -72,5 +72,10 @@ namespace AwtrixSharpWeb.Apps
         {
             return await AwtrixService.Set(AwtrixAddress, settings);
         }
+
+        public void Dispose()
+        {
+            AppClear().Wait();
+        }
     }
 }
