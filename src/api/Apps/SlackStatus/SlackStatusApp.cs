@@ -9,7 +9,12 @@ namespace AwtrixSharpWeb.Apps.SlackStatus
         SlackConnector _slackConnector;
         string _trackingUserId;
 
-        public SlackStatusApp(ILogger logger, SlackStatusAppConfig config, AwtrixAddress awtrixAddress, AwtrixService awtrixService, SlackConnector slackConnector) : base(logger, config, awtrixAddress, awtrixService)
+        public SlackStatusApp(
+            ILogger logger
+            , SlackStatusAppConfig config
+            , AwtrixAddress awtrixAddress
+            , AwtrixService awtrixService
+            , SlackConnector slackConnector) : base(logger, config, awtrixAddress, awtrixService)
         {
             _slackConnector = slackConnector;
         }
@@ -25,7 +30,7 @@ namespace AwtrixSharpWeb.Apps.SlackStatus
         {
             if (_trackingUserId.Equals(e.UserId))
             {
-                Logger.LogInformation(e.ToString());
+                Logger.LogInformation($"SlackApp: {e.ToString()}");
                 bool result;
                 if (e.StatusText == string.Empty)
                 {
@@ -37,9 +42,9 @@ namespace AwtrixSharpWeb.Apps.SlackStatus
                     var message = new AwtrixAppMessage();
 
                     // Look for a matching value map
-                    if (!TryValueMatch(e.StatusText, message))
+                    if (!DecorateIfMatch(e.StatusText, message))
                     {
-                        if (!TryValueMatch(e.StatusEmoji, message))
+                        if (!DecorateIfMatch(e.StatusEmoji, message))
                         {
                             // No mapping found, use default behavior
                             message.SetText(e.StatusText);
@@ -53,13 +58,13 @@ namespace AwtrixSharpWeb.Apps.SlackStatus
             }
         }
 
-        private bool TryValueMatch(string value, AwtrixAppMessage message)
+        private bool DecorateIfMatch(string value, AwtrixAppMessage message)
         {
             var valueMap = Config.FindMatchingValueMap(value);
 
             if (valueMap != null)
             {
-                Logger.LogInformation("Found matching value map for valueRegex='{value}'", value);
+                Logger.LogInformation("ValueMap matched for'{value}'", value);
 
                 valueMap.Decorate(message, Logger);
 
