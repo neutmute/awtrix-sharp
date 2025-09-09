@@ -7,6 +7,9 @@ using System.Text;
 namespace AwtrixSharpWeb.Apps.MqttRender
 {
 
+    /// <summary>
+    /// Render a subscribed MQTT payload
+    /// </summary>
     public class MqttRenderApp : ScheduledApp<MqttAppConfig>
     {
         IMqttConnector _mqttConnector;

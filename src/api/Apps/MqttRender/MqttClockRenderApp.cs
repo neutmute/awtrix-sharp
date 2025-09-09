@@ -7,6 +7,9 @@ using System.Text;
 
 namespace AwtrixSharpWeb.Apps.MqttRender
 {
+    /// <summary>
+    /// Render the time and an MQTT message
+    /// </summary>
     public class MqttClockRenderApp : MqttRenderApp
     {
         ITimerService _timerService;

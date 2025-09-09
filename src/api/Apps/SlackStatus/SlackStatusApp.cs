@@ -4,6 +4,9 @@ using AwtrixSharpWeb.Services;
 
 namespace AwtrixSharpWeb.Apps.SlackStatus
 {
+    /// <summary>
+    /// Mirror your slack status to the Awtrix
+    /// </summary>
     public class SlackStatusApp : AwtrixApp<SlackStatusAppConfig>
     {
         SlackConnector _slackConnector;
