@@ -1,4 +1,5 @@
-﻿using AwtrixSharpWeb.Interfaces;
+﻿using AwtrixSharpWeb.Domain;
+using AwtrixSharpWeb.Interfaces;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -90,7 +91,7 @@ namespace AwtrixSharpWeb.HostedServices
 
             // remove all ms/small precision
             var trimmedCurrent = new DateTime(now.Year, now.Month, now.Day, now.Hour, now.Minute, now.Second, now.Kind);
-            
+
             // Check if second has changed
             if (trimmedCurrent.Second != _lastTime.Second)
             {
@@ -155,6 +156,23 @@ namespace AwtrixSharpWeb.HostedServices
         {
             _timer?.Dispose();
             _stoppingCts?.Dispose();
+        }
+
+
+        public static string FormatClockString(DateTime time)
+        {
+            var thisSecond = time.Second;
+            var isOddSecond = thisSecond % 2 == 1;
+            var spacer = isOddSecond ? " " : ":";
+
+            // 12h saves a character, ToString("h") fails
+            var hour = time.Hour % 12;
+            if (hour == 0) hour = 12;
+            var hourString = hour.ToString();
+
+            var clockText = $"{hourString}{spacer}{time:mm}";
+
+            return clockText;
         }
     }
 }

@@ -89,16 +89,8 @@ namespace AwtrixSharpWeb.Apps.TripTimer
             {
                 var nextAlarm = alarmTimes.First();
                 var timeToAlarm = nextAlarm - Clock.Now;
-                //var secondsToAlarm = (int) timeToAlarm.TotalSeconds;
-
-                var thisSecond = e.Time.Second;
-                var isOddSecond = thisSecond % 2 == 1;
-                var spacer = isOddSecond ? " " : ":";
-
-                // 12h saves a character, ToString("h") fails
-                var hour = Clock.Now.Hour % 12;
-                if (hour == 0) hour = 12;
-                var hourString = hour.ToString();
+                
+                var clockText = TimerService.FormatClockString(e.Time);
 
                 var nowColor = "00FF00";
 
@@ -108,6 +100,7 @@ namespace AwtrixSharpWeb.Apps.TripTimer
                     nowColor = "FFA500";
                 }
 
+                
                 //var text = $"{hour}{spacer}{Clock.Now:mm} {secondsToAlarm}";
                 //var text = $"{hour}{spacer}{Clock.Now:mm}->{nextAlarm.Minute}";
                 var jsonFormat = @"[
@@ -122,13 +115,14 @@ namespace AwtrixSharpWeb.Apps.TripTimer
 ]";
 
                 var text = jsonFormat
-                    .Replace("(NOW_TIME)", $"{hourString}{spacer}{Clock.Now:mm}")
+                    .Replace("(NOW_TIME)", clockText)
                     .Replace("(NOW_COLOR)", nowColor)
                     .Replace("(ALARM_TIME)", $"{nextAlarm:mm}");
 
                 var quantisedProgress = GetProgress(Clock, nextAlarm);
                 var useProgress = quantisedProgress.quantized;
-                if (isOddSecond)
+                
+                if (clockText.Contains(":"))    // Is an odd second
                 {
                     useProgress = quantisedProgress.quantizedBlink;
                 }
