@@ -159,16 +159,17 @@ namespace AwtrixSharpWeb.HostedServices
         }
 
 
-        public static string FormatClockString(DateTime time)
+        public static string FormatClockString(DateTime time, bool format24h)
         {
             var thisSecond = time.Second;
             var isOddSecond = thisSecond % 2 == 1;
             var spacer = isOddSecond ? " " : ":";
 
-            // 12h saves a character, ToString("h") fails
-            var hour = time.Hour % 12;
-            if (hour == 0) hour = 12;
-            var hourString = hour.ToString();
+            var hourString = time.ToString(format24h ? "HH" : "hh");
+            if (!format24h)
+            {
+                hourString = hourString.TrimStart('0');
+            }
 
             var clockText = $"{hourString}{spacer}{time:mm}";
 

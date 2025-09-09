@@ -90,7 +90,7 @@ namespace AwtrixSharpWeb.Apps.TripTimer
                 var nextAlarm = alarmTimes.First();
                 var timeToAlarm = nextAlarm - Clock.Now;
                 
-                var clockText = TimerService.FormatClockString(e.Time);
+                var clockText = TimerService.FormatClockString(e.Time, false);
 
                 var nowColor = "00FF00";
 

@@ -46,7 +46,7 @@ namespace AwtrixSharpWeb.Apps.MqttRender
 
         private Task<bool> UpdateDisplay()
         {
-            var clockText = TimerService.FormatClockString(_currentTime);
+            var clockText = TimerService.FormatClockString(_currentTime, true);
 
             var messageText = $"{clockText} {_mqttValue}";
 
