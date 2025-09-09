@@ -103,6 +103,7 @@ namespace AwtrixSharpWeb.HostedServices
             catch(Exception e)
             {
                 _log.LogError($"Failed to publish message {message} ({e.Message})");
+                await ConnectAsync(); // Attempt to reconnect if publish fails
             }
         }
 

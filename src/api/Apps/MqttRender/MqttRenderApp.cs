@@ -6,6 +6,7 @@ using System.Text;
 
 namespace AwtrixSharpWeb.Apps.MqttRender
 {
+
     public class MqttRenderApp : ScheduledApp<MqttAppConfig>
     {
         IMqttConnector _mqttConnector;
@@ -46,7 +47,7 @@ namespace AwtrixSharpWeb.Apps.MqttRender
             await AppClear();
         }
 
-        private Task MessageReceived(MqttApplicationMessageReceivedEventArgs arg)
+        protected virtual Task MessageReceived(MqttApplicationMessageReceivedEventArgs arg)
         {
             string textPayload = Encoding.UTF8.GetString(arg.ApplicationMessage.Payload);
 

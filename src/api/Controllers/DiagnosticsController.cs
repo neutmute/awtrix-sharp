@@ -19,7 +19,6 @@ namespace AwtrixSharpWeb.Controllers
         private readonly MqttConnector _mqttService;
         private readonly AwtrixService _awtrixService;
         private readonly Conductor _conductor;
-        private readonly JsonSerializerOptions _jsonOptions;
 
         public DiagnosticsController(
             ILogger<DiagnosticsController> logger
@@ -27,7 +26,6 @@ namespace AwtrixSharpWeb.Controllers
             , MqttConnector mqttService
             , AwtrixService awtrixService
             , Conductor conductor
-            , JsonSerializerOptions jsonOptions
             )
         {
             _awtrixConfig = devices.Value;
@@ -35,7 +33,6 @@ namespace AwtrixSharpWeb.Controllers
             _mqttService = mqttService;
             _awtrixService = awtrixService;
             _conductor = conductor;
-            _jsonOptions = jsonOptions;
         }
 
         [HttpGet("")]
@@ -64,7 +61,7 @@ namespace AwtrixSharpWeb.Controllers
                 Message = "Diagnostic test"
             };
             
-            var payload = System.Text.Json.JsonSerializer.Serialize(diagnosticInfo);
+            var payload = JsonSerializer.Serialize(diagnosticInfo);
             
             await _mqttService.PublishAsync("awtrixsharp/diagnostic", payload);
             

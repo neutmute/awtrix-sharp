@@ -8,6 +8,7 @@ namespace AwtrixSharpWeb.Interfaces
 
         event EventHandler<ClockTickEventArgs>? SecondChanged;
 
+
         Task StartAsync(CancellationToken cancellationToken);
 
         Task StopAsync(CancellationToken cancellationToken);
