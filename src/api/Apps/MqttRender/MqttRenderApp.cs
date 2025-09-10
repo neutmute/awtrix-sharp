@@ -28,7 +28,7 @@ namespace AwtrixSharpWeb.Apps.MqttRender
         protected override async Task ActivateScheduledWork(CancellationTokenSource cts)
         {
             await _mqttConnector.Subscribe(Config.ReadTopic);
-            _mqttConnector.MessageReceived += MessageReceived;
+            _mqttConnector.MessageReceived += RawMessageReceived;
 
             try
             {
@@ -46,11 +46,27 @@ namespace AwtrixSharpWeb.Apps.MqttRender
 
         private async Task Deactivate()
         {
-            _mqttConnector.MessageReceived -= MessageReceived;
+            _mqttConnector.MessageReceived -= RawMessageReceived;
             await AppClear();
         }
 
-        protected virtual Task MessageReceived(MqttApplicationMessageReceivedEventArgs arg)
+        /// <summary>
+        /// Make sure we are a subscriber to this topic before continuing
+        /// </summary>
+        private Task RawMessageReceived(MqttApplicationMessageReceivedEventArgs arg)
+        {
+            // the client can be subscribed to multiple topics, so we need to filter here
+            if (arg.ApplicationMessage.Topic == Config.ReadTopic)
+            {
+                return HandleMessage(arg);
+            }
+            return Task.CompletedTask;
+        }
+
+        /// <summary>
+        /// If invoked, then this is the correct topic
+        /// </summary>
+        protected virtual Task HandleMessage(MqttApplicationMessageReceivedEventArgs arg)
         {
             string textPayload = Encoding.UTF8.GetString(arg.ApplicationMessage.Payload);
 

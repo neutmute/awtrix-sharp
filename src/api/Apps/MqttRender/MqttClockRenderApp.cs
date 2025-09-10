@@ -41,7 +41,7 @@ namespace AwtrixSharpWeb.Apps.MqttRender
             UpdateDisplay();
         }
 
-        protected override async Task MessageReceived(MqttApplicationMessageReceivedEventArgs arg)
+        protected override async Task HandleMessage(MqttApplicationMessageReceivedEventArgs arg)
         {
             _mqttValue = Encoding.UTF8.GetString(arg.ApplicationMessage.Payload);
             await UpdateDisplay();
