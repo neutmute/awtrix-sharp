@@ -1,20 +1,18 @@
-﻿using AwtrixSharpWeb.Domain;
-using AwtrixSharpWeb.HostedServices;
+﻿using AwtrixSharpWeb.Apps.Configs;
+using AwtrixSharpWeb.Domain;
 using AwtrixSharpWeb.Interfaces;
 using AwtrixSharpWeb.Services;
 using MQTTnet;
-using System.Diagnostics.Contracts;
 using System.Text;
-using TransportOpenData.TripPlanner;
 
 namespace AwtrixSharpWeb.Apps.MqttRender
 {
     public enum Button
     {
         Unknown = 0
-        ,Left
-        ,Right
-        ,Select
+        , Left
+        , Right
+        , Select
     }
 
     public class ButtonEventArgs : EventArgs
@@ -97,90 +95,67 @@ namespace AwtrixSharpWeb.Apps.MqttRender
             return $"Button={Button}, IsPressed={IsPressed}";
         }
     }
-
-    /// <summary>
-    /// Render a subscribed MQTT payload
-    /// </summary>
-    public class MqttRenderApp : ScheduledApp<MqttAppConfig>
+    public class ButtonApp: AwtrixApp<AppConfig>
     {
         IMqttConnector _mqttConnector;
 
-        public MqttRenderApp(
-         ILogger logger
-         ,IClock clock
-         ,MqttAppConfig config
-         ,AwtrixAddress awtrixAddress
-         ,IAwtrixService awtrixService
-         ,IMqttConnector mqttConnector) : base(logger, clock, awtrixAddress, awtrixService, config)
+        Dictionary<Button, ButtonState> _buttonTopics;
+
+        public event EventHandler<ButtonEventArgs>? Click;
+
+        public event EventHandler<ButtonEventArgs>? DoubleClick;
+
+        public ButtonApp(
+            ILogger logger
+            , AppConfig config
+            , AwtrixAddress awtrixAddress
+            , IAwtrixService awtrixService
+            , IMqttConnector mqttConnector)
+            : base(logger, config, awtrixAddress, awtrixService)
         {
+
             _mqttConnector = mqttConnector;
+
+            _buttonTopics = new Dictionary<Button, ButtonState>
+            {
+                 { Button.Left, BuildState(Button.Left)}
+                ,{ Button.Select, BuildState(Button.Select)}
+                ,{ Button.Right, BuildState(Button.Right)}
+            };
         }
 
-
-        protected override async Task ActivateScheduledWork(CancellationTokenSource cts)
+        private ButtonState BuildState(Button button)
         {
-            await _mqttConnector.Subscribe(Config.ReadTopic);
-            _mqttConnector.MessageReceived += RawMessageReceived;
-
-            try
-            {
-                await WaitForCancellation(cts.Token);
-            }
-            catch (Exception ex)
-            {
-                Logger.LogError($"Error in ActivateScheduledWork: {ex.Message}");
-            }
-            finally
-            {
-                await Deactivate();
-            }
+            return new ButtonState(button, GetTopic(button));
         }
 
-        private async Task Deactivate()
+        private string GetTopic(Button button)
         {
-            _mqttConnector.MessageReceived -= RawMessageReceived;
-            await AppClear();
+            return $"{AwtrixAddress.BaseTopic}/stats/button{button.ToString()}";
         }
 
-        /// <summary>
-        /// Make sure we are a subscriber to this topic before continuing
-        /// </summary>
-        private Task RawMessageReceived(MqttApplicationMessageReceivedEventArgs arg)
+        protected override void Initialize()
         {
-            // the client can be subscribed to multiple topics, so we need to filter here
-            if (arg.ApplicationMessage.Topic == Config.ReadTopic)
+            foreach (var buttonState in _buttonTopics.Values)
             {
-                return HandleMessage(arg);
+                _mqttConnector.Subscribe(buttonState.Topic).Wait();
+                buttonState.Click += (s, e) => Click?.Invoke(this, e);
+                buttonState.DoubleClick += (s, e) => DoubleClick?.Invoke(this, e);
             }
-            return Task.CompletedTask;
+            _mqttConnector.MessageReceived += RawMessageReceived;   
         }
 
-        /// <summary>
-        /// If invoked, then this is the correct topic
-        /// </summary>
-        protected virtual Task HandleMessage(MqttApplicationMessageReceivedEventArgs arg)
+        private async Task RawMessageReceived(MqttApplicationMessageReceivedEventArgs args)
         {
-            string textPayload = Encoding.UTF8.GetString(arg.ApplicationMessage.Payload);
-
-            var message = new AwtrixAppMessage()
-                            .SetText(textPayload);
-
-            var valueMap = Config.FindMatchingValueMap(textPayload);
-
-            if (valueMap != null)
+            foreach (var keyValuePair in _buttonTopics)
             {
-                Logger.LogDebug("Found matching value map for status: {StatusText}", textPayload);
-
-                valueMap.Decorate(message, Logger);
-
-                // If no text is set in the mapping, use the original status text
-                if (message.Text == null)
+                var state = keyValuePair.Value;
+                if (args.ApplicationMessage.Topic == state.Topic)
                 {
-                    message.SetText(textPayload);
+                    bool isPressed = Encoding.UTF8.GetString(args.ApplicationMessage.Payload) == "1";
+                    state.RegisterChange(isPressed);
                 }
             }
-
-            return AppUpdate(message);
         }
     }
 }

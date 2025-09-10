@@ -16,6 +16,7 @@ namespace AwtrixSharpWeb.HostedServices
     internal class AppNames
     {
         public const string DiurnalApp = "DiurnalApp";
+        public const string ButtonApp = "ButtonApp";
         public const string TripTimerApp = "TripTimerApp";
         public const string SlackStatusApp = "SlackStatusApp";
         public const string MqttRenderApp = "MqttRenderApp";
@@ -68,6 +69,19 @@ namespace AwtrixSharpWeb.HostedServices
         {
             foreach (var device in _awtrixConfig.Devices)
             {
+                var buttonApp = (ButtonApp) AppFactory(device, AppConfig.Empty().WithName(AppNames.ButtonApp));
+                _apps.Add(buttonApp);
+
+                buttonApp.Click += (s, e) =>
+                {
+                    _logger.LogInformation("{Button} button clicked on {Device}", e.Button, device.BaseTopic);
+                };
+
+                buttonApp.DoubleClick += (s, e) =>
+                {
+                    _logger.LogInformation("{Button} button double-clicked on {Device}", e.Button, device.BaseTopic);
+                };
+
                 foreach (var appConfig in device.Apps)
                 {
                     // Log the app configuration to debug configuration binding issues
@@ -128,6 +142,14 @@ namespace AwtrixSharpWeb.HostedServices
                         var appLogger = _loggerFactory.CreateLogger<TripTimerApp>();
                         var tripTimerConfig = appConfig.As<TripTimerAppConfig>();
                         app = new TripTimerApp(appLogger, clock, device, awtrixService, _timerService, tripTimerConfig, _tripPlanner);
+                    }
+                    break;
+
+                case AppNames.ButtonApp:
+                    {
+                        var appLogger = _loggerFactory.CreateLogger<MqttRenderApp>();
+                        var mqttConfig = appConfig.As<MqttAppConfig>();
+                        app = new ButtonApp(appLogger, mqttConfig, device, awtrixService, _mqttConnector);
                     }
                     break;
 
