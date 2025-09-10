@@ -7,6 +7,9 @@ using System.Text;
 
 namespace AwtrixSharpWeb.Apps.MqttRender
 {
+    /// <summary>
+    /// Render the time and an MQTT message
+    /// </summary>
     public class MqttClockRenderApp : MqttRenderApp
     {
         ITimerService _timerService;
@@ -38,7 +41,7 @@ namespace AwtrixSharpWeb.Apps.MqttRender
             UpdateDisplay();
         }
 
-        protected override async Task MessageReceived(MqttApplicationMessageReceivedEventArgs arg)
+        protected override async Task HandleMessage(MqttApplicationMessageReceivedEventArgs arg)
         {
             _mqttValue = Encoding.UTF8.GetString(arg.ApplicationMessage.Payload);
             await UpdateDisplay();

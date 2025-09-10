@@ -7,6 +7,9 @@ using System.Xml.Linq;
 
 namespace AwtrixSharpWeb.Apps.TripTimer
 {
+    /// <summary>
+    /// Calculate the best times to get ready and leave for the train station
+    /// </summary>
     public class TripTimerApp : ScheduledApp<TripTimerAppConfig>
     {
         private readonly ITripPlannerService _tripPlanner;
