@@ -106,7 +106,7 @@ Using the `ValueMap` section, mutate the display configuration to show red text 
 
 ### `MqttClockRenderApp`
 
-Render the time AND and MQTT value without having to swap between apps
+Render the time AND an MQTT value (eg: temperature) without having to swap between apps
 
 ![image](./docs/gifs/awtrix-mqttclockrender-dirunal.gif)
 
@@ -167,9 +167,6 @@ Put the clock on your desk, set yourself to `Busy` and let even passer's by know
 | `AWTRIXSHARP_SLACK__BOTTOKEN`  | `xoxb-`             | Slack bot token - reserved for future use           |
 | `TRANSPORTOPENDATA__APIKEY` | `your-api-key`     | NSW Transport Trip Planner API key |
 
-
-### Powershell Script
-
 ## Installation
 
 1. Create your `docker-compose.yaml`
@@ -214,6 +211,10 @@ services:
 ```
 
 ## Development
+
+A Swagger API supports testing and development
+
+### Powershell Script
 
 Configure your env vars with appropriate secrets for development
 
