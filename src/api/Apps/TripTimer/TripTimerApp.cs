@@ -184,7 +184,6 @@ namespace AwtrixSharpWeb.Apps.TripTimer
         {
             Logger.LogInformation($"Schedule has activated");
 
-
             var message = new AwtrixAppMessage()
                 .SetText($"Starting trip timer")
                 .SetStack(false);
