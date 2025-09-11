@@ -1,8 +1,11 @@
 ﻿using AwtrixSharpWeb.Domain;
+using AwtrixSharpWeb.HostedServices;
 using AwtrixSharpWeb.Interfaces;
 using AwtrixSharpWeb.Services;
 using MQTTnet;
+using System.Diagnostics.Contracts;
 using System.Text;
+using TransportOpenData.TripPlanner;
 
 namespace AwtrixSharpWeb.Apps.MqttRender
 {
@@ -24,6 +27,7 @@ namespace AwtrixSharpWeb.Apps.MqttRender
         {
             _mqttConnector = mqttConnector;
         }
+
 
         protected override async Task ActivateScheduledWork(CancellationTokenSource cts)
         {

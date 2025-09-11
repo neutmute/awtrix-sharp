@@ -184,6 +184,12 @@ namespace AwtrixSharpWeb.Apps.TripTimer
         {
             Logger.LogInformation($"Schedule has activated");
 
+            var message = new AwtrixAppMessage()
+                .SetText($"Starting trip timer")
+                .SetStack(false);
+
+            await Notify(message);
+
             // Find the earliest we could get to the train station and query from then
             var earliestDeparture = Clock.Now.Add(Config.TimeToOrigin).Add(Config.TimeToPrepare);
 
@@ -228,7 +234,6 @@ namespace AwtrixSharpWeb.Apps.TripTimer
             _timerService.MinuteChanged -= ClockTickMinute;
         }
 
-
         new protected void Dispose(bool disposing)
         {
             if (disposing)
@@ -238,7 +243,6 @@ namespace AwtrixSharpWeb.Apps.TripTimer
                         
             base.Dispose(disposing);
         }
-
 
         public void Dispose()
         {
