@@ -19,14 +19,14 @@ Why?
 
 ![image](./docs/gifs/awtrix-train.png)
 
+Uses [TransportNSW Trip Planner API](https://opendata.transport.nsw.gov.au/data/dataset/trip-planner-apis/resource/917c66c3-8123-4a0f-b1b1-b4220f32585d) on a schedule - or double press of the button - to start a countdown of how long you have until you have to get out of bed for each train over the next 30 minutes
+
 Configure it with 
 
-- a [Transport NSW](https://transportnsw.info/) API Key
-- a [Transport NSW](https://transportnsw.info/) departure and destination `stopId`
+- a [Transport Open Data Hub](https://opendata.transport.nsw.gov.au/) API Key
+- a `StopId`, found using [TripPlanner API](https://opendata.transport.nsw.gov.au/dataset/trip-planner-apis) for departure and destination stops
 - Your travel time to the station
 - Your preparation time (eg: get dressed, breakfast, pack bag)
-
-On a schedule - or double press of the button - start a countdown of how long you have until you have to get out of bed for each train over the next 30 minutes
 
 #### TripTimerApp AppSettings Configuration Example
 

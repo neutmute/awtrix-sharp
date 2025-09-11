@@ -23,7 +23,13 @@ namespace AwtrixSharpWeb.Services.TripPlanner
 
         public async Task<StopFinderResponse> FindStops(string query)
         {
-            return await _stopFinderClient.RequestAsync(OutputFormat4.RapidJSON, Type_sf.Stop, query, CoordOutputFormat3.EPSG4326, TfNSWSF.True, null);
+            return await _stopFinderClient.RequestAsync(
+                            OutputFormat4.RapidJSON
+                            , Type_sf.Any
+                            , query
+                            , CoordOutputFormat3.EPSG4326
+                            , null
+                            , null);
         }
 
         public async Task<TripRequestResponse> GetTrips(string originStopId, string destinationStopId, DateTime fromWhen)
