@@ -199,7 +199,7 @@ services:
     ports:
       - 80:8080
     volumes:
-      - ./data/awtrix/appsettings.json:/app/appsettings.json
+      - ./data/awtrix/appsettings.json:/app-api/appsettings.json
     environment:
       TZ: "Australia/Sydney"
       ASPNETCORE_ENVIRONMENT: "Production"
