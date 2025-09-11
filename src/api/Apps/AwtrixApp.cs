@@ -1,4 +1,5 @@
 ﻿using AwtrixSharpWeb.Apps.Configs;
+using AwtrixSharpWeb.Apps.MqttRender;
 using AwtrixSharpWeb.Domain;
 using AwtrixSharpWeb.HostedServices;
 using AwtrixSharpWeb.Interfaces;
@@ -11,6 +12,7 @@ namespace AwtrixSharpWeb.Apps
         public AwtrixAddress AwtrixAddress { get; private set; }
 
         private IAwtrixService AwtrixService;
+
 
         public readonly TConfig Config;
 

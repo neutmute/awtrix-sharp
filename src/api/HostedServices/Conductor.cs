@@ -23,6 +23,9 @@ namespace AwtrixSharpWeb.HostedServices
         public const string MqttClockRenderApp = "MqttClockRenderApp";        
     }
 
+    /// <summary>
+    /// Orchestrates the various Awtrix apps based on configuration
+    /// </summary>
     public class Conductor : IHostedService
     {
         private readonly ILogger<Conductor> _logger;
@@ -87,7 +90,20 @@ namespace AwtrixSharpWeb.HostedServices
                     // Log the app configuration to debug configuration binding issues
                     LogAppConfigDetails(appConfig);
 
-                    var app = AppFactory(device, appConfig);            
+                    var app = AppFactory(device, appConfig);     
+                    
+                    // Hacky binding for now
+                    if (app is TripTimerApp tripTimerApp)
+                    {
+                        buttonApp.DoubleClick += (s, e) =>
+                        {
+                            if (e.Button == Button.Right)
+                            {
+                                tripTimerApp.ExecuteNow();
+                            }
+                        };
+                    }
+
                     _apps.Add(app);
                 }
 
