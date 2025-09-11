@@ -19,14 +19,14 @@ Why?
 
 ![image](./docs/gifs/awtrix-train.png)
 
+Uses [TransportNSW Trip Planner API](https://opendata.transport.nsw.gov.au/data/dataset/trip-planner-apis/resource/917c66c3-8123-4a0f-b1b1-b4220f32585d) on a schedule - or double press of the button - to start a countdown of how long you have until you have to get out of bed for each train over the next 30 minutes
+
 Configure it with 
 
-- a [Transport NSW](https://transportnsw.info/) API Key
-- a [Transport NSW](https://transportnsw.info/) departure and destination `stopId`
+- a [Transport Open Data Hub](https://opendata.transport.nsw.gov.au/) API Key
+- a `StopId`, found using [TripPlanner API](https://opendata.transport.nsw.gov.au/dataset/trip-planner-apis) for departure and destination stops
 - Your travel time to the station
 - Your preparation time (eg: get dressed, breakfast, pack bag)
-
-On a schedule - or double press of the button - start a countdown of how long you have until you have to get out of bed for each train over the next 30 minutes
 
 #### TripTimerApp AppSettings Configuration Example
 
@@ -106,7 +106,7 @@ Using the `ValueMap` section, mutate the display configuration to show red text 
 
 ### `MqttClockRenderApp`
 
-Render the time AND and MQTT value without having to swap between apps
+Render the time AND an MQTT value (eg: temperature) without having to swap between apps
 
 ![image](./docs/gifs/awtrix-mqttclockrender-dirunal.gif)
 
@@ -167,9 +167,6 @@ Put the clock on your desk, set yourself to `Busy` and let even passer's by know
 | `AWTRIXSHARP_SLACK__BOTTOKEN`  | `xoxb-`             | Slack bot token - reserved for future use           |
 | `TRANSPORTOPENDATA__APIKEY` | `your-api-key`     | NSW Transport Trip Planner API key |
 
-
-### Powershell Script
-
 ## Installation
 
 1. Create your `docker-compose.yaml`
@@ -214,6 +211,10 @@ services:
 ```
 
 ## Development
+
+A Swagger API supports testing and development
+
+### Powershell Script
 
 Configure your env vars with appropriate secrets for development
 
