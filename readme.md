@@ -17,9 +17,15 @@ Why?
 
 ### `TripTimerApp`
 
-![image](./docs/gifs/awtrix-train.png)
 
 Uses [TransportNSW Trip Planner API](https://opendata.transport.nsw.gov.au/data/dataset/trip-planner-apis/resource/917c66c3-8123-4a0f-b1b1-b4220f32585d) on a schedule - or double press of the button - to start a countdown of how long you have until you have to get out of bed for each train over the next 30 minutes
+
+- Shows the next best time to leave for the train. 
+- The clock on the left starts white
+- The red number on the right is the minutes past the hour until you need to get up or leave
+- The progress bar counts up from 5 minutes, the clock turning orange in the last minute
+
+![image](./docs/gifs/awtrix-triptimer.gif)
 
 Configure it with 
 
@@ -127,6 +133,35 @@ When you change your status in Slack, render it to the Awtrix 3.
 Put the clock on your desk, set yourself to `Busy` and let even passer's by know
 
 ![image](./docs/gifs/awtrix-slack.png)
+
+First create Slack app [api.slack.com/apps](https://api.slack.com/apps) with the following manifest and deploy it into your organisation
+
+```
+display_information:
+  name: Awtrix
+  description: Awtrix clock automations
+  background_color: "#737373"
+oauth_config:
+  scopes:
+    user:
+      - dnd:read
+      - users:read
+settings:
+  event_subscriptions:
+    user_events:
+      - dnd_updated
+      - dnd_updated_user
+      - user_change
+  interactivity:
+    is_enabled: true
+  org_deploy_enabled: false
+  socket_mode_enabled: true
+  token_rotation_enabled: false
+```
+
+Configure the environment variables in `docker-compose.yml` (see below) and configure the app in AwtrixSharp `appsettings.json` similar to below
+
+Use the `ValueMaps` to transform the slack status to include an icon or shorten the text for the Awtrix display
 
 ```
 {
