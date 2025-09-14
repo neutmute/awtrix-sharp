@@ -130,11 +130,11 @@ Render the time AND an MQTT value (eg: temperature) without having to swap betwe
 ### `SlackStatusApp`
 
 When you change your status in Slack, render it to the Awtrix 3. 
-Put the clock on your desk, set yourself to `Busy` and let even passer's by know
+Put the clock on your desk, set yourself to `Busy` and let people know you are in the zone.
 
 ![image](./docs/gifs/awtrix-slack.png)
 
-First create Slack app [api.slack.com/apps](https://api.slack.com/apps) with the following manifest and deploy it into your organisation
+First create a Slack app ([api.slack.com/apps](https://api.slack.com/apps)) with a manifest simimlar to below and deploy it into your organisation
 
 ```
 display_information:
@@ -248,6 +248,9 @@ services:
 ## Development
 
 A Swagger API supports testing and development
+
+
+![image](./docs/gifs/swagger.jpg)
 
 ### Powershell Script
 
