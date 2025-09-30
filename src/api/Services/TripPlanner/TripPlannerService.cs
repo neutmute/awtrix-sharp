@@ -1,5 +1,8 @@
-﻿using AwtrixSharpWeb.Controllers;
+﻿using AwtrixSharpWeb.Apps.Configs;
+using AwtrixSharpWeb.Controllers;
 using AwtrixSharpWeb.Interfaces;
+using Newtonsoft.Json.Linq;
+using System.Text.Json;
 using TransportOpenData.TripPlanner;
 
 namespace AwtrixSharpWeb.Services.TripPlanner
@@ -74,6 +77,13 @@ namespace AwtrixSharpWeb.Services.TripPlanner
 
         public async Task<List<TripSummary>> GetNextDepartures(string originStopId, string destinationStopId, DateTime fromWhen)
         {
+            var cachedDepatures = await TryLocalCache(originStopId, destinationStopId, fromWhen);
+            if (cachedDepatures?.Count > 0)
+            {
+                _logger.LogInformation("Using {tripCount} cached trip entries", cachedDepatures.Count);
+                return cachedDepatures;
+            }
+
             var trips = await GetTrips(originStopId, destinationStopId, fromWhen);
 
             var output = new List<TripSummary>();
@@ -98,13 +108,59 @@ namespace AwtrixSharpWeb.Services.TripPlanner
 
                 var summary = new TripSummary
                 {
-                    Origin = TimePlace.Factory(departs, origin.DisassembledName) ,
+                    Origin = TimePlace.Factory(departs, origin.DisassembledName),
                     Destination = TimePlace.Factory(arrives, destination.DisassembledName)
                 };
                 output.Add(summary);
             }
 
             return output;
+        }
+
+        private async Task<List<TripSummary>> TryLocalCache(string originStopId, string destinationStopId, DateTime fromWhen)
+        {
+            // Transport NSW data connection times aren't great, so allow override via file cache
+            // See TripPlannerController::GetDepartures to generate cache files 
+            var cacheFolder = Environment.GetEnvironmentVariable("AWTRIXSHARP_SETTINGS__DATA_DIRECTORY");
+
+            if (!string.IsNullOrEmpty(cacheFolder))
+            {
+                var cacheFilename = $"trip_{originStopId}_{destinationStopId}_{fromWhen:HH}.json";
+                var fullCachePath = Path.Combine(cacheFolder, cacheFilename);
+                if (File.Exists(fullCachePath))
+                {
+                    _logger.LogInformation("Loading trip data from {CacheFile}", fullCachePath);
+                    var cachedJson = await File.ReadAllTextAsync(fullCachePath);
+                    var cachedTrips = JsonSerializer.Deserialize<List<TripSummary>>(cachedJson);
+
+                    var now = DateTimeOffset.Now;
+                    foreach(var trip in cachedTrips)
+                    {   
+                        // Adjust times to be today
+                        trip.Origin.Time = new DateTimeOffset(
+                            now.Year,
+                            now.Month,
+                            now.Day,
+                            trip.Origin.Time.Hour,
+                            trip.Origin.Time.Minute,
+                            trip.Origin.Time.Second,
+                            now.Offset);
+
+                        trip.Destination.Time = new DateTimeOffset(
+                            now.Year,
+                            now.Month,
+                            now.Day,
+                            trip.Destination.Time.Hour,
+                            trip.Destination.Time.Minute,
+                            trip.Destination.Time.Second,
+                            now.Offset);
+                    }
+
+                    return cachedTrips;
+                }
+            }
+
+            return new List<TripSummary>();
         }
     }
 }
