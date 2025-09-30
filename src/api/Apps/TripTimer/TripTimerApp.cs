@@ -230,6 +230,7 @@ namespace AwtrixSharpWeb.Apps.TripTimer
         private void Deactivate()
         {
             Logger.LogInformation($"Schedule deactivating");
+            _ = AppClear().Result;
             _timerService.SecondChanged -= ClockTickSecond;
             _timerService.MinuteChanged -= ClockTickMinute;
         }

@@ -1,10 +1,11 @@
-using System;
-using System.Threading.Tasks;
 using AwtrixSharpWeb.Domain;
 using AwtrixSharpWeb.Services.TripPlanner;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Swashbuckle.AspNetCore.Annotations;
+using System;
+using System.Text.Json;
+using System.Threading.Tasks;
 using TransportOpenData.TripPlanner;
 
 namespace AwtrixSharpWeb.Controllers
@@ -49,6 +50,12 @@ namespace AwtrixSharpWeb.Controllers
             {
                 var fromTimestamp = DateTime.Parse(fromDateTime);
                 var result = await _tripPlannerService.GetNextDepartures(originId, destinationId, fromTimestamp);
+
+                //For populating unit tests with real data
+                //var options = new JsonSerializerOptions { WriteIndented = true };
+                //string json = JsonSerializer.Serialize(result, options);
+                //System.IO.File.WriteAllText("D:\\downloads\\departures.json", json);
+
                 return Ok(result);
             }
             catch (Exception ex)
