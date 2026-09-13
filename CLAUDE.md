@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Project Does
 
-AwtrixSharp is a .NET 9 ASP.NET Core background service that controls [Awtrix 3](https://blueforcer.github.io/awtrix3) smart clock devices. It supports multiple clocks simultaneously via MQTT or HTTP, with pluggable "apps" that push display content on a schedule.
+AwtrixSharp is a .NET 10 ASP.NET Core background service that controls [Awtrix 3](https://blueforcer.github.io/awtrix3) smart clock devices. It supports multiple clocks simultaneously via MQTT or HTTP, with pluggable "apps" that push display content on a schedule.
 
 ## Build & Test Commands
 

@@ -2,7 +2,6 @@
 using AwtrixSharpWeb.HostedServices;
 using AwtrixSharpWeb.Services.TripPlanner;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.OpenApi.Attributes;
 using Swashbuckle.AspNetCore.Annotations;
 using System.ComponentModel;
 
