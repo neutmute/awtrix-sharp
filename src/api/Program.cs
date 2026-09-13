@@ -100,11 +100,14 @@ namespace AwtrixSharpWeb
             services.AddHostedService(sp => sp.GetRequiredService<TimerService>());
         }
 
-        private static void SetupConfiguration(ConfigurationManager configuration, IServiceCollection services)
+        /// <summary>
+        /// WebApplication.CreateBuilder already loads appsettings.json, appsettings.{Env}.json, user secrets,
+        /// environment variables and the command line (in that order). Only the AWTRIXSHARP_ provider is added
+        /// here, last, so it keeps overriding everything (CR-13: appsettings.json is not re-added).
+        /// </summary>
+        internal static void SetupConfiguration(ConfigurationManager configuration, IServiceCollection services)
         {
-            configuration
-                .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
-                .AddEnvironmentVariables("AWTRIXSHARP_");
+            configuration.AddEnvironmentVariables("AWTRIXSHARP_");
 
             services.Configure<MqttSettings>(configuration.GetSection("Mqtt"));
             services.Configure<AwtrixConfig>(configuration.GetSection("Awtrix"));
