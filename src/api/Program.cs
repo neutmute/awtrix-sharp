@@ -1,6 +1,7 @@
 using AwtrixSharpWeb.Domain;
 using AwtrixSharpWeb.HostedServices;
 using AwtrixSharpWeb.Interfaces;
+using AwtrixSharpWeb.Middleware;
 using AwtrixSharpWeb.Services;
 using AwtrixSharpWeb.Services.TripPlanner;
 using Microsoft.Extensions.Options;
@@ -24,29 +25,76 @@ namespace AwtrixSharpWeb
 
             ConfigureLogging(builder);
 
-            services.AddControllers();
+            AddHttpSurface(services, configuration);
 
             AddAwtrixServices(services, configuration);
-
-            RegisterSwagger(services);
 
             var app = builder.Build();
 
             LogStartup(app);
 
-            // if (app.Environment.IsDevelopment()) always show swagger
+            ConfigureHttpPipeline(app);
+
+            app.Run();
+        }
+
+        /// <summary>
+        /// MVC, ProblemDetails, API-key options and Swagger generation. Public so tests can host the pipeline.
+        /// </summary>
+        public static void AddHttpSurface(IServiceCollection services, IConfiguration configuration)
+        {
+            services.AddControllers();
+            services.AddProblemDetails();
+            services.Configure<ApiSettings>(configuration.GetSection(ApiSettings.SectionName));
+            RegisterSwagger(services, configuration);
+        }
+
+        /// <summary>
+        /// CR-15: stack traces only in Development; ProblemDetails otherwise. Swagger is optional (default on),
+        /// and sits before the optional API-key check so its UI stays reachable.
+        /// </summary>
+        public static void ConfigureHttpPipeline(WebApplication app)
+        {
+            if (app.Environment.IsDevelopment())
             {
                 app.UseDeveloperExceptionPage();
+            }
+            else
+            {
+                app.UseExceptionHandler();
+            }
 
+            if (IsSwaggerEnabled(app.Configuration, app.Logger))
+            {
                 app.UseSwagger();
                 app.UseSwaggerUI();
             }
 
             app.UseHttpsRedirection();
 
-            app.MapControllers();
+            app.UseMiddleware<ApiKeyMiddleware>();
 
-            app.Run();
+            app.MapControllers();
+        }
+
+        /// <summary>
+        /// Swagger:Enabled (AWTRIXSHARP_SWAGGER__ENABLED). Blank or unparseable means enabled, as it always was.
+        /// </summary>
+        internal static bool IsSwaggerEnabled(IConfiguration configuration, ILogger logger)
+        {
+            var raw = configuration["Swagger:Enabled"];
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                return true;
+            }
+
+            if (bool.TryParse(raw, out var enabled))
+            {
+                return enabled;
+            }
+
+            logger.LogWarning("Swagger:Enabled value '{Value}' is not true or false; Swagger stays enabled", raw);
+            return true;
         }
 
         /// <summary>
@@ -149,7 +197,7 @@ namespace AwtrixSharpWeb
             logging.AddDebug();
         }
 
-        private static void RegisterSwagger(IServiceCollection services)
+        private static void RegisterSwagger(IServiceCollection services, IConfiguration configuration)
         {
             services.AddEndpointsApiExplorer();
             services.AddSwaggerGen(c =>
@@ -158,6 +206,28 @@ namespace AwtrixSharpWeb
 
                 // Enable annotations for Swagger
                 c.EnableAnnotations();
+
+                // Let "Try it out" send the optional API key
+                if (!string.IsNullOrWhiteSpace(configuration[ApiSettings.KeyConfigurationKey]))
+                {
+                    c.AddSecurityDefinition("ApiKey", new OpenApiSecurityScheme
+                    {
+                        Type = SecuritySchemeType.ApiKey,
+                        In = ParameterLocation.Header,
+                        Name = ApiKeyMiddleware.HeaderName,
+                        Description = "API key configured in Api:Key",
+                    });
+                    c.AddSecurityRequirement(new OpenApiSecurityRequirement
+                    {
+                        {
+                            new OpenApiSecurityScheme
+                            {
+                                Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "ApiKey" },
+                            },
+                            Array.Empty<string>()
+                        },
+                    });
+                }
             });
         }
 
