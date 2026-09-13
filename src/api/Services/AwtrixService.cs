@@ -38,13 +38,13 @@ namespace AwtrixSharpWeb.Services
         public Task<bool> AppUpdate(AwtrixAddress awtrixAddress, string appName, AwtrixAppMessage message)
         {
             var baseTopic = awtrixAddress.BaseTopic;
-            return SafePublish(baseTopic, p => p.Publish(baseTopic + $"/custom/{appName}", message));
+            return SafePublish(baseTopic, p => p.Publish(p.BuildCustomAppUrl(baseTopic, appName), message));
         }
 
         public Task<bool> AppClear(AwtrixAddress awtrixAddress, string appName)
         {
             var baseTopic = awtrixAddress.BaseTopic;
-            return SafePublish(baseTopic, p => p.Publish(baseTopic + $"/custom/{appName}", (AwtrixAppMessage?)null));
+            return SafePublish(baseTopic, p => p.Publish(p.BuildCustomAppUrl(baseTopic, appName), (AwtrixAppMessage?)null));
         }
 
         public Task<bool> Notify(AwtrixAddress awtrixAddress, AwtrixAppMessage message)
@@ -117,16 +117,9 @@ namespace AwtrixSharpWeb.Services
             }
         }
 
-        private AwtrixPublisher ResolvePublisher(string topic)
+        private AwtrixPublisher ResolvePublisher(string baseTopic)
         {
-            if (topic.StartsWith("http://") || topic.StartsWith("https://"))
-            {
-                return _httpPublisher;
-            }
-            else
-            {
-                return _mqttPublisher;
-            }
+            return AwtrixAddress.IsHttpTopic(baseTopic) ? _httpPublisher : _mqttPublisher;
         }
     }
 }

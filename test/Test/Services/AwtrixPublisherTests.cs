@@ -82,5 +82,13 @@ namespace Test.Services
 
             Assert.False(result);
         }
+
+        [Fact]
+        public void BuildCustomAppUrl_Default_UsesMqttTopicForm()
+        {
+            var publisher = new RecordingPublisher();
+
+            Assert.Equal("awtrix/clock1/custom/MyApp", publisher.BuildCustomAppUrl("awtrix/clock1", "MyApp"));
+        }
     }
 }

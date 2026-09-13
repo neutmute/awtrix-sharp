@@ -37,5 +37,18 @@ namespace Test.Domain
             Assert.NotNull(device.Apps);
             Assert.Empty(device.Apps);
         }
+
+        [Theory]
+        [InlineData("http://192.168.1.50/api", true)]
+        [InlineData("https://192.168.1.50/api", true)]
+        [InlineData("HTTP://192.168.1.50/api", true)]
+        [InlineData("awtrix/clock1", false)]
+        [InlineData("", false)]
+        [InlineData(null, false)]
+        public void IsHttpTopic_DetectsHttpSchemesCaseInsensitively(string? topic, bool expected)
+        {
+            Assert.Equal(expected, AwtrixAddress.IsHttpTopic(topic));
+            Assert.Equal(expected, new AwtrixAddress { BaseTopic = topic! }.IsHttp);
+        }
     }
 }

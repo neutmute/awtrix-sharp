@@ -88,6 +88,17 @@ namespace Test.Services
             Assert.True(content.Disposed);
         }
 
+        [Theory]
+        [InlineData("http://192.168.1.50/api", "TripTimerApp", "http://192.168.1.50/api/custom?name=TripTimerApp")]
+        [InlineData("http://192.168.1.50/api/", "TripTimerApp", "http://192.168.1.50/api/custom?name=TripTimerApp")]
+        [InlineData("http://192.168.1.50/api", "My App", "http://192.168.1.50/api/custom?name=My%20App")]
+        public void BuildCustomAppUrl_UsesAwtrixHttpApiQueryForm(string baseTopic, string appName, string expected)
+        {
+            var publisher = CreatePublisher(StubHttpMessageHandler.Returning(HttpStatusCode.OK), out _);
+
+            Assert.Equal(expected, publisher.BuildCustomAppUrl(baseTopic, appName));
+        }
+
         [Fact]
         public void DefaultTimeout_IsFiveSeconds()
         {

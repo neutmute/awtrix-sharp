@@ -191,5 +191,54 @@ namespace Test.Services
             Assert.False(update);
             Assert.False(set);
         }
+
+        [Fact]
+        public async Task HttpBaseTopic_AppUpdate_UsesCustomQueryNameUrl()
+        {
+            var (service, http, mqtt) = CreateService();
+            var address = new AwtrixAddress { BaseTopic = "http://192.168.1.50/api" };
+
+            var result = await service.AppUpdate(address, "TripTimerApp", new AwtrixAppMessage().SetText("42"));
+
+            Assert.True(result);
+            Assert.Equal("http://192.168.1.50/api/custom?name=TripTimerApp", http.LastUrl);
+            Assert.Contains("42", http.LastPayload);
+            Assert.Equal(0, mqtt.PublishCallCount);
+        }
+
+        [Fact]
+        public async Task HttpBaseTopicWithTrailingSlash_AppClear_UsesCustomQueryNameUrlWithEmptyPayload()
+        {
+            var (service, http, _) = CreateService();
+            var address = new AwtrixAddress { BaseTopic = "http://192.168.1.50/api/" };
+
+            await service.AppClear(address, "TripTimerApp");
+
+            Assert.Equal("http://192.168.1.50/api/custom?name=TripTimerApp", http.LastUrl);
+            Assert.Equal(string.Empty, http.LastPayload);
+        }
+
+        [Fact]
+        public async Task HttpBaseTopic_Settings_PathUnchanged()
+        {
+            var (service, http, _) = CreateService();
+            var address = new AwtrixAddress { BaseTopic = "http://192.168.1.50/api" };
+
+            await service.Set(address, new AwtrixSettings().SetBrightness(8));
+
+            Assert.Equal("http://192.168.1.50/api/settings", http.LastUrl);
+        }
+
+        [Fact]
+        public async Task UppercaseHttpScheme_RoutesToHttpPublisher()
+        {
+            var (service, http, mqtt) = CreateService();
+            var address = new AwtrixAddress { BaseTopic = "HTTP://192.168.1.50/api" };
+
+            await service.Dismiss(address);
+
+            Assert.Equal(1, http.PublishCallCount);
+            Assert.Equal(0, mqtt.PublishCallCount);
+        }
     }
 }
