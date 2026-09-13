@@ -86,7 +86,7 @@ namespace Test.Apps
             awtrix.Setup(a => a.AppClear(It.IsAny<AwtrixAddress>(), It.IsAny<string>()))
                 .Returns(() => clearIsSlow ? slowClear.Task : Task.FromResult(true));
             var planner = new Mock<ITripPlannerService>();
-            planner.Setup(p => p.GetNextDepartures(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<DateTime>()))
+            planner.Setup(p => p.GetNextDepartures(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(new List<TripSummary>());
             var config = new TripTimerAppConfig
             {

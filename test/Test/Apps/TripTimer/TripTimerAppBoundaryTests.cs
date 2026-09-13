@@ -42,7 +42,7 @@ namespace Test.Apps.TripTimer
             _mockTripPlannerService = new Mock<ITripPlannerService>();
 
             _mockTripPlannerService
-                .Setup(x => x.GetNextDepartures(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<DateTime>()))
+                .Setup(x => x.GetNextDepartures(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(new List<TripSummary> { TripSummaryTests.Create(departureTime) });
 
             _timerConfig = new TripTimerAppConfig

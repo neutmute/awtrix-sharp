@@ -2,6 +2,7 @@ using AwtrixSharpWeb.Domain;
 using AwtrixSharpWeb.HostedServices;
 using AwtrixSharpWeb.Interfaces;
 using AwtrixSharpWeb.Services;
+using AwtrixSharpWeb.Services.TripPlanner;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -58,6 +59,20 @@ namespace Test
             var client = provider.GetRequiredService<IHttpClientFactory>().CreateClient(HttpPublisher.HttpClientName);
 
             Assert.Equal(TimeSpan.FromSeconds(5), client.Timeout);
+        }
+
+        [Fact]
+        public void TripPlanner_IsASingleton_OverANamedClientWithTimeoutAndApiKeyHeader()
+        {
+            // CR-29: no transient service holding typed clients captured by the singleton Conductor
+            using var provider = BuildProvider();
+
+            Assert.Same(provider.GetRequiredService<TripPlannerService>(), provider.GetRequiredService<ITripPlannerService>());
+            Assert.Same(provider.GetRequiredService<ITripPlannerService>(), provider.GetRequiredService<ITripPlannerService>());
+
+            var client = provider.GetRequiredService<IHttpClientFactory>().CreateClient(TripPlannerService.HttpClientName);
+            Assert.Equal(TimeSpan.FromSeconds(15), client.Timeout);
+            Assert.StartsWith("apikey", Assert.Single(client.DefaultRequestHeaders.GetValues("Authorization")));
         }
 
         [Fact]

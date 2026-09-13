@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using Swashbuckle.AspNetCore.Annotations;
 using System;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using TransportOpenData.TripPlanner;
 
@@ -28,11 +29,11 @@ namespace AwtrixSharpWeb.Controllers
 
         [HttpGet("stops")]
         [SwaggerOperation(Summary = "Find stops matching a query")]
-        public async Task<IActionResult> FindStops([FromQuery] string query)
+        public async Task<IActionResult> FindStops([FromQuery] string query, CancellationToken cancellationToken = default)
         {
             try
             {
-                var result = await _tripPlannerService.FindStops(query);
+                var result = await _tripPlannerService.FindStops(query, cancellationToken);
                 return Ok(result);
             }
             catch (Exception ex)
@@ -44,12 +45,17 @@ namespace AwtrixSharpWeb.Controllers
 
         [HttpGet("departures")]
         [SwaggerOperation(Summary = "Get upcoming departures between stops")]
-        public async Task<IActionResult> GetDepartures([FromQuery] string originId, [FromQuery] string destinationId, [FromQuery] string fromDateTime)
+        public async Task<IActionResult> GetDepartures([FromQuery] string originId, [FromQuery] string destinationId, [FromQuery] string fromDateTime, CancellationToken cancellationToken = default)
         {
             try
             {
-                var fromTimestamp = DateTime.Parse(fromDateTime);
-                var result = await _tripPlannerService.GetNextDepartures(originId, destinationId, fromTimestamp);
+                // An offset-less value is Sydney wall clock, whatever the host TZ (CR-26)
+                if (!TransportTime.TryParseQuery(fromDateTime, out var fromTimestamp))
+                {
+                    throw new FormatException($"'{fromDateTime}' is not a recognised date/time"); // 500 as before; WS7 makes this a 400
+                }
+
+                var result = await _tripPlannerService.GetNextDepartures(originId, destinationId, fromTimestamp, cancellationToken);
 
                 //For populating unit tests with real data
                 //var options = new JsonSerializerOptions { WriteIndented = true };
@@ -71,12 +77,16 @@ namespace AwtrixSharpWeb.Controllers
         /// </summary>
         [HttpGet("trip")]
         [SwaggerOperation(Summary = "Get detailed trip information")]
-        public async Task<IActionResult> GetTrip([FromQuery] string originId, [FromQuery] string destinationId, [FromQuery] string fromDateTime)
+        public async Task<IActionResult> GetTrip([FromQuery] string originId, [FromQuery] string destinationId, [FromQuery] string fromDateTime, CancellationToken cancellationToken = default)
         {
             try
             {
-                var fromTimestamp = DateTime.Parse(fromDateTime);
-                var result = await _tripPlannerService.GetTrips(originId, destinationId, fromTimestamp);
+                if (!TransportTime.TryParseQuery(fromDateTime, out var fromTimestamp))
+                {
+                    throw new FormatException($"'{fromDateTime}' is not a recognised date/time"); // 500 as before; WS7 makes this a 400
+                }
+
+                var result = await _tripPlannerService.GetTrips(originId, destinationId, fromTimestamp, cancellationToken);
 
                 return Ok(result);
             }

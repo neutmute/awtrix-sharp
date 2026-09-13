@@ -12,7 +12,7 @@ namespace TransportOpenData.Tests.Config
             var sut = new TransportOpenDataConfig();
 
             // Assert
-            Assert.Equal("https://api.transport.nsw.gov.au/v1", sut.BaseUrl);
+            Assert.Equal("https://api.transport.nsw.gov.au/v1/tp", sut.BaseUrl);
         }
 
         [Fact]

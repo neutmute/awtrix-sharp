@@ -195,7 +195,7 @@ namespace Test.HostedServices
             var mqtt = new Mock<IMqttConnector>();
             var tripPlanner = new Mock<ITripPlannerService>();
             tripPlanner
-                .Setup(t => t.GetNextDepartures(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<DateTime>()))
+                .Setup(t => t.GetNextDepartures(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(new List<TripSummary>());
             var conductor = ConductorTestHelper.Create(
                 new AwtrixConfig { Devices = new[] { clock1, clock2 } },

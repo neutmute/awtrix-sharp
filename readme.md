@@ -245,6 +245,12 @@ services:
       TRANSPORTOPENDATA__APIKEY: "your-api-key-here"    # Optional, only required for TripTimerApp
 ```
 
+### Time zones
+
+- **Trip planner queries always use Sydney time.** Transport NSW reads and returns Sydney wall-clock times, so AwtrixSharp converts to `Australia/Sydney` itself. Containers without `TZ` (UTC) get the right trains.
+- **`CronSchedule` and `DiurnalApp` times use the host's local time zone.** Set `TZ` on the container, as in the compose example above. Otherwise a `CronSchedule` of `10 6 * * 1-5` fires at 06:10 UTC.
+- `GET api/TripPlanner/departures` and `api/TripPlanner/trip` read a `fromDateTime` without an offset (e.g. `2025-09-01T06:00`) as Sydney time. Add an offset or `Z` to pass an exact instant.
+
 ## Development
 
 A Swagger API supports testing and development

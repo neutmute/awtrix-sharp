@@ -93,9 +93,9 @@ namespace AwtrixSharpWeb.Apps.TripTimer
             // Find the earliest we could get to the train station and query from then
             var earliestDeparture = Clock.Now.Add(Config.TimeToOrigin).Add(Config.TimeToPrepare);
 
+            // The service converts the instant to Sydney time (CR-26) and honours the token (CR-29)
             var departures = await _tripPlanner
-                .GetNextDepartures(Config.StopIdOrigin, Config.StopIdDestination, earliestDeparture.LocalDateTime)
-                .WaitAsync(activation.Token);
+                .GetNextDepartures(Config.StopIdOrigin, Config.StopIdDestination, earliestDeparture, activation.Token);
 
             SetDepartures(departures);
 

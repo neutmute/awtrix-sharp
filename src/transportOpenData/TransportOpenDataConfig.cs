@@ -7,7 +7,7 @@ namespace TransportOpenData
         /// <summary>
         /// The base URL for the NSW Transport Trip Planner API
         /// </summary>
-        public string BaseUrl { get; set; } = "https://api.transport.nsw.gov.au/v1";
+        public string BaseUrl { get; set; } = "https://api.transport.nsw.gov.au/v1/tp";
 
         /// <summary>
         /// The authorization key used to access the API

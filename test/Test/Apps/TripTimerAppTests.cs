@@ -38,7 +38,7 @@ namespace Test.Apps
 
             var baseTime = DateTimeOffset.Parse("2025-08-19T06:00:00+10:00");
 
-            _mockTripPlannerService.Setup(x => x.GetNextDepartures(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<DateTime>()))
+            _mockTripPlannerService.Setup(x => x.GetNextDepartures(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(new List<TripSummary>
                 {
                     TripSummaryTests.Create(baseTime)

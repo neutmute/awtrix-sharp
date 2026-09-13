@@ -1,57 +1,75 @@
-﻿using AwtrixSharpWeb.Apps.Configs;
-using AwtrixSharpWeb.Controllers;
-using AwtrixSharpWeb.Interfaces;
-using Newtonsoft.Json.Linq;
+using System.Globalization;
 using System.Text.Json;
+using AwtrixSharpWeb.Interfaces;
+using Microsoft.Extensions.Options;
+using TransportOpenData;
 using TransportOpenData.TripPlanner;
 
 namespace AwtrixSharpWeb.Services.TripPlanner
 {
-
+    /// <summary>
+    /// Transport NSW Trip Planner access. A singleton: every call builds a short-lived NSwag client over the named
+    /// IHttpClientFactory client, so pooled handlers rotate (DNS changes are picked up), requests time out after
+    /// <see cref="HttpTimeout"/>, and callers can cancel (CR-29). BaseUrl comes from TransportOpenDataConfig (CR-36).
+    /// Times on the wire are Sydney wall clock (CR-26).
+    /// </summary>
     public class TripPlannerService : ITripPlannerService
     {
-        private readonly StopfinderClient _stopFinderClient;
-        private readonly TripClient _tripClient;
+        public const string HttpClientName = "TransportOpenData";
+        public static readonly TimeSpan HttpTimeout = TimeSpan.FromSeconds(15);
+        internal const int TripsPerQuery = 5;
+
+        private readonly IHttpClientFactory _httpClientFactory;
+        private readonly IOptions<TransportOpenDataConfig> _config;
         private readonly ILogger<TripPlannerService> _logger;
 
         public TripPlannerService(
-            StopfinderClient stopFinderClient,
-            TripClient tripClient,
+            IHttpClientFactory httpClientFactory,
+            IOptions<TransportOpenDataConfig> config,
             ILogger<TripPlannerService> logger)
         {
-            _stopFinderClient = stopFinderClient;
-            _tripClient = tripClient;
+            _httpClientFactory = httpClientFactory;
+            _config = config;
             _logger = logger;
         }
 
-        public async Task<StopFinderResponse> FindStops(string query)
+        public async Task<StopFinderResponse> FindStops(string query, CancellationToken cancellationToken = default)
         {
-            return await _stopFinderClient.RequestAsync(
-                            OutputFormat4.RapidJSON
-                            , Type_sf.Any
-                            , query
-                            , CoordOutputFormat3.EPSG4326
-                            , null
-                            , null);
+            using var httpClient = _httpClientFactory.CreateClient(HttpClientName);
+            var client = new StopfinderClient(httpClient);
+            ApplyBaseUrl(url => client.BaseUrl = url);
+
+            return await client.RequestAsync(
+                OutputFormat4.RapidJSON,
+                Type_sf.Any,
+                query,
+                CoordOutputFormat3.EPSG4326,
+                null,
+                null,
+                cancellationToken);
         }
 
-        public async Task<TripRequestResponse> GetTrips(string originStopId, string destinationStopId, DateTime fromWhen)
+        public async Task<TripRequestResponse> GetTrips(string originStopId, string destinationStopId, DateTimeOffset fromWhen, CancellationToken cancellationToken = default)
         {
-            _logger.LogInformation("Getting trip from {Origin} to {Destination} from {Time:HH:mm}", originStopId, destinationStopId, fromWhen);
+            var (itdDate, itdTime) = TransportTime.ToQuery(fromWhen);
+            _logger.LogInformation("Getting trips from {Origin} to {Destination} departing after {ItdDate} {ItdTime} ({TimeZone})",
+                originStopId, destinationStopId, itdDate, itdTime, TransportTime.TimeZoneId);
 
-            // Use the TripClient to get trip information
-            // Setting up default parameters based on the API requirements
-            var result = await _tripClient.Request2Async(
+            using var httpClient = _httpClientFactory.CreateClient(HttpClientName);
+            var client = new TripClient(httpClient);
+            ApplyBaseUrl(url => client.BaseUrl = url);
+
+            return await client.Request2Async(
                 outputFormat: OutputFormat5.RapidJSON,
                 coordOutputFormat: CoordOutputFormat4.EPSG4326,
                 depArrMacro: DepArrMacro.Dep, // Departing after the specified time
-                itdDate: fromWhen.ToString("yyyyMMdd"), // Today's date
-                itdTime: fromWhen.ToString("HHmm"), // Current time
+                itdDate: itdDate,
+                itdTime: itdTime,
                 type_origin: Type_origin.Any,
                 name_origin: originStopId,
                 type_destination: Type_destination.Any,
                 name_destination: destinationStopId,
-                calcNumberOfTrips: 5,
+                calcNumberOfTrips: TripsPerQuery,
                 wheelchair: null,
                 excludedMeans: null,
                 exclMOT_1: null,
@@ -70,57 +88,60 @@ namespace AwtrixSharpWeb.Services.TripPlanner
                 maxTimeBicycle: null,
                 onlyITBicycle: null,
                 useElevationData: null,
-                elevFac: null);
-
-            return result;
+                elevFac: null,
+                cancellationToken: cancellationToken);
         }
 
-        public async Task<List<TripSummary>> GetNextDepartures(string originStopId, string destinationStopId, DateTime fromWhen)
+        public async Task<List<TripSummary>> GetNextDepartures(string originStopId, string destinationStopId, DateTimeOffset fromWhen, CancellationToken cancellationToken = default)
         {
-            var cachedDepatures = await TryLocalCache(originStopId, destinationStopId, fromWhen);
-            if (cachedDepatures?.Count > 0)
+            var cachedDepartures = await TryLocalCache(originStopId, destinationStopId, TransportTime.ToTransportZone(fromWhen));
+            if (cachedDepartures.Count > 0)
             {
-                _logger.LogInformation("Using {tripCount} cached trip entries", cachedDepatures.Count);
-                return cachedDepatures;
+                _logger.LogInformation("Using {TripCount} cached trip entries", cachedDepartures.Count);
+                return cachedDepartures;
             }
 
-            var trips = await GetTrips(originStopId, destinationStopId, fromWhen);
+            var trips = await GetTrips(originStopId, destinationStopId, fromWhen, cancellationToken);
+            return MapDepartures(trips);
+        }
 
+        private void ApplyBaseUrl(Action<string> apply)
+        {
+            // CR-36: honour TransportOpenData:BaseUrl; blank keeps the generated default
+            var baseUrl = _config.Value.BaseUrl;
+            if (!string.IsNullOrWhiteSpace(baseUrl))
+            {
+                apply(baseUrl);
+            }
+        }
+
+        // Replaced by DepartureMapper in Task 3
+        private static List<TripSummary> MapDepartures(TripRequestResponse trips)
+        {
             var output = new List<TripSummary>();
-
-
-            DateTimeOffset ParseTime(string s)
-            {
-                var datetime = DateTimeOffset.Parse(s);
-                return TimeZoneInfo.ConvertTime(datetime, TimeZoneInfo.Local);
-            }
 
             foreach (var journey in trips.Journeys)
             {
-                var firstLeg = journey.Legs.First();
-                var lastLeg = journey.Legs.Last();
+                var origin = journey.Legs.First().Origin;
+                var destination = journey.Legs.Last().Destination;
 
-                var origin = firstLeg.Origin;
-                var destination = lastLeg.Destination;
-
-                var departs = ParseTime(origin.DepartureTimeEstimated);
-                var arrives = ParseTime(destination.ArrivalTimeEstimated);
-
-                var summary = new TripSummary
+                output.Add(new TripSummary
                 {
-                    Origin = TimePlace.Factory(departs, origin.DisassembledName),
-                    Destination = TimePlace.Factory(arrives, destination.DisassembledName)
-                };
-                output.Add(summary);
+                    Origin = TimePlace.Factory(ParseApiTime(origin.DepartureTimeEstimated), origin.DisassembledName),
+                    Destination = TimePlace.Factory(ParseApiTime(destination.ArrivalTimeEstimated), destination.DisassembledName)
+                });
             }
 
             return output;
         }
 
-        private async Task<List<TripSummary>> TryLocalCache(string originStopId, string destinationStopId, DateTime fromWhen)
+        private static DateTimeOffset ParseApiTime(string value) =>
+            TransportTime.ToTransportZone(DateTimeOffset.Parse(value, CultureInfo.InvariantCulture));
+
+        // Replaced by TripFileCache in Task 4
+        private async Task<List<TripSummary>> TryLocalCache(string originStopId, string destinationStopId, DateTimeOffset fromWhen)
         {
             // Transport NSW data connection times aren't great, so allow override via file cache
-            // See TripPlannerController::GetDepartures to generate cache files 
             var cacheFolder = Environment.GetEnvironmentVariable("AWTRIXSHARP_SETTINGS__DATA_DIRECTORY");
 
             if (!string.IsNullOrEmpty(cacheFolder))
@@ -131,29 +152,16 @@ namespace AwtrixSharpWeb.Services.TripPlanner
                 {
                     _logger.LogInformation("Loading trip data from {CacheFile}", fullCachePath);
                     var cachedJson = await File.ReadAllTextAsync(fullCachePath);
-                    var cachedTrips = JsonSerializer.Deserialize<List<TripSummary>>(cachedJson);
+                    var cachedTrips = JsonSerializer.Deserialize<List<TripSummary>>(cachedJson)!;
 
                     var now = DateTimeOffset.Now;
-                    foreach(var trip in cachedTrips)
-                    {   
+                    foreach (var trip in cachedTrips)
+                    {
                         // Adjust times to be today
-                        trip.Origin.Time = new DateTimeOffset(
-                            now.Year,
-                            now.Month,
-                            now.Day,
-                            trip.Origin.Time.Hour,
-                            trip.Origin.Time.Minute,
-                            trip.Origin.Time.Second,
-                            now.Offset);
-
-                        trip.Destination.Time = new DateTimeOffset(
-                            now.Year,
-                            now.Month,
-                            now.Day,
-                            trip.Destination.Time.Hour,
-                            trip.Destination.Time.Minute,
-                            trip.Destination.Time.Second,
-                            now.Offset);
+                        trip.Origin.Time = new DateTimeOffset(now.Year, now.Month, now.Day,
+                            trip.Origin.Time.Hour, trip.Origin.Time.Minute, trip.Origin.Time.Second, now.Offset);
+                        trip.Destination.Time = new DateTimeOffset(now.Year, now.Month, now.Day,
+                            trip.Destination.Time.Hour, trip.Destination.Time.Minute, trip.Destination.Time.Second, now.Offset);
                     }
 
                     return cachedTrips;

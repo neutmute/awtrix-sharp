@@ -65,25 +65,16 @@ namespace AwtrixSharpWeb
             services.AddSingleton(TimeProvider.System);
             services.AddSingleton<IClock, Clock>();
 
-            // Trip planner
-            services.AddTransient<TripPlannerService>();
-            services.AddTransient<ITripPlannerService>(sp => sp.GetRequiredService<TripPlannerService>());
-
-            services.AddHttpClient<StopfinderClient>((serviceProvider, client) =>
+            // Trip planner: a singleton that builds NSwag clients per call over this named client (CR-29)
+            services.AddHttpClient(TripPlannerService.HttpClientName, (serviceProvider, client) =>
             {
                 var config = serviceProvider.GetRequiredService<IOptions<TransportOpenDataConfig>>();
 
-                // Set the authorization header
+                client.Timeout = TripPlannerService.HttpTimeout;
                 client.DefaultRequestHeaders.Add("Authorization", $"apikey {config.Value.ApiKey}");
             });
-
-            services.AddHttpClient<TripClient>((serviceProvider, client) =>
-            {
-                var config = serviceProvider.GetRequiredService<IOptions<TransportOpenDataConfig>>();
-
-                // Set the authorization header
-                client.DefaultRequestHeaders.Add("Authorization", $"apikey {config.Value.ApiKey}");
-            });
+            services.AddSingleton<TripPlannerService>();
+            services.AddSingleton<ITripPlannerService>(sp => sp.GetRequiredService<TripPlannerService>());
 
             // Connectors
             services.AddSingleton<MqttConnector>();
