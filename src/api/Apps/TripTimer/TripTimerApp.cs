@@ -70,7 +70,7 @@ namespace AwtrixSharpWeb.Apps.TripTimer
 
         private void ClockTickSecond(object? sender, ClockTickEventArgs e)
         {
-            // BuildMessage runs inside FireAndLog so its _cts.Cancel() cannot escape onto the timer loop
+            // BuildMessage runs inside FireAndLog so nothing can escape onto the timer loop
             _ = FireAndLog(async () =>
             {
                 var message = BuildMessage(e);
@@ -89,7 +89,7 @@ namespace AwtrixSharpWeb.Apps.TripTimer
             if (alarmTimes.Count == 0)
             {
                 Logger.LogWarning("No future departures");
-                _cts.Cancel();
+                CurrentActivation?.Complete(); // interim; Task 4 returns null instead
                 return new AwtrixAppMessage();
             }
             else
@@ -184,9 +184,9 @@ namespace AwtrixSharpWeb.Apps.TripTimer
             return new AlarmStages { OriginDepartTime = originDepartTime.Origin.Time, DepartForOriginTime = departForOriginTime, PrepareForDepartTime = prepareForDepartTime };
         }
 
-        protected override async Task ActivateScheduledWork(CancellationTokenSource cts)
+        protected override async Task OnActivateAsync(ScheduledActivation activation)
         {
-            Logger.LogInformation($"Schedule has activated");
+            Logger.LogInformation("Trip timer activated ({Trigger})", activation.Trigger);
 
             var message = new AwtrixAppMessage()
                 .SetText($"Starting trip timer")
@@ -197,18 +197,18 @@ namespace AwtrixSharpWeb.Apps.TripTimer
             // Find the earliest we could get to the train station and query from then
             var earliestDeparture = Clock.Now.Add(Config.TimeToOrigin).Add(Config.TimeToPrepare);
 
-            var newDepartures = await _tripPlanner.GetNextDepartures(Config.StopIdOrigin, Config.StopIdDestination, earliestDeparture.LocalDateTime);
+            var newDepartures = await _tripPlanner
+                .GetNextDepartures(Config.StopIdOrigin, Config.StopIdDestination, earliestDeparture.LocalDateTime)
+                .WaitAsync(activation.Token);
             NextDepartures.Clear();
 
-            foreach(var departure in newDepartures)
+            foreach (var departure in newDepartures)
             {
                 Logger.LogInformation("Raw Departure: {departure}", departure);
             }
 
             // Round to the minute otherwise we get to alarm time and it isn't aligned to minute boundaries
             NextDepartures.AddRange(newDepartures.Select(d => d.AsRounded()));
-            
-            var departuresCsv = string.Join(Environment.NewLine, NextDepartures.Select(d => GetAlarmTime(d).ToString()));
 
             Logger.LogInformation($"{NextDepartures.Count} future departures computed:");
             Logger.LogInformation($"Prep -> Leave -> Departure");
@@ -216,27 +216,14 @@ namespace AwtrixSharpWeb.Apps.TripTimer
 
             _timerService.SecondChanged += ClockTickSecond;
             _timerService.MinuteChanged += ClockTickMinute;
-
-            try
-            {
-                await WaitForCancellation(cts.Token);
-            }
-            catch (Exception ex)
-            {
-                Logger.LogError($"Error in ActivateScheduledWork: {ex.Message}");
-            }
-            finally
-            {
-                await DeactivateAsync();
-            }
         }
 
-        private async Task DeactivateAsync()
+        protected override Task OnDeactivateAsync(ScheduledActivation activation)
         {
             Logger.LogInformation($"Schedule deactivating");
             _timerService.SecondChanged -= ClockTickSecond;
             _timerService.MinuteChanged -= ClockTickMinute;
-            await AppClear();
+            return Task.CompletedTask;
         }
     }
 }

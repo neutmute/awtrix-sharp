@@ -63,12 +63,6 @@ namespace Test.Apps.TripTimer
                 _timerConfig,
                 _mockTripPlannerService.Object);
 
-            // BuildMessage cancels `_cts` when there are no future departures; ActivateScheduledWork
-            // (which normally creates it) is never invoked in these unit tests, so it must be seeded
-            // via reflection to avoid a NullReferenceException on that code path.
-            var ctsField = typeof(TripTimerApp).GetField("_cts", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.FlattenHierarchy);
-            ctsField.SetValue(sut, new System.Threading.CancellationTokenSource());
-
             // TimeToOrigin/TimeToPrepare are zero above, so the alarm time equals the departure time.
             sut.NextDepartures.Clear();
             sut.NextDepartures.Add(TripSummaryTests.Create(departureTime));

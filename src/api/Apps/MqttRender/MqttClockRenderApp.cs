@@ -1,4 +1,4 @@
-﻿using AwtrixSharpWeb.Domain;
+using AwtrixSharpWeb.Domain;
 using AwtrixSharpWeb.HostedServices;
 using AwtrixSharpWeb.Interfaces;
 using AwtrixSharpWeb.Services;
@@ -28,11 +28,11 @@ namespace AwtrixSharpWeb.Apps.MqttRender
             _timerService = timerService;
         }
 
-        protected override async Task ActivateScheduledWork(CancellationTokenSource cts)
+        protected override async Task OnActivateAsync(ScheduledActivation activation)
         {
             _timerService.SecondChanged += ClockTick;
 
-            await base.ActivateScheduledWork(cts);
+            await base.OnActivateAsync(activation);
         }
 
         private void ClockTick(object? sender, ClockTickEventArgs e)

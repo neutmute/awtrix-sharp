@@ -1,11 +1,9 @@
-﻿using AwtrixSharpWeb.Domain;
+using AwtrixSharpWeb.Domain;
 using AwtrixSharpWeb.HostedServices;
 using AwtrixSharpWeb.Interfaces;
 using AwtrixSharpWeb.Services;
 using MQTTnet;
-using System.Diagnostics.Contracts;
 using System.Text;
-using TransportOpenData.TripPlanner;
 
 namespace AwtrixSharpWeb.Apps.MqttRender
 {
@@ -28,31 +26,17 @@ namespace AwtrixSharpWeb.Apps.MqttRender
             _mqttConnector = mqttConnector;
         }
 
-
-        protected override async Task ActivateScheduledWork(CancellationTokenSource cts)
+        protected override async Task OnActivateAsync(ScheduledActivation activation)
         {
             // Attach first: a retained message can arrive before Subscribe returns (CR-33)
             _mqttConnector.MessageReceived += RawMessageReceived;
             await _mqttConnector.Subscribe(Config.ReadTopic);
-
-            try
-            {
-                await WaitForCancellation(cts.Token);
-            }
-            catch (Exception ex)
-            {
-                Logger.LogError($"Error in ActivateScheduledWork: {ex.Message}");
-            }
-            finally
-            {
-                await Deactivate();
-            }
         }
 
-        private async Task Deactivate()
+        protected override Task OnDeactivateAsync(ScheduledActivation activation)
         {
             _mqttConnector.MessageReceived -= RawMessageReceived;
-            await AppClear();
+            return Task.CompletedTask;
         }
 
         /// <summary>

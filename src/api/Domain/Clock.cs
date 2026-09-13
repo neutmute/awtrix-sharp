@@ -12,5 +12,7 @@ namespace AwtrixSharpWeb.Domain
         }
 
         public DateTimeOffset Now => _timeProvider.GetLocalNow();
+
+        public TimeProvider TimeProvider => _timeProvider;
     }
 }

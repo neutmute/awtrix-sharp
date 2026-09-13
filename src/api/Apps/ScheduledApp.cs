@@ -3,199 +3,368 @@ using AwtrixSharpWeb.Domain;
 using AwtrixSharpWeb.Interfaces;
 using AwtrixSharpWeb.Services;
 using NCrontab;
-using static System.Net.Mime.MediaTypeNames;
 
 namespace AwtrixSharpWeb.Apps
 {
+    /// <summary>
+    /// Base for apps that take over the clock for Config.ActiveTime, on a cron schedule or on demand (ExecuteNow).
+    /// <para>
+    /// State, all mutated under <see cref="_gate"/>: at most one pending cron wait and at most one current
+    /// activation; nothing is armed while an activation is current; nothing re-arms or activates after disposal.
+    /// Activations are serialised: a superseded activation's teardown (OnDeactivateAsync + AppClear) completes
+    /// before the next activation's OnActivateAsync runs.
+    /// </para>
+    /// </summary>
     public abstract class ScheduledApp<TConfig> : AwtrixApp<TConfig> where TConfig : ScheduledAppConfig
     {
-        /// <summary>
-        /// The current activation's (or pending cron wait's) CTS. Replaced only under <see cref="_ctsLock"/>;
-        /// each activation captures its own instance rather than re-reading this field.
-        /// </summary>
-        protected CancellationTokenSource _cts;
-        private readonly object _ctsLock = new();
+        /// <summary>Longest single timer used while waiting for a cron occurrence (Task.Delay rejects > ~49.7 days).</summary>
+        internal static readonly TimeSpan MaxDelayChunk = TimeSpan.FromDays(1);
+
+        /// <summary>Back-off before retrying after a failure while waiting for the schedule.</summary>
+        internal static readonly TimeSpan WaitRetryDelay = TimeSpan.FromMinutes(1);
+
+        /// <summary>Budget for OnDeactivateAsync, and for disposal waiting on the last run's teardown.</summary>
+        internal static readonly TimeSpan DeactivationTimeout = TimeSpan.FromSeconds(5);
+
+        private readonly object _gate = new();
+        private readonly CancellationTokenSource _lifetime = new(); // cancelled on dispose; never disposed (no timer)
+        private CancellationScope? _pendingWait;
+        private ScheduledActivation? _active;
+        private ScheduledActivation? _currentActivation;
+        private Task _lastRun = Task.CompletedTask;
+        private DateTimeOffset? _nextWakeUp;
+        private int _activationCount;
         private bool _disposed;
-        /// <summary>
-        /// waiting to wakeup
-        /// </summary>
-        protected bool IsScheduled { get; private set; }
-        protected CrontabSchedule CrontabSchedule { get; private set; }
-        //protected readonly TConfig Config;
-        protected IClock Clock { get; }
 
-
-
-        public ScheduledApp(ILogger logger, IClock clock, AwtrixAddress awtrixAddress, IAwtrixService awtrixService, TConfig config) : base(logger, config, awtrixAddress, awtrixService) 
+        public ScheduledApp(ILogger logger, IClock clock, AwtrixAddress awtrixAddress, IAwtrixService awtrixService, TConfig config)
+            : base(logger, config, awtrixAddress, awtrixService)
         {
-          //  Config = config;
             Clock = clock;
         }
+
+        protected IClock Clock { get; }
+
+        protected CrontabSchedule? CrontabSchedule { get; private set; }
+
+        /// <summary>
+        /// The activation whose OnActivateAsync ran and whose OnDeactivateAsync has not finished, or null.
+        /// Event handlers guard with <c>if (CurrentActivation is not { IsEnded: false }) return;</c>.
+        /// </summary>
+        protected ScheduledActivation? CurrentActivation => Volatile.Read(ref _currentActivation);
+
+        /// <summary>When the pending cron wait will activate the app; null while active, unscheduled or disposed.</summary>
+        internal DateTimeOffset? NextWakeUp
+        {
+            get { lock (_gate) { return _nextWakeUp; } }
+        }
+
+        /// <summary>Completes when the latest activation's teardown and re-arm have finished. Never faults.</summary>
+        internal Task LastRun
+        {
+            get { lock (_gate) { return _lastRun; } }
+        }
+
+        private TimeProvider Time => Clock.TimeProvider;
+
+        /// <summary>
+        /// Wire up the window (subscribe, fetch) and return once wired; the base waits for the window to end.
+        /// Observe <see cref="ScheduledActivation.Token"/> in anything that can take a while.
+        /// </summary>
+        protected abstract Task OnActivateAsync(ScheduledActivation activation);
+
+        /// <summary>
+        /// Undo OnActivateAsync (unsubscribe). Runs once per activation that was activated, even if activation threw.
+        /// The base clears the app slot afterwards. Bounded by <see cref="DeactivationTimeout"/>.
+        /// </summary>
+        protected virtual Task OnDeactivateAsync(ScheduledActivation activation) => Task.CompletedTask;
+
+        internal static TimeSpan NextDelayChunk(TimeSpan remaining) => remaining < MaxDelayChunk ? remaining : MaxDelayChunk;
 
         protected override void Initialize()
         {
             CrontabSchedule = CrontabSchedule.Parse(Config.CronSchedule);
-
-            ScheduleNextWakeUp(owner: null);
-        }
-
-        protected abstract Task ActivateScheduledWork(CancellationTokenSource cts);
-
-        /// <summary>
-        /// Ends the pending wait or active run; the run's teardown continues in the background. Never blocks.
-        /// </summary>
-        protected override void ReleaseResources()
-        {
-            Logger.LogInformation("Disposing app {App}", Config.Name);
-
-            CancellationTokenSource? current;
-            lock (_ctsLock)
-            {
-                _disposed = true;
-                current = _cts;
-                _cts = null!;
-            }
-            CancelAndDispose(current);
-
-            base.ReleaseResources();
-        }
-
-        /// <summary>
-        /// Only the code that swapped a CTS out of <see cref="_cts"/> (under <see cref="_ctsLock"/>) cancels and
-        /// disposes it, so each instance is torn down exactly once and never by a superseded activation.
-        /// </summary>
-        private static void CancelAndDispose(CancellationTokenSource? cts)
-        {
-            if (cts == null)
-            {
-                return; // Nothing to dispose
-            }
-            cts.Cancel();
-            cts.Dispose();
-        }
-
-        /// <param name="owner">
-        /// The CTS of the activation that just ended (null at start-up). A superseded activation — its CTS is no
-        /// longer current because ExecuteNow replaced it — must not touch the newer activation's CTS.
-        /// </param>
-        private void ScheduleNextWakeUp(CancellationTokenSource? owner)
-        {
-            CancellationTokenSource previous;
-            CancellationTokenSource next;
-            lock (_ctsLock)
-            {
-                if (_disposed || !ReferenceEquals(_cts, owner) || IsScheduled)
-                {
-                    return; // Disposed, superseded by a newer activation, or already scheduled
-                }
-
-                IsScheduled = true;
-                previous = _cts;
-                next = new CancellationTokenSource();
-                _cts = next;
-            }
-            CancelAndDispose(previous);
-
-            // Start a background task to wait for the next scheduled time
-            Task.Run(async () =>
-            {
-                try
-                {
-                    await WaitForCronSchedule(next);
-                }
-                catch (OperationCanceledException)
-                {
-                    // Normal during cancellation
-                }
-                catch (ObjectDisposedException)
-                {
-                    // Superseded by ExecuteNow or Dispose while waking up
-                }
-                catch (Exception ex)
-                {
-                    // Log exception if needed
-                    Logger.LogWarning($"Error in TripTimerApp: {ex.Message}");
-                }
-            });
-        }
-
-        private async Task WaitForCronSchedule(CancellationTokenSource cts)
-        {
-            var cancellationToken = cts.Token;
-
-            // Wait until the next scheduled time
-            var now = Clock.Now;
-            var next = CrontabSchedule.GetNextOccurrence(now.DateTime);
-            var delay = next - now;
-
-            Logger.LogInformation($"{Config.Name} Next wake up scheduled for {next} (in {delay})");
-
-            await Task.Delay(delay, cancellationToken);
-
-            lock (_ctsLock)
-            {
-                // Only invoke WakeUp if we weren't cancelled or superseded
-                if (cancellationToken.IsCancellationRequested || !ReferenceEquals(_cts, cts))
-                {
-                    return;
-                }
-                Logger.LogInformation($"Waking up for {Config.ActiveTime}");
-                cts.CancelAfter(Config.ActiveTime);
-                IsScheduled = false; // Reset the scheduled flag
-            }
-            await WakeUp(cts);
+            ArmNextWait();
         }
 
         public override void ExecuteNow()
         {
-            Logger.LogInformation($"ExecuteNow() triggering immediate wake");
-            CancellationTokenSource previous;
-            var cts = new CancellationTokenSource();
-            lock (_ctsLock)
-            {
-                if (_disposed)
-                {
-                    cts.Dispose();
-                    return;
-                }
-                previous = _cts;
-                _cts = cts;
-                IsScheduled = false; // Reset the scheduled flag
-            }
-            CancelAndDispose(previous);
-            _ = WakeUp(cts);
+            Logger.LogInformation("ExecuteNow: activating {App} on {AwtrixAddress}", Config.Name, AwtrixAddress);
+            StartActivation(ActivationTrigger.Manual, fromWait: null);
         }
 
-        private async Task WakeUp(CancellationTokenSource cts)
+        private void ArmNextWait()
         {
-            var _activationStartTime = Clock.Now;
+            CancellationScope wait;
+            lock (_gate)
+            {
+                if (_disposed || CrontabSchedule == null || _active != null || _pendingWait != null)
+                {
+                    return;
+                }
+                wait = new CancellationScope(_lifetime.Token);
+                _pendingWait = wait;
+            }
 
+            // Runs synchronously up to its first timer, so the wait is armed when this returns.
+            _ = WaitThenActivateAsync(wait);
+        }
+
+        private async Task WaitThenActivateAsync(CancellationScope wait)
+        {
             try
             {
-                await AppClear();
-                await ActivateScheduledWork(cts);
-            }
-            catch (Exception ex)
-            {
-                Logger.LogError($"Error during wakeup {ex}", ex);
+                while (true)
+                {
+                    try
+                    {
+                        var due = GetNextOccurrence();
+                        lock (_gate)
+                        {
+                            if (ReferenceEquals(_pendingWait, wait))
+                            {
+                                _nextWakeUp = due;
+                            }
+                        }
+                        Logger.LogInformation("{App} next wake up scheduled for {Due} (in {Delay})", Config.Name, due, due - Time.GetUtcNow());
+
+                        await DelayUntilAsync(due, wait.Token);
+                        break;
+                    }
+                    catch (OperationCanceledException) when (wait.IsCancellationRequested)
+                    {
+                        return; // superseded by ExecuteNow, or disposed
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.LogError(ex, "{App} failed while waiting for its schedule; retrying in {Delay}", Config.Name, WaitRetryDelay);
+                        try
+                        {
+                            await Task.Delay(WaitRetryDelay, Time, wait.Token).ConfigureAwait(ConfigureAwaitOptions.ForceYielding);
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            return;
+                        }
+                    }
+                }
+
+                StartActivation(ActivationTrigger.Cron, wait);
             }
             finally
             {
-                var activeTime = Clock.Now - _activationStartTime;
-                Logger.LogInformation($"{Config.Name} was active for {activeTime.TotalSeconds:F1} seconds. Dismissing notice");
-
-                ScheduleNextWakeUp(owner: cts);
+                lock (_gate)
+                {
+                    if (ReferenceEquals(_pendingWait, wait))
+                    {
+                        _pendingWait = null;
+                        _nextWakeUp = null;
+                    }
+                }
+                wait.Dispose();
             }
         }
 
-        protected static Task WaitForCancellation(CancellationToken token)
+        /// <summary>Next cron occurrence strictly after now, in the time provider's local zone (host-local in production).</summary>
+        private DateTimeOffset GetNextOccurrence()
         {
-            // RunContinuationsAsynchronously: Cancel() is called from tick handlers on the TimerService loop;
-            // the awaiting continuation (deactivation I/O) must never run inline on that thread.
-            var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            token.Register(() => tcs.TrySetResult());
-            return tcs.Task;
+            var now = Time.GetLocalNow();
+            var next = CrontabSchedule!.GetNextOccurrence(now.DateTime);
+            return new DateTimeOffset(next, Time.LocalTimeZone.GetUtcOffset(next));
         }
 
+        private async Task DelayUntilAsync(DateTimeOffset due, CancellationToken token)
+        {
+            while (true)
+            {
+                var remaining = due - Time.GetUtcNow();
+                if (remaining <= TimeSpan.Zero)
+                {
+                    return;
+                }
+
+                // ForceYielding: a cancelling thread (tick handler, Dispose) never runs this continuation inline
+                await Task.Delay(NextDelayChunk(remaining), Time, token).ConfigureAwait(ConfigureAwaitOptions.ForceYielding);
+            }
+        }
+
+        private void StartActivation(ActivationTrigger trigger, CancellationScope? fromWait)
+        {
+            var activeTime = ReadActiveTime();
+
+            ScheduledActivation activation;
+            ScheduledActivation? superseded;
+            CancellationScope? pendingWait;
+            Task previousRun;
+            TaskCompletionSource runCompleted;
+            lock (_gate)
+            {
+                if (_disposed)
+                {
+                    Logger.LogDebug("{App} is disposed; ignoring {Trigger} activation", Config.Name, trigger);
+                    return;
+                }
+                if (fromWait != null && !ReferenceEquals(_pendingWait, fromWait))
+                {
+                    return; // this wait was superseded while it was waking up
+                }
+
+                superseded = _active;
+                pendingWait = _pendingWait;
+                _pendingWait = null;
+                _nextWakeUp = null;
+
+                activation = new ScheduledActivation(++_activationCount, trigger, Time.GetLocalNow(), activeTime, Time, _lifetime.Token);
+                _active = activation;
+
+                previousRun = _lastRun;
+                runCompleted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                _lastRun = runCompleted.Task;
+            }
+
+            if (pendingWait != null && !ReferenceEquals(pendingWait, fromWait))
+            {
+                pendingWait.Cancel();
+            }
+            if (superseded != null)
+            {
+                Logger.LogInformation("{App} activation #{Old} superseded by #{New} ({Trigger})", Config.Name, superseded.Number, activation.Number, trigger);
+                superseded.Complete();
+            }
+
+            _ = RunActivationAsync(activation, previousRun, runCompleted);
+        }
+
+        private TimeSpan ReadActiveTime()
+        {
+            try
+            {
+                var activeTime = Config.ActiveTime;
+                if (activeTime <= TimeSpan.Zero)
+                {
+                    Logger.LogWarning("{App} ActiveTime is {ActiveTime}; the activation ends immediately", Config.Name, activeTime);
+                }
+                return activeTime;
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "{App} has a missing or invalid ActiveTime; the activation ends immediately", Config.Name);
+                return TimeSpan.Zero;
+            }
+        }
+
+        private async Task RunActivationAsync(ScheduledActivation activation, Task previousRun, TaskCompletionSource runCompleted)
+        {
+            try
+            {
+                // Serialise: the previous activation's teardown finishes before this one wires anything up.
+                await previousRun;
+                if (activation.IsEnded)
+                {
+                    return; // superseded while waiting, ActiveTime <= 0, or disposed
+                }
+
+                Logger.LogInformation("{App} activation #{Number} ({Trigger}) starting for {ActiveTime}", Config.Name, activation.Number, activation.Trigger, activation.ActiveTime);
+                activation.WasActivated = true;
+                Volatile.Write(ref _currentActivation, activation);
+
+                await AppClear();
+
+                // ForceYielding: if a superseding ExecuteNow (controller or MQTT receive thread) or Dispose cancels a
+                // token OnActivateAsync is awaiting, this run's teardown resumes on the pool, never on that thread.
+                await OnActivateAsync(activation).ConfigureAwait(ConfigureAwaitOptions.ForceYielding);
+                await activation.Ended;
+            }
+            catch (OperationCanceledException) when (activation.IsEnded)
+            {
+                Logger.LogDebug("{App} activation #{Number} ended while activating", Config.Name, activation.Number);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "{App} activation #{Number} failed", Config.Name, activation.Number);
+            }
+            finally
+            {
+                await EndActivationAsync(activation, runCompleted);
+            }
+        }
+
+        private async Task EndActivationAsync(ScheduledActivation activation, TaskCompletionSource runCompleted)
+        {
+            activation.Complete(); // OnActivateAsync may have thrown: end the window so its timeout and handlers stop
+
+            if (activation.WasActivated)
+            {
+                try
+                {
+                    await OnDeactivateAsync(activation).WaitAsync(DeactivationTimeout, Time);
+                }
+                catch (TimeoutException)
+                {
+                    Logger.LogWarning("{App} activation #{Number} did not deactivate within {Timeout}", Config.Name, activation.Number, DeactivationTimeout);
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogError(ex, "{App} activation #{Number} failed to deactivate", Config.Name, activation.Number);
+                }
+
+                Interlocked.CompareExchange(ref _currentActivation, null, activation);
+
+                try
+                {
+                    await AppClear();
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogWarning(ex, "{App} could not clear its slot after activation #{Number}", Config.Name, activation.Number);
+                }
+
+                Logger.LogInformation("{App} activation #{Number} ended after {Seconds:F1} s", Config.Name, activation.Number, (Time.GetLocalNow() - activation.StartedAt).TotalSeconds);
+            }
+
+            bool rearm;
+            lock (_gate)
+            {
+                rearm = ReferenceEquals(_active, activation);
+                if (rearm)
+                {
+                    _active = null;
+                }
+                rearm = rearm && !_disposed;
+            }
+
+            activation.Release();
+            if (rearm)
+            {
+                ArmNextWait();
+            }
+            runCompleted.TrySetResult(); // last, so awaiting LastRun also observes the re-armed wait
+        }
+
+        protected override void ReleaseResources()
+        {
+            Logger.LogInformation("Disposing app {App}", Config.Name);
+            lock (_gate)
+            {
+                _disposed = true;
+                _nextWakeUp = null;
+            }
+            _lifetime.Cancel(); // ends the pending wait and the current activation; teardown runs on the thread pool
+            base.ReleaseResources();
+        }
+
+        protected override async Task DisposeCoreAsync()
+        {
+            try
+            {
+                // WS3 review M4: await the ended activation's teardown (bounded) before the final clear
+                await LastRun.WaitAsync(DeactivationTimeout, Time);
+            }
+            catch (TimeoutException)
+            {
+                Logger.LogWarning("{App} did not finish deactivating within {Timeout}; clearing anyway", Config.Name, DeactivationTimeout);
+            }
+
+            await base.DisposeCoreAsync();
+        }
     }
 }
