@@ -46,6 +46,32 @@ namespace AwtrixSharpWeb.Apps
         {
         }
 
+        /// <summary>
+        /// Run async work from a synchronous event handler (e.g. a clock tick) without blocking
+        /// the caller and without ever letting an exception escape. The returned task never faults;
+        /// callers normally discard it.
+        /// </summary>
+        protected Task FireAndLog(Func<Task> work, string operation)
+        {
+            return RunAndLogAsync(work, operation);
+        }
+
+        private async Task RunAndLogAsync(Func<Task> work, string operation)
+        {
+            try
+            {
+                await work();
+            }
+            catch (OperationCanceledException)
+            {
+                Logger.LogDebug("{Operation} cancelled for {AppType} on {AwtrixAddress}", operation, Config.Type, AwtrixAddress);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogError(ex, "{Operation} failed for {AppType} on {AwtrixAddress}", operation, Config.Type, AwtrixAddress);
+            }
+        }
+
         protected async Task<bool> Notify(AwtrixAppMessage message)
         {
             return await AwtrixService.Notify(AwtrixAddress, message);

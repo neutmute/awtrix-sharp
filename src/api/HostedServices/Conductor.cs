@@ -149,7 +149,7 @@ namespace AwtrixSharpWeb.HostedServices
                 case AppNames.DiurnalApp:
                     {
                         var appLogger = _loggerFactory.CreateLogger<DiurnalApp>();
-                        app = new DiurnalApp(appLogger, _timerService, appConfig, device, awtrixService);
+                        app = new DiurnalApp(appLogger, clock, _timerService, appConfig, device, awtrixService);
                     }
                     break;
 

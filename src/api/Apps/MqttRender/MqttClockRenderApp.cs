@@ -37,8 +37,8 @@ namespace AwtrixSharpWeb.Apps.MqttRender
 
         private void ClockTick(object? sender, ClockTickEventArgs e)
         {
-            _currentTime= e.Time;
-            UpdateDisplay();
+            _currentTime = e.Time;
+            _ = FireAndLog(() => UpdateDisplay(), nameof(ClockTick));
         }
 
         protected override async Task HandleMessage(MqttApplicationMessageReceivedEventArgs arg)

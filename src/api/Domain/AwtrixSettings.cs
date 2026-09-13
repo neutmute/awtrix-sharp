@@ -22,9 +22,7 @@ namespace AwtrixSharpWeb.Domain
 
         public override string ToString()
         {
-            return Keys
-                .Select(k => $"{k}={this[k]}")
-                .Aggregate((a, b) => $"{a};{b}");   
+            return string.Join(";", this.Select(kv => $"{kv.Key}={kv.Value}"));
         }
     }
 }

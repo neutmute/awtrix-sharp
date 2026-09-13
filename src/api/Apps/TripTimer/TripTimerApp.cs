@@ -70,8 +70,12 @@ namespace AwtrixSharpWeb.Apps.TripTimer
 
         private void ClockTickSecond(object? sender, ClockTickEventArgs e)
         {
-            var message = BuildMessage(e);
-            _ = AppUpdate(message).Result;
+            // BuildMessage runs inside FireAndLog so its _cts.Cancel() cannot escape onto the timer loop
+            _ = FireAndLog(async () =>
+            {
+                var message = BuildMessage(e);
+                await AppUpdate(message);
+            }, nameof(ClockTickSecond));
         }
 
         private AwtrixAppMessage BuildMessage(ClockTickEventArgs e)

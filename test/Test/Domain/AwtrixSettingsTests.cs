@@ -64,13 +64,12 @@ namespace Test.Domain
         }
 
         [Fact]
-        public void ToString_WhenEmpty_ThrowsInvalidOperationException()
+        public void ToString_WhenEmpty_ReturnsEmptyString()
         {
-            // AwtrixSettings.ToString() uses Aggregate() with no seed, which throws
-            // on an empty sequence. Documenting current (perhaps unintended) behaviour.
+            // Previously threw InvalidOperationException (Aggregate on empty) inside a tick handler (CR-01).
             var settings = new AwtrixSettings();
 
-            Assert.Throws<InvalidOperationException>(() => settings.ToString());
+            Assert.Equal(string.Empty, settings.ToString());
         }
     }
 }

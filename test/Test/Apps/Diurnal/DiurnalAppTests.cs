@@ -1,39 +1,59 @@
-﻿using AwtrixSharpWeb.Apps.Configs;
+using AwtrixSharpWeb.Apps.Configs;
 using AwtrixSharpWeb.Apps.Diurnal;
 using AwtrixSharpWeb.Domain;
 using AwtrixSharpWeb.HostedServices;
 using AwtrixSharpWeb.Interfaces;
 using AwtrixSharpWeb.Services;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 
 namespace Test.Apps.Diurnal
 {
     /// <summary>
-    /// DiurnalApp.Initialize() replays past time entries using the real wall-clock
-    /// (DateTime.Now) rather than an injected IClock - see testability note in final report.
-    /// To keep tests deterministic we drive the time-of-day logic via ITimerService.MinuteChanged,
-    /// which DiurnalApp always subscribes to.
+    /// DiurnalApp takes an injected IClock for its startup replay, so time is fully controlled.
+    /// Tick handling is driven via ITimerService.MinuteChanged; Moq's completed-task defaults make
+    /// FireAndLog run synchronously, so verification can follow the raise directly.
     /// </summary>
     public class DiurnalAppTests
     {
-        private Mock<ILogger> _mockLogger;
-        private Mock<ITimerService> _mockTimerService;
-        private Mock<IAwtrixService> _mockAwtrixService;
-        private AwtrixAddress _address;
+        private static readonly TimeSpan Aest = TimeSpan.FromHours(10);
 
+        private readonly Mock<ITimerService> _timer = new();
+        private readonly Mock<IAwtrixService> _awtrix = new();
+        private readonly AwtrixAddress _address = new() { BaseTopic = "awtrix/clock1" };
+
+        private DiurnalApp CreateApp(DateTimeOffset now, params (string Time, string Value)[] entries)
+        {
+            var config = AppConfig.Empty().WithName(AppNames.DiurnalApp);
+            foreach (var (time, value) in entries)
+            {
+                config.Config[time] = value;
+            }
+
+            return new DiurnalApp(NullLogger.Instance, new MockClock(now), _timer.Object, config, _address, _awtrix.Object);
+        }
+
+        /// <summary>
+        /// Clock at midnight so no entry is earlier than "now" and the startup replay is a no-op.
+        /// </summary>
         private DiurnalApp CreateSut(AppConfig config)
         {
-            _mockLogger = new Mock<ILogger>();
-            _mockTimerService = new Mock<ITimerService>();
-            _mockAwtrixService = new Mock<IAwtrixService>();
-            _address = new AwtrixAddress { BaseTopic = "test/base/topic" };
+            _awtrix.Setup(x => x.Set(It.IsAny<AwtrixAddress>(), It.IsAny<AwtrixSettings>())).ReturnsAsync(true);
+            _awtrix.Setup(x => x.AppClear(It.IsAny<AwtrixAddress>(), It.IsAny<string>())).ReturnsAsync(true);
 
-            _mockAwtrixService.Setup(x => x.Set(It.IsAny<AwtrixAddress>(), It.IsAny<AwtrixSettings>())).ReturnsAsync(true);
-            _mockAwtrixService.Setup(x => x.AppClear(It.IsAny<AwtrixAddress>(), It.IsAny<string>())).ReturnsAsync(true);
-
-            return new DiurnalApp(_mockLogger.Object, _mockTimerService.Object, config, _address, _mockAwtrixService.Object);
+            return new DiurnalApp(new Mock<ILogger>().Object, new MockClock(At(0, 0)), _timer.Object, config, _address, _awtrix.Object);
         }
+
+        private static DateTimeOffset At(int hour, int minute) => new DateTimeOffset(2026, 9, 13, hour, minute, 0, Aest);
+
+        private void RaiseMinute(int hour, int minute, int second = 0)
+        {
+            _timer.Raise(t => t.MinuteChanged += null,
+                new ClockTickEventArgs(new DateTime(2026, 9, 13, hour, minute, second, DateTimeKind.Local)));
+        }
+
+        private static bool HasBrightness(AwtrixSettings s, string value) => s.ContainsKey("BRI") && s["BRI"] == value;
 
         [Fact]
         public void Init_WithEmptyConfig_DoesNotThrow()
@@ -61,11 +81,6 @@ namespace Test.Apps.Diurnal
         [Fact]
         public void Init_WithUnknownSettingKeyOnly_ParsesWithoutThrowing()
         {
-            // The entry is parsed into an (empty) actions list even though the only setting key
-            // is unrecognised - see the follow-up test below for what happens when that time is
-            // actually reached. A time entry late in the day is used here so DiurnalApp's
-            // wall-clock replay-on-Initialize logic (which would otherwise hit the same bug
-            // documented below) does not fire for the whole test run.
             var config = new AppConfig();
             config.Config.Add("2359", "SomeUnknownSetting=123");
             var sut = CreateSut(config);
@@ -75,18 +90,21 @@ namespace Test.Apps.Diurnal
             Assert.Null(ex);
         }
 
-        [Fact(Skip = "Known bug: a Diurnal time entry whose only setting key is unrecognised still creates an empty actions list; when that minute is reached, AwtrixSettings.ToString() calls Aggregate() on an empty Keys collection and throws InvalidOperationException from within ClockTickMinute's logging call.")]
-        public void MinuteChanged_TimeWithOnlyUnknownSettingKey_ThrowsDueToEmptySettingsToString()
+        [Fact]
+        public void MinuteChanged_TimeWithOnlyUnknownSettingKey_DoesNotThrowAndSkipsSet()
         {
+            // Previously a known bug: the empty settings reached AwtrixSettings.ToString() (Aggregate on
+            // empty) inside ClockTickMinute and threw on the timer thread (CR-01). Now skipped with a warning.
             var config = new AppConfig();
             config.Config.Add("0600", "SomeUnknownSetting=123");
             var sut = CreateSut(config);
             sut.Init();
 
             var tickTime = DateTime.Today.AddHours(6);
-            var ex = Record.Exception(() => _mockTimerService.Raise(m => m.MinuteChanged += null, this, new ClockTickEventArgs(tickTime)));
+            var ex = Record.Exception(() => _timer.Raise(m => m.MinuteChanged += null, this, new ClockTickEventArgs(tickTime)));
 
             Assert.Null(ex);
+            _awtrix.Verify(x => x.Set(It.IsAny<AwtrixAddress>(), It.IsAny<AwtrixSettings>()), Times.Never);
         }
 
         [Fact]
@@ -96,12 +114,12 @@ namespace Test.Apps.Diurnal
             config.Config.Add("0600", "Brightness=8");
             var sut = CreateSut(config);
             sut.Init();
-            _mockAwtrixService.Invocations.Clear();
+            _awtrix.Invocations.Clear();
 
             var tickTime = DateTime.Today.AddHours(6);
-            _mockTimerService.Raise(m => m.MinuteChanged += null, this, new ClockTickEventArgs(tickTime));
+            _timer.Raise(m => m.MinuteChanged += null, this, new ClockTickEventArgs(tickTime));
 
-            _mockAwtrixService.Verify(x => x.Set(_address, It.Is<AwtrixSettings>(s => s["BRI"] == "8")), Times.Once);
+            _awtrix.Verify(x => x.Set(_address, It.Is<AwtrixSettings>(s => s["BRI"] == "8")), Times.Once);
         }
 
         [Fact]
@@ -111,12 +129,12 @@ namespace Test.Apps.Diurnal
             config.Config.Add("2200", "GlobalTextColor=#112233");
             var sut = CreateSut(config);
             sut.Init();
-            _mockAwtrixService.Invocations.Clear();
+            _awtrix.Invocations.Clear();
 
             var tickTime = DateTime.Today.AddHours(22);
-            _mockTimerService.Raise(m => m.MinuteChanged += null, this, new ClockTickEventArgs(tickTime));
+            _timer.Raise(m => m.MinuteChanged += null, this, new ClockTickEventArgs(tickTime));
 
-            _mockAwtrixService.Verify(x => x.Set(_address, It.Is<AwtrixSettings>(s => s["TCOL"] == "#112233")), Times.Once);
+            _awtrix.Verify(x => x.Set(_address, It.Is<AwtrixSettings>(s => s["TCOL"] == "#112233")), Times.Once);
         }
 
         [Fact]
@@ -126,12 +144,12 @@ namespace Test.Apps.Diurnal
             config.Config.Add("0700", "Brightness=5;GlobalTextColor=#FFFFFF");
             var sut = CreateSut(config);
             sut.Init();
-            _mockAwtrixService.Invocations.Clear();
+            _awtrix.Invocations.Clear();
 
             var tickTime = DateTime.Today.AddHours(7);
-            _mockTimerService.Raise(m => m.MinuteChanged += null, this, new ClockTickEventArgs(tickTime));
+            _timer.Raise(m => m.MinuteChanged += null, this, new ClockTickEventArgs(tickTime));
 
-            _mockAwtrixService.Verify(x => x.Set(_address, It.Is<AwtrixSettings>(s => s["BRI"] == "5" && s["TCOL"] == "#FFFFFF")), Times.Once);
+            _awtrix.Verify(x => x.Set(_address, It.Is<AwtrixSettings>(s => s["BRI"] == "5" && s["TCOL"] == "#FFFFFF")), Times.Once);
         }
 
         [Fact]
@@ -141,12 +159,93 @@ namespace Test.Apps.Diurnal
             config.Config.Add("0600", "Brightness=8");
             var sut = CreateSut(config);
             sut.Init();
-            _mockAwtrixService.Invocations.Clear();
+            _awtrix.Invocations.Clear();
 
             var tickTime = DateTime.Today.AddHours(9);
-            _mockTimerService.Raise(m => m.MinuteChanged += null, this, new ClockTickEventArgs(tickTime));
+            _timer.Raise(m => m.MinuteChanged += null, this, new ClockTickEventArgs(tickTime));
 
-            _mockAwtrixService.Verify(x => x.Set(It.IsAny<AwtrixAddress>(), It.IsAny<AwtrixSettings>()), Times.Never);
+            _awtrix.Verify(x => x.Set(It.IsAny<AwtrixAddress>(), It.IsAny<AwtrixSettings>()), Times.Never);
+        }
+
+        [Fact]
+        public void MinuteTick_MatchingEntry_AppliesSettings()
+        {
+            var app = CreateApp(At(0, 30), ("0600", "Brightness=8"));
+            app.Init();
+
+            RaiseMinute(6, 0);
+
+            _awtrix.Verify(a => a.Set(_address, It.Is<AwtrixSettings>(s => HasBrightness(s, "8"))), Times.Once);
+        }
+
+        [Fact]
+        public void MinuteTick_WithNonZeroSeconds_StillMatchesEntry()
+        {
+            var app = CreateApp(At(0, 30), ("0600", "Brightness=8"));
+            app.Init();
+
+            RaiseMinute(6, 0, second: 7);
+
+            _awtrix.Verify(a => a.Set(_address, It.IsAny<AwtrixSettings>()), Times.Once);
+        }
+
+        [Fact]
+        public void MinuteTick_WhenSetFaults_DoesNotPropagate()
+        {
+            _awtrix.Setup(a => a.Set(It.IsAny<AwtrixAddress>(), It.IsAny<AwtrixSettings>()))
+                .ThrowsAsync(new HttpRequestException("device offline"));
+            var app = CreateApp(At(0, 30), ("0600", "Brightness=8"));
+            app.Init();
+
+            var exception = Record.Exception(() => RaiseMinute(6, 0));
+
+            Assert.Null(exception);
+        }
+
+        [Fact]
+        public void MinuteTick_OutOfRangeBrightness_DoesNotThrowAndDoesNotPublish()
+        {
+            var app = CreateApp(At(0, 30), ("2100", "Brightness=300"));
+            app.Init();
+
+            var exception = Record.Exception(() => RaiseMinute(21, 0));
+
+            Assert.Null(exception);
+            _awtrix.Verify(a => a.Set(It.IsAny<AwtrixAddress>(), It.IsAny<AwtrixSettings>()), Times.Never);
+        }
+
+        [Fact]
+        public void MinuteTick_UnknownKeyOnly_SkipsSetWithoutThrowing()
+        {
+            var app = CreateApp(At(0, 30), ("0600", "Brightnes=8"));
+            app.Init();
+
+            var exception = Record.Exception(() => RaiseMinute(6, 0));
+
+            Assert.Null(exception);
+            _awtrix.Verify(a => a.Set(It.IsAny<AwtrixAddress>(), It.IsAny<AwtrixSettings>()), Times.Never);
+        }
+
+        [Fact]
+        public void Init_AfterEntryWithUnknownKey_StartupReplayDoesNotThrow()
+        {
+            var app = CreateApp(At(7, 0), ("0600", "Brightnes=8"));
+
+            var exception = Record.Exception(() => app.Init());
+
+            Assert.Null(exception);
+            _awtrix.Verify(a => a.Set(It.IsAny<AwtrixAddress>(), It.IsAny<AwtrixSettings>()), Times.Never);
+        }
+
+        [Fact]
+        public void Init_ReplaysEarlierEntriesUsingInjectedClock()
+        {
+            var app = CreateApp(At(7, 0), ("0600", "Brightness=8"), ("2100", "Brightness=1"));
+
+            app.Init();
+
+            _awtrix.Verify(a => a.Set(_address, It.Is<AwtrixSettings>(s => HasBrightness(s, "8"))), Times.Once);
+            _awtrix.Verify(a => a.Set(_address, It.Is<AwtrixSettings>(s => HasBrightness(s, "1"))), Times.Never);
         }
     }
 }
