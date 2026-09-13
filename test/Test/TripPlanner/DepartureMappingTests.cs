@@ -184,6 +184,31 @@ namespace Test.TripPlanner
             Assert.DoesNotContain(result, d => d.Origin.Time == At("2025-08-16T05:42:00Z"));
         }
 
+        /// <summary>
+        /// WS6 rereview: strengthens the lock-in above. Two walk-first journeys board the *same* service; the later
+        /// walk-start journey ("B") arrives second in API order. The old rule de-duplicated on the boarding leg's own
+        /// time (identical for both, since neither Origin.Time recorded the walk), so it kept whichever came first
+        /// ("A") outright. The current rule departs from the walk and replaces in place on a later Origin.Time, so B
+        /// must win and land in A's position.
+        /// </summary>
+        [Fact]
+        public async Task JourneysBoardingTheSameService_WalkStartWinsAndReplacesInPlace_RegardlessOfApiOrder()
+        {
+            var walkA = Journey(
+                Leg(Stop("2025-08-16T05:40:00Z", null, "Oatley Station"), Stop("2025-08-16T05:50:00Z", null, "Oatley"), productClass: 100),
+                Leg(Stop("2025-08-16T05:53:00Z", null, "Oatley"), Stop("2025-08-16T06:40:00Z", null, "A"), productClass: 1));
+            var walkB = Journey(
+                Leg(Stop("2025-08-16T05:45:00Z", null, "Oatley Station"), Stop("2025-08-16T05:50:00Z", null, "Oatley"), productClass: 100),
+                Leg(Stop("2025-08-16T05:53:00Z", null, "Oatley"), Stop("2025-08-16T06:40:00Z", null, "B"), productClass: 1));
+            var later = GoodJourney(departs: "2025-08-16T06:03:00Z", place: "Oatley"); // a distinct, later service
+
+            var result = await DeparturesFor(Response(walkA, later, walkB)); // B (the later walk) arrives last in API order
+
+            Assert.Equal(new[] { At("2025-08-16T05:45:00Z"), At("2025-08-16T06:03:00Z") }, result.Select(d => d.Origin.Time));
+            Assert.Equal("B", result[0].Destination.Place);
+            Assert.DoesNotContain(result, d => d.Origin.Time == At("2025-08-16T05:40:00Z") || d.Origin.Time == At("2025-08-16T05:53:00Z"));
+        }
+
         [Fact]
         public async Task SameBoardingStopAndTime_WithEqualDepartures_KeepTheFirstJourney()
         {

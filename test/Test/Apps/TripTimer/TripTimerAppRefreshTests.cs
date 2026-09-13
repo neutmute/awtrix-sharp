@@ -242,9 +242,14 @@ namespace Test.Apps.TripTimer
             var wait = await _delays.NextAsync();
 
             var late = new TaskCompletionSource<List<TripSummary>>(TaskCreationOptions.RunContinuationsAsynchronously);
-            _plannerResult = _ => late.Task;
+            var lateRequested = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            _plannerResult = _ =>
+            {
+                lateRequested.TrySetResult();
+                return late.Task;
+            };
             wait.Release();
-            Assert.True(SpinWait.SpinUntil(() => PlannerCalls == 2, Guard), $"#1's refresh query did not start; planner calls {PlannerCalls}");
+            await lateRequested.Task.WaitAsync(Guard); // #1's refresh has read _plannerResult, not merely been recorded by Moq
 
             _plannerResult = _ => Task.FromException<List<TripSummary>>(new HttpRequestException("503"));
             app.ExecuteNow(); // #2 supersedes #1; its initial query fails
@@ -281,6 +286,43 @@ namespace Test.Apps.TripTimer
             Assert.True(SpinWait.SpinUntil(() => PlannerCalls == 2, Guard));
 
             requery.TrySetResult(new List<TripSummary>());
+            await app.LastRun.WaitAsync(Guard);
+
+            Assert.Equal(1, LoggedCount(LogLevel.Information, "No future departures"));
+            VerifyNoErrorsLogged();
+        }
+
+        [Fact]
+        public async Task ExhaustedList_ExtraTickFromInsideTheFirstLog_EndsTheWindowOnce()
+        {
+            // WS6 rereview: the test above happens to pass on old code too, because three queued ticks resume one
+            // after another and the first one's Complete() beats the others to the IsEnded check. Force the real
+            // interleaving instead: raise a second tick synchronously from inside the first "No future departures"
+            // log call, before Complete() has run. The planner resolves synchronously (an already-empty list), so
+            // that second tick reaches the end check without yielding, while the activation is not yet ended.
+            var app = CreateApp();
+            app.ExecuteNow();
+            await _delays.NextAsync();
+            _time.Advance(Departure - Now + TimeSpan.FromMinutes(1));
+            _plannerResult = _ => Task.FromResult(new List<TripSummary>());
+
+            var reentered = false;
+            _logger.Setup(x => x.Log(
+                    LogLevel.Information,
+                    It.IsAny<EventId>(),
+                    It.Is<It.IsAnyType>((state, _) => state.ToString()!.Contains("No future departures")),
+                    It.IsAny<Exception?>(),
+                    It.IsAny<Func<It.IsAnyType, Exception?, string>>()))
+                .Callback(() =>
+                {
+                    if (!reentered)
+                    {
+                        reentered = true;
+                        RaiseSecond(); // reaches the same end check again, on the same thread, before Complete() runs
+                    }
+                });
+
+            RaiseSecond();
             await app.LastRun.WaitAsync(Guard);
 
             Assert.Equal(1, LoggedCount(LogLevel.Information, "No future departures"));
