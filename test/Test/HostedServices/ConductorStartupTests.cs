@@ -29,6 +29,13 @@ namespace Test.HostedServices
 
         private static AppConfig App(string type) => AppConfig.Empty().WithName(type);
 
+        private static AppConfig Diurnal()
+        {
+            var config = App(AppNames.DiurnalApp);
+            config.Config["0600"] = "Brightness=8";
+            return config;
+        }
+
         private static AppConfig TripTimer()
         {
             var config = App(AppNames.TripTimerApp);
@@ -69,8 +76,9 @@ namespace Test.HostedServices
         public async Task StartAsync_TwoDevices_InitialisesEachAppExactlyOnce()
         {
             // CR-06: device 1's apps used to be re-initialised once per later device
-            var clock1 = Device("awtrix/clock1", App(AppNames.DiurnalApp));
-            var clock2 = Device("awtrix/clock2", App(AppNames.DiurnalApp));
+            // WS5: Diurnal subscribes only when its schedule has a valid entry, so give each one
+            var clock1 = Device("awtrix/clock1", Diurnal());
+            var clock2 = Device("awtrix/clock2", Diurnal());
             var awtrix = new Mock<IAwtrixService>();
             var mqtt = new Mock<IMqttConnector>();
             var timer = new Mock<ITimerService>();

@@ -4,24 +4,42 @@ using AwtrixSharpWeb.Domain;
 using AwtrixSharpWeb.HostedServices;
 using AwtrixSharpWeb.Interfaces;
 using AwtrixSharpWeb.Services;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 
 namespace Test.Apps.Diurnal
 {
     /// <summary>
-    /// DiurnalApp takes an injected IClock for its startup replay, so time is fully controlled.
-    /// Tick handling is driven via ITimerService.MinuteChanged; Moq's completed-task defaults make
-    /// FireAndLog run synchronously, so verification can follow the raise directly.
+    /// DiurnalApp over a mocked timer and awtrix service, with fixed dates (never DateTime.Today).
+    /// Moq's completed tasks make FireAndLog run synchronously, so assertions can follow the raise directly.
     /// </summary>
     public class DiurnalAppTests
     {
         private static readonly TimeSpan Aest = TimeSpan.FromHours(10);
+        private static readonly DateTime Day = new(2026, 9, 13, 0, 0, 0, DateTimeKind.Local);
+
+        private static readonly (string Time, string Value)[] Shipped =
+        {
+            ("0600", "Brightness=8"),
+            ("0700", "GlobalTextColor=#FFFFFF"),
+            ("1900", "GlobalTextColor=#FF0000"),
+            ("2100", "Brightness=1"),
+        };
 
         private readonly Mock<ITimerService> _timer = new();
         private readonly Mock<IAwtrixService> _awtrix = new();
         private readonly AwtrixAddress _address = new() { BaseTopic = "awtrix/clock1" };
+        private readonly List<AwtrixSettings> _applied = new();
+
+        public DiurnalAppTests()
+        {
+            _awtrix.Setup(a => a.Set(It.IsAny<AwtrixAddress>(), It.IsAny<AwtrixSettings>()))
+                .Callback<AwtrixAddress, AwtrixSettings>((_, settings) => _applied.Add(settings))
+                .ReturnsAsync(true);
+            _awtrix.Setup(a => a.AppClear(It.IsAny<AwtrixAddress>(), It.IsAny<string>())).ReturnsAsync(true);
+        }
+
+        private static DateTimeOffset At(int hour, int minute) => new(2026, 9, 13, hour, minute, 0, Aest);
 
         private DiurnalApp CreateApp(DateTimeOffset now, params (string Time, string Value)[] entries)
         {
@@ -34,253 +52,255 @@ namespace Test.Apps.Diurnal
             return new DiurnalApp(NullLogger.Instance, new MockClock(now), _timer.Object, config, _address, _awtrix.Object);
         }
 
-        /// <summary>
-        /// Clock at midnight so no entry is earlier than "now" and the startup replay is a no-op.
-        /// </summary>
-        private DiurnalApp CreateSut(AppConfig config)
+        /// <summary>Init at <paramref name="now"/>, then forget the startup publish.</summary>
+        private async Task<DiurnalApp> StartApp(DateTimeOffset now, params (string Time, string Value)[] entries)
         {
-            _awtrix.Setup(x => x.Set(It.IsAny<AwtrixAddress>(), It.IsAny<AwtrixSettings>())).ReturnsAsync(true);
-            _awtrix.Setup(x => x.AppClear(It.IsAny<AwtrixAddress>(), It.IsAny<string>())).ReturnsAsync(true);
-
-            return new DiurnalApp(new Mock<ILogger>().Object, new MockClock(At(0, 0)), _timer.Object, config, _address, _awtrix.Object);
+            var app = CreateApp(now, entries);
+            await app.InitAsync();
+            _applied.Clear();
+            return app;
         }
 
-        private static DateTimeOffset At(int hour, int minute) => new DateTimeOffset(2026, 9, 13, hour, minute, 0, Aest);
-
-        private void RaiseMinute(int hour, int minute, int second = 0)
+        private void RaiseMinute(int hour, int minute, int second = 0, int dayOffset = 0)
         {
-            _timer.Raise(t => t.MinuteChanged += null,
-                new ClockTickEventArgs(new DateTime(2026, 9, 13, hour, minute, second, DateTimeKind.Local)));
+            _timer.Raise(t => t.MinuteChanged += null, _timer.Object,
+                new ClockTickEventArgs(Day.AddDays(dayOffset).Add(new TimeSpan(hour, minute, second))));
         }
 
-        private static bool HasBrightness(AwtrixSettings s, string value) => s.ContainsKey("BRI") && s["BRI"] == value;
+        // ---------- Init / validation (CR-21) ----------
 
         [Fact]
-        public void Init_WithEmptyConfig_DoesNotThrow()
+        public async Task InitAsync_EmptyConfig_DoesNotThrowSubscribeOrPublish()
         {
-            var config = new AppConfig();
-            var sut = CreateSut(config);
+            var app = CreateApp(At(7, 0));
 
-            var ex = Record.Exception(() => sut.InitAsync().GetAwaiter().GetResult());
+            var ex = await Record.ExceptionAsync(() => app.InitAsync());
 
             Assert.Null(ex);
+            Assert.Empty(_applied);
+            _timer.VerifyAdd(t => t.MinuteChanged += It.IsAny<EventHandler<ClockTickEventArgs>>(), Times.Never);
         }
 
         [Fact]
-        public void Init_WithUnparsableTimeKey_DoesNotThrow()
+        public async Task InitAsync_UnparsableTimeKey_DoesNotThrowOrPublish()
         {
-            var config = new AppConfig();
-            config.Config.Add("not-a-time", "Brightness=5");
-            var sut = CreateSut(config);
+            var app = CreateApp(At(7, 0), ("not-a-time", "Brightness=5"));
 
-            var ex = Record.Exception(() => sut.InitAsync().GetAwaiter().GetResult());
+            var ex = await Record.ExceptionAsync(() => app.InitAsync());
 
             Assert.Null(ex);
+            Assert.Empty(_applied);
         }
 
         [Fact]
-        public void Init_WithUnknownSettingKeyOnly_ParsesWithoutThrowing()
+        public async Task InitAsync_UnknownSettingKeyOnly_DoesNotThrowOrPublish()
         {
-            var config = new AppConfig();
-            config.Config.Add("2359", "SomeUnknownSetting=123");
-            var sut = CreateSut(config);
+            var app = CreateApp(At(7, 0), ("0600", "Brightnes=8"));
 
-            var ex = Record.Exception(() => sut.InitAsync().GetAwaiter().GetResult());
+            var ex = await Record.ExceptionAsync(() => app.InitAsync());
 
             Assert.Null(ex);
+            Assert.Empty(_applied);
         }
 
-        [Fact]
-        public void MinuteChanged_TimeWithOnlyUnknownSettingKey_DoesNotThrowAndSkipsSet()
+        [Theory]
+        [InlineData("Brightness=dim")]
+        [InlineData("Brightness=300")]
+        public async Task InitAsync_InvalidBrightnessValue_DoesNotThrowOrPublish(string value)
         {
-            // Previously a known bug: the empty settings reached AwtrixSettings.ToString() (Aggregate on
-            // empty) inside ClockTickMinute and threw on the timer thread (CR-01). Now skipped with a warning.
-            var config = new AppConfig();
-            config.Config.Add("0600", "SomeUnknownSetting=123");
-            var sut = CreateSut(config);
-            sut.InitAsync().GetAwaiter().GetResult();
+            var app = CreateApp(At(22, 0), ("2100", value));
 
-            var tickTime = DateTime.Today.AddHours(6);
-            var ex = Record.Exception(() => _timer.Raise(m => m.MinuteChanged += null, this, new ClockTickEventArgs(tickTime)));
+            var ex = await Record.ExceptionAsync(() => app.InitAsync());
 
             Assert.Null(ex);
-            _awtrix.Verify(x => x.Set(It.IsAny<AwtrixAddress>(), It.IsAny<AwtrixSettings>()), Times.Never);
+            Assert.Empty(_applied);
         }
 
         [Fact]
-        public void MinuteChanged_MatchingBrightnessEntry_AppliesBrightness()
+        public async Task InitAsync_MixedValidAndInvalidSettings_AppliesValidPart()
         {
-            var config = new AppConfig();
-            config.Config.Add("0600", "Brightness=8");
-            var sut = CreateSut(config);
-            sut.InitAsync().GetAwaiter().GetResult();
-            _awtrix.Invocations.Clear();
+            var app = CreateApp(At(22, 0), ("2100", "Brightness=dim;GlobalTextColor=#00FF00"));
 
-            var tickTime = DateTime.Today.AddHours(6);
-            _timer.Raise(m => m.MinuteChanged += null, this, new ClockTickEventArgs(tickTime));
+            await app.InitAsync();
 
-            _awtrix.Verify(x => x.Set(_address, It.Is<AwtrixSettings>(s => s["BRI"] == "8")), Times.Once);
+            var settings = Assert.Single(_applied);
+            Assert.False(settings.ContainsKey("BRI"));
+            Assert.Equal("#00FF00", settings["TCOL"]);
         }
 
         [Fact]
-        public void MinuteChanged_MatchingColorEntry_AppliesGlobalTextColor()
+        public async Task MinuteTick_UnknownKeyOnly_DoesNotThrowOrPublish()
         {
-            var config = new AppConfig();
-            config.Config.Add("2200", "GlobalTextColor=#112233");
-            var sut = CreateSut(config);
-            sut.InitAsync().GetAwaiter().GetResult();
-            _awtrix.Invocations.Clear();
+            await StartApp(At(5, 59), ("0600", "SomeUnknownSetting=123"));
 
-            var tickTime = DateTime.Today.AddHours(22);
-            _timer.Raise(m => m.MinuteChanged += null, this, new ClockTickEventArgs(tickTime));
+            var ex = Record.Exception(() => RaiseMinute(6, 0));
 
-            _awtrix.Verify(x => x.Set(_address, It.Is<AwtrixSettings>(s => s["TCOL"] == "#112233")), Times.Once);
+            Assert.Null(ex);
+            Assert.Empty(_applied);
         }
 
         [Fact]
-        public void MinuteChanged_CompoundEntry_AppliesBothSettingsTogether()
+        public async Task MinuteTick_OutOfRangeBrightness_DoesNotThrowOrPublish()
         {
-            var config = new AppConfig();
-            config.Config.Add("0700", "Brightness=5;GlobalTextColor=#FFFFFF");
-            var sut = CreateSut(config);
-            sut.InitAsync().GetAwaiter().GetResult();
-            _awtrix.Invocations.Clear();
+            var app = CreateApp(At(20, 59), ("2100", "Brightness=300"));
+            await app.InitAsync();
 
-            var tickTime = DateTime.Today.AddHours(7);
-            _timer.Raise(m => m.MinuteChanged += null, this, new ClockTickEventArgs(tickTime));
+            var ex = Record.Exception(() => RaiseMinute(21, 0));
 
-            _awtrix.Verify(x => x.Set(_address, It.Is<AwtrixSettings>(s => s["BRI"] == "5" && s["TCOL"] == "#FFFFFF")), Times.Once);
+            Assert.Null(ex);
+            Assert.Empty(_applied);
         }
 
-        [Fact]
-        public void MinuteChanged_NonMatchingTime_DoesNotApplySettings()
-        {
-            var config = new AppConfig();
-            config.Config.Add("0600", "Brightness=8");
-            var sut = CreateSut(config);
-            sut.InitAsync().GetAwaiter().GetResult();
-            _awtrix.Invocations.Clear();
-
-            var tickTime = DateTime.Today.AddHours(9);
-            _timer.Raise(m => m.MinuteChanged += null, this, new ClockTickEventArgs(tickTime));
-
-            _awtrix.Verify(x => x.Set(It.IsAny<AwtrixAddress>(), It.IsAny<AwtrixSettings>()), Times.Never);
-        }
+        // ---------- Startup state (CR-20) ----------
 
         [Fact]
-        public void MinuteTick_MatchingEntry_AppliesSettings()
+        public async Task InitAsync_RestoresStateInEffect_AsOneMergedSet()
         {
-            var app = CreateApp(At(0, 30), ("0600", "Brightness=8"));
-            app.InitAsync().GetAwaiter().GetResult();
+            var app = CreateApp(At(7, 0), Shipped);
 
-            RaiseMinute(6, 0);
+            await app.InitAsync();
 
-            _awtrix.Verify(a => a.Set(_address, It.Is<AwtrixSettings>(s => HasBrightness(s, "8"))), Times.Once);
-        }
-
-        [Fact]
-        public void MinuteTick_WithNonZeroSeconds_StillMatchesEntry()
-        {
-            var app = CreateApp(At(0, 30), ("0600", "Brightness=8"));
-            app.InitAsync().GetAwaiter().GetResult();
-
-            RaiseMinute(6, 0, second: 7);
-
+            var settings = Assert.Single(_applied);
+            Assert.Equal("8", settings["BRI"]);
+            Assert.Equal("#FFFFFF", settings["TCOL"]);
             _awtrix.Verify(a => a.Set(_address, It.IsAny<AwtrixSettings>()), Times.Once);
         }
 
         [Fact]
-        public void MinuteTick_WhenSetFaults_DoesNotPropagate()
+        public async Task InitAsync_RestartAt0300_RestoresYesterdayEveningSettings()
+        {
+            var app = CreateApp(At(3, 0), Shipped);
+
+            await app.InitAsync();
+
+            var settings = Assert.Single(_applied);
+            Assert.Equal("1", settings["BRI"]);
+            Assert.Equal("#FF0000", settings["TCOL"]);
+        }
+
+        [Fact]
+        public async Task MinuteTick_SameMinuteAsStartup_DoesNotReapply()
+        {
+            var app = CreateApp(At(6, 0), ("0600", "Brightness=8"));
+            await app.InitAsync();
+            Assert.Single(_applied);
+
+            RaiseMinute(6, 0, second: 30);
+
+            Assert.Single(_applied);
+        }
+
+        // ---------- Ticks (CR-20) ----------
+
+        [Fact]
+        public async Task MinuteTick_MatchingBrightnessEntry_AppliesBrightness()
+        {
+            await StartApp(At(5, 59), ("0600", "Brightness=8"));
+
+            RaiseMinute(6, 0);
+
+            Assert.Equal("8", Assert.Single(_applied)["BRI"]);
+            _awtrix.Verify(a => a.Set(_address, It.IsAny<AwtrixSettings>()), Times.Exactly(2)); // startup + tick
+        }
+
+        [Fact]
+        public async Task MinuteTick_MatchingColorEntry_AppliesGlobalTextColor()
+        {
+            await StartApp(At(21, 59), ("2200", "GlobalTextColor=#112233"));
+
+            RaiseMinute(22, 0);
+
+            Assert.Equal("#112233", Assert.Single(_applied)["TCOL"]);
+        }
+
+        [Fact]
+        public async Task MinuteTick_CompoundEntry_AppliesBothSettingsTogether()
+        {
+            await StartApp(At(6, 59), ("0700", "Brightness=5;GlobalTextColor=#FFFFFF"));
+
+            RaiseMinute(7, 0);
+
+            var settings = Assert.Single(_applied);
+            Assert.Equal("5", settings["BRI"]);
+            Assert.Equal("#FFFFFF", settings["TCOL"]);
+        }
+
+        [Fact]
+        public async Task MinuteTick_NonMatchingTime_DoesNotPublish()
+        {
+            await StartApp(At(8, 59), ("0600", "Brightness=8"));
+
+            RaiseMinute(9, 0);
+
+            Assert.Empty(_applied);
+        }
+
+        [Fact]
+        public async Task MinuteTick_WithNonZeroSeconds_StillMatchesEntry()
+        {
+            await StartApp(At(5, 59), ("0600", "Brightness=8"));
+
+            RaiseMinute(6, 0, second: 7);
+
+            Assert.Equal("8", Assert.Single(_applied)["BRI"]);
+        }
+
+        [Fact]
+        public async Task MinuteTick_WhenSetFaults_DoesNotPropagate()
         {
             _awtrix.Setup(a => a.Set(It.IsAny<AwtrixAddress>(), It.IsAny<AwtrixSettings>()))
                 .ThrowsAsync(new HttpRequestException("device offline"));
-            var app = CreateApp(At(0, 30), ("0600", "Brightness=8"));
-            app.InitAsync().GetAwaiter().GetResult();
+            var app = CreateApp(At(5, 59), ("0600", "Brightness=8"));
 
-            var exception = Record.Exception(() => RaiseMinute(6, 0));
+            var initException = await Record.ExceptionAsync(() => app.InitAsync());
+            var tickException = Record.Exception(() => RaiseMinute(6, 0));
 
-            Assert.Null(exception);
+            Assert.Null(initException);
+            Assert.Null(tickException);
         }
 
         [Fact]
-        public void MinuteTick_OutOfRangeBrightness_DoesNotThrowAndDoesNotPublish()
+        public async Task MinuteTick_StallAcrossEntry_AppliesMissedEntry()
         {
-            var app = CreateApp(At(0, 30), ("2100", "Brightness=300"));
-            app.InitAsync().GetAwaiter().GetResult();
+            await StartApp(At(20, 59), Shipped);
 
-            var exception = Record.Exception(() => RaiseMinute(21, 0));
+            RaiseMinute(21, 1); // coalesced tick: 21:00 never arrived
 
-            Assert.Null(exception);
-            _awtrix.Verify(a => a.Set(It.IsAny<AwtrixAddress>(), It.IsAny<AwtrixSettings>()), Times.Never);
+            var settings = Assert.Single(_applied);
+            Assert.Equal("1", Assert.Single(settings, kv => kv.Key == "BRI").Value);
+            Assert.Single(settings);
         }
 
         [Fact]
-        public void MinuteTick_UnknownKeyOnly_SkipsSetWithoutThrowing()
+        public async Task MinuteTick_CrossingMidnight_AppliesMidnightEntry()
         {
-            var app = CreateApp(At(0, 30), ("0600", "Brightnes=8"));
-            app.InitAsync().GetAwaiter().GetResult();
+            await StartApp(At(23, 59), ("0000", "Brightness=3"));
 
-            var exception = Record.Exception(() => RaiseMinute(6, 0));
+            RaiseMinute(0, 1, dayOffset: 1);
 
-            Assert.Null(exception);
-            _awtrix.Verify(a => a.Set(It.IsAny<AwtrixAddress>(), It.IsAny<AwtrixSettings>()), Times.Never);
+            Assert.Equal("3", Assert.Single(_applied)["BRI"]);
         }
 
         [Fact]
-        public void Init_AfterEntryWithUnknownKey_StartupReplayDoesNotThrow()
+        public async Task MinuteTick_ClockMovesBackwards_SkipsThenResumesFromNewTime()
         {
-            var app = CreateApp(At(7, 0), ("0600", "Brightnes=8"));
+            await StartApp(At(3, 0), ("0230", "Brightness=2"));
 
-            var exception = Record.Exception(() => app.InitAsync().GetAwaiter().GetResult());
+            RaiseMinute(2, 0); // DST end / NTP step back
+            Assert.Empty(_applied);
 
-            Assert.Null(exception);
-            _awtrix.Verify(a => a.Set(It.IsAny<AwtrixAddress>(), It.IsAny<AwtrixSettings>()), Times.Never);
+            RaiseMinute(2, 30);
+            Assert.Equal("2", Assert.Single(_applied)["BRI"]);
         }
 
         [Fact]
-        public void Init_ReplaysEarlierEntriesUsingInjectedClock()
+        public async Task MinuteTick_AfterGapOfDays_AppliesStateAtTickTime()
         {
-            var app = CreateApp(At(7, 0), ("0600", "Brightness=8"), ("2100", "Brightness=1"));
+            await StartApp(At(0, 30), ("0600", "Brightness=8"), ("2100", "Brightness=1"));
 
-            app.InitAsync().GetAwaiter().GetResult();
+            RaiseMinute(7, 0, dayOffset: 3); // host suspended for days
 
-            _awtrix.Verify(a => a.Set(_address, It.Is<AwtrixSettings>(s => HasBrightness(s, "8"))), Times.Once);
-            _awtrix.Verify(a => a.Set(_address, It.Is<AwtrixSettings>(s => HasBrightness(s, "1"))), Times.Never);
-        }
-
-        [Fact]
-        public void Init_ReplayWithPublishesCompletingOutOfOrder_FinalAppliedValueIsLatestEntry()
-        {
-            // HTTP device restarting at 22:00: the 21:00 night brightness must win even if the
-            // device acknowledges requests in reverse order.
-            var pending = new List<(TaskCompletionSource<bool> Tcs, AwtrixSettings Settings)>();
-            var applied = new List<AwtrixSettings>();
-            _awtrix.Setup(a => a.AppClear(It.IsAny<AwtrixAddress>(), It.IsAny<string>())).ReturnsAsync(true);
-            _awtrix.Setup(a => a.Set(It.IsAny<AwtrixAddress>(), It.IsAny<AwtrixSettings>()))
-                .Returns((AwtrixAddress _, AwtrixSettings s) =>
-                {
-                    var tcs = new TaskCompletionSource<bool>();
-                    var snapshot = new AwtrixSettings();
-                    foreach (var kv in s) snapshot[kv.Key] = kv.Value;
-                    pending.Add((tcs, snapshot));
-                    return tcs.Task;
-                });
-
-            var app = CreateApp(At(22, 0), ("0600", "Brightness=80"), ("2100", "Brightness=1"));
-            app.InitAsync().GetAwaiter().GetResult();
-
-            // Complete the most recently issued publish first, repeatedly, until nothing is in flight.
-            for (var guard = 0; guard < 10 && pending.Count > 0; guard++)
-            {
-                var last = pending[^1];
-                pending.RemoveAt(pending.Count - 1);
-                applied.Add(last.Settings);
-                last.Tcs.SetResult(true);
-            }
-
-            Assert.Empty(pending);
-            Assert.NotEmpty(applied);
-            Assert.True(HasBrightness(applied[^1], "1"), $"final applied settings were {applied[^1]}");
+            Assert.Equal("8", Assert.Single(_applied)["BRI"]);
         }
     }
 }

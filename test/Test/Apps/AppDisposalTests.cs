@@ -29,8 +29,11 @@ namespace Test.Apps
         public async Task DiurnalApp_DisposeAsync_UnsubscribesMinuteChanged()
         {
             var timer = new Mock<ITimerService>();
+            // WS5: an empty schedule no longer subscribes, so give Diurnal one valid entry
+            var config = AppConfig.Empty().WithName(AppNames.DiurnalApp);
+            config.Config["0600"] = "Brightness=8";
             var app = new DiurnalApp(NullLogger.Instance, new MockClock(Noon), timer.Object,
-                AppConfig.Empty().WithName(AppNames.DiurnalApp), Address(), new Mock<IAwtrixService>().Object);
+                config, Address(), new Mock<IAwtrixService>().Object);
             await app.InitAsync();
 
             await app.DisposeAsync();
