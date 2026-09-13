@@ -228,6 +228,65 @@ namespace Test.Apps.TripTimer
             VerifyNoErrorsLogged();
         }
 
+        private int LoggedCount(LogLevel level, string containing) =>
+            _logger.Invocations.ToArray().Count(i => i.Method.Name == nameof(ILogger.Log)
+                && (LogLevel)i.Arguments[0] == level
+                && i.Arguments[2]?.ToString()?.Contains(containing) == true);
+
+        [Fact]
+        public async Task LateResultFromASupersededActivation_IsDiscarded_AndTheNextWindowStaysUnloaded()
+        {
+            // WS6 review m1/m8: the planner ignores the token, so #1's answer really does arrive during #2
+            var app = CreateApp();
+            app.ExecuteNow();
+            var wait = await _delays.NextAsync();
+
+            var late = new TaskCompletionSource<List<TripSummary>>(TaskCreationOptions.RunContinuationsAsynchronously);
+            _plannerResult = _ => late.Task;
+            wait.Release();
+            Assert.True(SpinWait.SpinUntil(() => PlannerCalls == 2, Guard), $"#1's refresh query did not start; planner calls {PlannerCalls}");
+
+            _plannerResult = _ => Task.FromException<List<TripSummary>>(new HttpRequestException("503"));
+            app.ExecuteNow(); // #2 supersedes #1; its initial query fails
+            Assert.Equal(TripTimerApp.RetryInterval, (await _delays.NextAsync()).Delay);
+            Assert.Equal(3, PlannerCalls);
+
+            late.TrySetResult(Departures(Departure.AddMinutes(30)));
+            Assert.True(SpinWait.SpinUntil(() => LoggedCount(LogLevel.Debug, "Discarding a late departures result for trip timer activation #1") == 1, Guard),
+                $"#1's late result was not discarded; planner calls {PlannerCalls}, departures {app.NextDepartures.Count}");
+
+            Assert.Empty(app.NextDepartures);
+            RaiseSecond(); // #2 has nothing loaded: the window stays open and nothing is re-queried
+            Assert.False(app.LastRun.IsCompleted);
+            Assert.Equal(3, PlannerCalls);
+            VerifyAppUpdates(Times.Never());
+            VerifyNoErrorsLogged();
+            await app.DisposeAsync();
+        }
+
+        [Fact]
+        public async Task ExhaustedList_TicksQueuedBehindTheReQuery_EndTheWindowOnce()
+        {
+            // WS6 review m2: every tick during the re-query used to log the end and call Complete()
+            var app = CreateApp();
+            app.ExecuteNow();
+            await _delays.NextAsync();
+            _time.Advance(Departure - Now + TimeSpan.FromMinutes(1));
+
+            var requery = new TaskCompletionSource<List<TripSummary>>(TaskCreationOptions.RunContinuationsAsynchronously);
+            _plannerResult = _ => requery.Task;
+            RaiseSecond();
+            RaiseSecond();
+            RaiseSecond();
+            Assert.True(SpinWait.SpinUntil(() => PlannerCalls == 2, Guard));
+
+            requery.TrySetResult(new List<TripSummary>());
+            await app.LastRun.WaitAsync(Guard);
+
+            Assert.Equal(1, LoggedCount(LogLevel.Information, "No future departures"));
+            VerifyNoErrorsLogged();
+        }
+
         [Fact]
         public async Task SupersededWhileClearingTheSlot_DoesNotAnnounceOrQueryForTheOldWindow()
         {

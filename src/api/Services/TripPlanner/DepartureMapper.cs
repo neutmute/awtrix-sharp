@@ -3,7 +3,7 @@ using TransportOpenData.TripPlanner;
 namespace AwtrixSharpWeb.Services.TripPlanner
 {
     /// <summary>
-    /// Turns a Trip Planner response into departures from the first boarded service. Never throws: an error body,
+    /// Turns a Trip Planner response into departures from the configured origin (first leg, including a leading walk). Never throws: an error body,
     /// a journey with no legs or times, or one malformed journey is logged and skipped without losing the others (CR-10).
     /// </summary>
     internal static class DepartureMapper
@@ -31,7 +31,9 @@ namespace AwtrixSharpWeb.Services.TripPlanner
                 return output;
             }
 
-            var seenDepartures = new HashSet<DateTimeOffset>();
+            // CR-27 (C1 ruling): journeys that board the same transit service are duplicates. Keep the one whose first leg
+            // departs latest (least waiting), in the position of the first one seen.
+            var positions = new Dictionary<string, int>(StringComparer.Ordinal);
             var index = 0;
 
             foreach (var journey in response.Journeys)
@@ -39,18 +41,27 @@ namespace AwtrixSharpWeb.Services.TripPlanner
                 index++;
                 try
                 {
-                    var summary = MapJourney(journey, index, logger);
-                    if (summary == null)
+                    var mapped = MapJourney(journey, index, logger);
+                    if (mapped == null)
                     {
                         continue;
                     }
 
-                    if (!seenDepartures.Add(summary.Origin.Time))
+                    var (summary, serviceKey) = mapped.Value;
+                    if (positions.TryGetValue(serviceKey, out var position))
                     {
-                        logger.LogDebug("Journey {Index} duplicates the {Departure:HH:mm:ss} departure; skipped", index, summary.Origin.Time);
+                        var kept = output[position];
+                        if (summary.Origin.Time > kept.Origin.Time)
+                        {
+                            output[position] = summary;
+                        }
+
+                        logger.LogDebug("Journey {Index} boards the same service as another journey ({Service}); keeping the {Departure:HH:mm:ss} departure",
+                            index, serviceKey, output[position].Origin.Time);
                         continue;
                     }
 
+                    positions[serviceKey] = output.Count;
                     output.Add(summary);
                 }
                 catch (Exception ex)
@@ -72,7 +83,13 @@ namespace AwtrixSharpWeb.Services.TripPlanner
         internal static bool IsCancelled(TripRequestResponseJourneyLeg leg) =>
             leg.RealtimeStatus?.Any(status => status != null && status.Contains("CANCEL", StringComparison.OrdinalIgnoreCase)) == true;
 
-        private static TripSummary? MapJourney(TripRequestResponseJourney? journey, int index, ILogger logger)
+        /// <summary>
+        /// The trip timer answers "when must I leave the configured origin" (C1 ruling). The departure is the FIRST leg's
+        /// departure, so a leading walk from the origin counts from the walk start; the place is where the first transit
+        /// leg is boarded. The service key identifies that boarded service: the model carries no trip id, so it is the
+        /// boarding stop plus the transit departure instant.
+        /// </summary>
+        private static (TripSummary Summary, string ServiceKey)? MapJourney(TripRequestResponseJourney? journey, int index, ILogger logger)
         {
             var legs = journey?.Legs?.Where(leg => leg != null).ToList() ?? new List<TripRequestResponseJourneyLeg>();
             if (legs.Count == 0)
@@ -94,19 +111,19 @@ namespace AwtrixSharpWeb.Services.TripPlanner
                 return null;
             }
 
+            var first = legs[0];
             var boarding = transitLegs[0];
             var final = legs[^1];
 
-            var firstStop = boarding.StopSequence?.FirstOrDefault();
-            if (!FirstTime(out var departs,
-                    boarding.Origin?.DepartureTimeEstimated,
-                    boarding.Origin?.DepartureTimePlanned,
-                    firstStop?.DepartureTimeEstimated,
-                    firstStop?.DepartureTimePlanned))
+            if (!TryDeparture(first, out var departs))
             {
                 logger.LogWarning("Journey {Index} has no departure time; skipped", index);
                 return null;
             }
+
+            var boardingDeparts = ReferenceEquals(first, boarding) ? departs
+                : TryDeparture(boarding, out var transitDeparts) ? transitDeparts
+                : (DateTimeOffset?)null;
 
             var lastStop = final.StopSequence?.LastOrDefault();
             if (!FirstTime(out var arrives,
@@ -118,11 +135,29 @@ namespace AwtrixSharpWeb.Services.TripPlanner
                 arrives = departs; // only the departure drives the alarm
             }
 
-            return new TripSummary
+            var boardingPlace = PlaceName(boarding.Origin);
+            var boardingStop = boarding.Origin?.Id ?? boardingPlace;
+            var serviceKey = boardingDeparts is { } at
+                ? $"{boardingStop}|{at.UtcDateTime:O}"
+                : $"{boardingStop}|journey {index}"; // no transit time: nothing to match on, never a duplicate
+
+            var summary = new TripSummary
             {
-                Origin = TimePlace.Factory(departs, PlaceName(boarding.Origin)),
+                Origin = TimePlace.Factory(departs, boardingPlace),
                 Destination = TimePlace.Factory(arrives, PlaceName(final.Destination))
             };
+            return (summary, serviceKey);
+        }
+
+        /// <summary>Origin Estimated → Planned → stopSequence[0] Estimated → Planned; unparsable values fall through</summary>
+        private static bool TryDeparture(TripRequestResponseJourneyLeg leg, out DateTimeOffset departs)
+        {
+            var firstStop = leg.StopSequence?.FirstOrDefault();
+            return FirstTime(out departs,
+                leg.Origin?.DepartureTimeEstimated,
+                leg.Origin?.DepartureTimePlanned,
+                firstStop?.DepartureTimeEstimated,
+                firstStop?.DepartureTimePlanned);
         }
 
         /// <summary>Estimated before planned: TfNSW's estimated time is the realtime value</summary>

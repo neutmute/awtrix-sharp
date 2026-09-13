@@ -25,6 +25,12 @@ namespace AwtrixSharpWeb.Apps.TripTimer
         private Task<bool>? _refreshInFlight;
         private ScheduledActivation? _refreshActivation;
 
+        /// <summary>The activation the list and <see cref="_departuresLoaded"/> belong to. Written under <see cref="_refreshLock"/>.</summary>
+        private ScheduledActivation? _departuresActivation;
+
+        /// <summary>The activation that has already logged its end, so concurrent ticks end it once</summary>
+        private ScheduledActivation? _endingActivation;
+
         /// <summary>True once a query in the current activation returned at least one departure</summary>
         private volatile bool _departuresLoaded;
 
@@ -127,6 +133,7 @@ namespace AwtrixSharpWeb.Apps.TripTimer
 
                 if (activation.IsEnded)
                 {
+                    Logger.LogDebug("Discarding a late departures result for trip timer activation #{Number}", activation.Number);
                     return false; // a late answer for a window that has already ended
                 }
 
@@ -137,8 +144,20 @@ namespace AwtrixSharpWeb.Apps.TripTimer
                     return false;
                 }
 
-                SetDepartures(departures);
-                _departuresLoaded = true;
+                lock (_refreshLock)
+                {
+                    // WS6 review m1: checked and written atomically with OnActivateAsync's reset, so a late answer for a
+                    // superseded window can never land in (or mark as loaded) the next window
+                    if (activation.IsEnded || !ReferenceEquals(_departuresActivation, activation))
+                    {
+                        Logger.LogDebug("Discarding a late departures result for trip timer activation #{Number}", activation.Number);
+                        return false;
+                    }
+
+                    SetDepartures(departures);
+                    _departuresLoaded = true;
+                }
+
                 return true;
             }
             catch (OperationCanceledException) when (activation.Token.IsCancellationRequested)
@@ -199,6 +218,12 @@ namespace AwtrixSharpWeb.Apps.TripTimer
                 return;
             }
 
+            // Ticks that queued up behind the re-query all get here; only the first ends the window (WS6 review m2)
+            if (ReferenceEquals(Interlocked.Exchange(ref _endingActivation, activation), activation))
+            {
+                return;
+            }
+
             // Deactivation (unsubscribe + AppClear) runs on the thread pool, never on the tick thread
             Logger.LogInformation("No future departures; ending trip timer activation #{Number}", activation.Number);
             activation.Complete();
@@ -209,8 +234,12 @@ namespace AwtrixSharpWeb.Apps.TripTimer
             Logger.LogInformation("Trip timer activated ({Trigger})", activation.Trigger);
 
             // A new window starts from nothing: the previous window's list must not count as loaded
-            _departuresLoaded = false;
-            _nextDepartures = Array.Empty<TripSummary>();
+            lock (_refreshLock)
+            {
+                _departuresActivation = activation;
+                _departuresLoaded = false;
+                _nextDepartures = Array.Empty<TripSummary>();
+            }
 
             // WS4 review: a window superseded while the base cleared the slot must not announce itself or call TfNSW
             activation.Token.ThrowIfCancellationRequested();

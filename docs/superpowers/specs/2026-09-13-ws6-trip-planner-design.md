@@ -19,7 +19,7 @@
 
 1. **One bad journey, an error body or a missing time never loses the trip-timer window (CR-10).**
 2. **Trip queries are correct on any host timezone (CR-26):** the service takes an instant and talks Sydney wall-clock time to TfNSW.
-3. **The departure is the first boarded service, not a leading walk; duplicates and cancelled services are dropped (CR-27, CR-28).**
+3. **The departure is when the user must leave the configured origin (the first leg, a leading walk included); journeys boarding the same service and cancelled services are dropped (CR-27, CR-28; revised by the 2026-09-14 C1 ruling).**
 4. **HTTP plumbing is correct for a long-lived process (CR-29):** no captured `HttpClient`, a 15 s timeout, cancellation from the activation token down to the socket.
 5. **`TransportOpenData:BaseUrl` takes effect (CR-36).**
 6. **An active trip timer refreshes departures, keeps the last good list on failure, backs off, and re-queries before giving up (CR-25).**
@@ -112,6 +112,8 @@ public TripPlannerService(IHttpClientFactory httpClientFactory, IOptions<Transpo
 
 ### D4. `DepartureMapper`: tolerant response → departures (CR-10, CR-27, CR-28)
 
+Revision 2026-09-14: C1 ruling. The trip timer answers "when must I leave the configured origin". A journey whose first leg is a walk from the origin (or its parent station) is a distinct journey, not a duplicate: it departs at the walk start. Only journeys boarding the same transit service are duplicates, and the one with the latest first-leg departure (least waiting) is kept. The original rule (departure = first transit leg; de-dup by instant) made the fixture's J2/J6 count down to a bus 19 minutes' walk away (WS6 review C1).
+
 `internal static class DepartureMapper { List<TripSummary> Map(TripRequestResponse? response, ILogger logger) }`, never throws:
 
 1. `response == null` → Warning, empty. `Error != null` → Warning with `Error.Message`, then continue with `Journeys ?? empty`.
@@ -119,18 +121,19 @@ public TripPlannerService(IHttpClientFactory httpClientFactory, IOptions<Transpo
    - legs = non-null `Legs`; none → Warning, skip.
    - **Transit legs** = legs whose `Transportation.Product.Class` is not 99 or 100 (a leg with no transportation counts as transit). None → Debug, skip (walk-only).
    - **Cancelled:** any transit leg whose `RealtimeStatus` contains a value containing `"CANCEL"` (ordinal, ignore case) → Information, skip. This deliberately matches `CANCELLED`, `TRIP_CANCELLED` and similar, because the exact value is unconfirmed (§4). A false positive would need a status value containing "CANCEL" that does not mean cancelled; none is known.
-   - **Departure** = first transit leg: `Origin.DepartureTimeEstimated` → `Origin.DepartureTimePlanned` → `StopSequence[0].DepartureTimeEstimated` → `StopSequence[0].DepartureTimePlanned`, first value that parses (unparsable strings fall through). None → Warning, skip.
+   - **Departure** = **first leg** (a leading walk included): `Origin.DepartureTimeEstimated` → `Origin.DepartureTimePlanned` → `StopSequence[0].DepartureTimeEstimated` → `StopSequence[0].DepartureTimePlanned`, first value that parses (unparsable strings fall through). None → Warning, skip.
+   - **Boarded service** = first transit leg. Its identity (the model carries no trip id; `Properties5` has only `isTTB`/`tripCode`) is the boarding stop (`Origin.Id`, else its place name) plus the transit leg's departure instant (same chain as above). No transit departure time → the journey is never treated as a duplicate.
    - **Arrival** = last leg (including a trailing walk): the same chain on `Destination.Arrival*` and `StopSequence[^1].Arrival*`. None → arrival = departure (the app only uses the departure).
-   - **Places:** `DisassembledName ?? Name ?? ""` of the first transit leg origin and the last leg destination.
-3. **De-duplicate** by departure instant, keeping the first in API order. API order is otherwise preserved (existing behaviour).
+   - **Places:** `DisassembledName ?? Name ?? ""` of the first transit leg origin (where the service is boarded) and the last leg destination.
+3. **De-duplicate** journeys with the same boarded service, keeping the one whose first-leg departure is latest (ties keep the first), in the position of the first one seen. API order is otherwise preserved (existing behaviour).
 4. **Not done:** skipping journeys whose first transit stop is not `StopIdOrigin`. Stop ids in responses are platform ids (`2000336`) while configs use parent stops, so a match rule would be guesswork; the review marks it optional.
 
-Fixture result for `ComplexTripResponse.json` (Sydney, AEST): 15:37:54, 16:00:30, 15:53, 16:03, 16:23, 16:13. The 05:41:30Z and 06:04Z walk starts and the duplicate 05:53Z/06:13Z journeys are gone.
+Fixture result for `ComplexTripResponse.json` (Sydney, AEST): 15:37:54, 15:41:30, 15:53, 16:03, 16:04, 16:13. J2 and J6 count from their walk starts at Oatley Station (05:41:30Z, 06:04Z) and show "Macquarie Pl at The Strand" as the boarding place; J4 and J8 board the same service at the same stop and time as J3 and J7 and are dropped.
 
 ### D5. No resilience package; retries live in the app
 
 - `Microsoft.Extensions.Http.Resilience` would need a network restore (not in the local cache) and adds a dependency to retry a request the app already re-issues every refresh.
-- Timeout: `HttpClient.Timeout = 15 s` (was 100 s).
+- Timeout: `HttpClient.Timeout = 15 s` (was 100 s). *Revision 2026-09-14 (WS6 review I1):* `HttpClient.Timeout` only bounds the wait for response headers, and the generated clients read the body separately. `TripPlannerService` therefore also wraps every call in a linked CTS that cancels after `HttpTimeout` (driven by an internal `TimeProvider` seam), covering the body read. A timeout while the caller's token is live surfaces as `TimeoutException`, an ordinary failure that `TripTimerApp` logs as a Warning and backs off; a cancelled caller token still surfaces as `OperationCanceledException`.
 - Retry: `TripTimerApp`'s refresh loop (D6) with backoff. `FindStops`/`GetTrips` via the controller are interactive and not retried.
 - Follow-up (optional, owner): add `AddStandardResilienceHandler()` to the named client once a restore is acceptable; no code shape changes needed.
 
@@ -204,7 +207,7 @@ Fixture result for `ComplexTripResponse.json` (Sydney, AEST): 15:37:54, 16:00:30
 | Trip queries on hosts without `TZ` ask for the right date and time | CR-26 |
 | Departure times in logs and `/api/TripPlanner/departures` carry the Sydney offset | D2 |
 | `fromDateTime` without an offset means Sydney time (was host-local) | CR-26 |
-| No early "GO!" for a walk-to-bus start; no duplicate alarm for the same service; cancelled services are ignored | CR-27, CR-28 |
+| A journey that starts with a walk from the origin counts down to the walk start (when to leave the origin); no duplicate alarm for the same boarded service; cancelled services are ignored | CR-27 (C1 ruling), CR-28 |
 | An error body, one bad journey or a missing estimate no longer blanks the window | CR-10 |
 | Delays that appear during the window are picked up within ~2 min | CR-25 |
 | A trip lookup gives up after 15 s instead of 100 s | CR-29 |
@@ -229,8 +232,11 @@ Fixture result for `ComplexTripResponse.json` (Sydney, AEST): 15:37:54, 16:00:30
 5. `grep -rn "LocalDateTime\|TimeZoneInfo.Local" src/api/Services/TripPlanner src/api/Apps/TripTimer src/api/Controllers/TripPlannerController.cs` → no matches.
 
 ### CR-27: walking legs
-1. `ComplexTripResponse.json` → exactly 15:37:54, 16:00:30, 15:53, 16:03, 16:23, 16:13 (+10:00), with the J2 origin place "Macquarie Pl at The Strand". *(DepartureMappingTests)*
-2. Walk-only journeys are skipped; duplicate departure instants keep the first journey. *(DepartureMappingTests)*
+Revision 2026-09-14: C1 ruling.
+
+1. `ComplexTripResponse.json` → exactly 15:37:54, 15:41:30, 15:53, 16:03, 16:04, 16:13 (+10:00); the J2 and J6 places are "Macquarie Pl at The Strand"; 16:00:30 and 16:23 do not appear. *(DepartureMappingTests)*
+2. A leading walk departs at its own Estimated → Planned time. *(DepartureMappingTests)*
+3. Walk-only journeys are skipped. Journeys boarding the same service (same boarding stop and transit departure) collapse to the latest first-leg departure whatever their order, so a walk ahead of a train that is also boarded directly gives neither an early nor a duplicate alarm (CR-27's symptom); equal departures keep the first; the same instant from different stops is kept twice. *(DepartureMappingTests)*
 
 ### CR-28: cancellations
 1. A transit leg with `realtimeStatus` `CANCELLED`, `TRIP_CANCELLED` or `cancelled` removes its journey; `MONITORED` does not. *(DepartureMappingTests)*
@@ -239,7 +245,8 @@ Fixture result for `ComplexTripResponse.json` (Sydney, AEST): 15:37:54, 16:00:30
 ### CR-29: HTTP plumbing
 1. `TripPlannerService` and `ITripPlannerService` resolve to the same singleton; the named client has a 15 s timeout and an `apikey` Authorization header. *(CompositionRootTests)*
 2. Two calls create two named clients (nothing captured). *(TripPlannerServiceTests)*
-3. Cancelling the token cancels an in-flight request. *(TripPlannerServiceTests)*
+3. Cancelling the token cancels an in-flight request, including one stalled reading the body. *(TripPlannerServiceTests)*
+3a. A response whose body stalls after the headers fails with `TimeoutException` exactly at `HttpTimeout` (FakeTimeProvider), for both `trip` and `stop_finder`. *(TripPlannerServiceTests; revision 2026-09-14, WS6 review I1)*
 4. Ending an activation cancels the token the planner received. *(TripTimerAppRefreshTests)*
 5. `grep -n "AddHttpClient<TripClient>\|AddHttpClient<StopfinderClient>\|AddTransient<TripPlannerService>" src/api/Program.cs` → no matches.
 
@@ -253,13 +260,14 @@ Fixture result for `ComplexTripResponse.json` (Sydney, AEST): 15:37:54, 16:00:30
 3. A failed initial query keeps the window open on ticks; a later successful retry makes the countdown publish. *(TripTimerAppRefreshTests)*
 4. On exhaustion the app re-queries once: still nothing → the activation completes (2 planner calls); a later service → the countdown continues. *(TripTimerAppRefreshTests)*
 5. After disposal the in-flight request's token is cancelled, a late result is not applied, and no Error is logged. *(TripTimerAppRefreshTests)*
+5a. A late result from a superseded activation (planner ignoring the token) is discarded and does not mark the next activation as loaded; ticks queued behind the exhaustion re-query log "No future departures" once. *(TripTimerAppRefreshTests; revision 2026-09-14, WS6 review m1/m2)*
 6. `NextRefreshDelay` values for 0, 1, 2, 3, 40 failures. *(TripTimerAppRefreshTests)*
 7. WS4's `TripTimerAppTickTests` and WS3's double-click Conductor test still pass.
 
 ### CR-37: cache
 1. No directory / no file → null (API used). *(TripFileCacheTests)*
 2. Invalid JSON, `null`, `[]` → null with a Warning; at service level an invalid file falls back to one API request. *(TripFileCacheTests, TripPlannerServiceTests)*
-3. Unsafe stop ids (`../x`, `a/b`) → null. *(TripFileCacheTests)*
+3. Unsafe stop ids (`../x`, `a/b`, `123\n`) → null. *(TripFileCacheTests)*
 4. The hour key is the Sydney hour whatever the caller's offset. *(TripFileCacheTests)*
 5. Same-day entries keep wall clock, seconds and place on the query date; post-midnight entries and arrivals roll to the next day; a DST-start date gets +11:00. *(TripFileCacheTests)*
 
@@ -288,7 +296,7 @@ WS7's plan was written before WS6. After WS6:
 ## 10. Risks
 
 - **WS4 drift.** Task 5 depends on WS4's exact names. Task 0 verifies them; if WS4 has not landed, Tasks 1–4 can proceed (Task 2 has an adaptation for the pre-WS4 `ActivateScheduledWork` call) and Task 5 waits.
-- **Behavioural blast radius of D4 on real data.** Skipping walk legs changes which departure the clock counts down to for users whose journeys start with a walk. That is the bug fix, but it is visible. De-dup by instant could merge two different services departing at the same second from different stops (rare, and the alarm time is identical anyway).
+- **Behavioural blast radius of D4 on real data.** After the C1 ruling, walk-first journeys keep the pre-WS6 departure (the walk start), so the visible change is limited to de-duplication and cancelled services. De-dup keys on boarding stop + transit departure instant because the model has no trip id; two journeys whose realtime estimates for the same service differ by seconds would both survive (they round to the same minute, and the earliest alarm wins).
 - **Cancellation matching is heuristic** (§4). If TfNSW signals cancellation only via `isCancelled` on stops or a message code, CR-28 remains partially open. The partial class makes adding a field a one-line change.
 - **Env-var tests share process state.** The service-level cache tests set `AWTRIXSHARP_SETTINGS__DATA_DIRECTORY`, as today. They stay in one test class (xUnit runs a class's tests serially). `TripFileCacheTests` passes the directory explicitly and never touches the env var. A developer machine with the variable set could still affect `TripPlannerControllerTests`, as it could before.
 - **Refresh vs CR-19 test from WS4.** `NoFutureDepartures_CompletesActivation_WithoutPublishingAnEmptyPayload` now makes two planner calls before completing; its assertions do not count calls, so it still passes.

@@ -9,8 +9,8 @@ using static Test.TripPlanner.TripPlannerTestData;
 namespace Test.TripPlanner
 {
     /// <summary>
-    /// GetNextDepartures over real fixtures and hand-built responses: tolerant of error bodies and gaps (CR-10), boards the
-    /// first transit leg rather than a leading walk and de-duplicates (CR-27), skips cancelled services (CR-28).
+    /// GetNextDepartures over real fixtures and hand-built responses: tolerant of error bodies and gaps (CR-10), departs at the
+    /// first leg (a leading walk included) and de-duplicates journeys boarding the same service (CR-27, C1 ruling), skips cancelled services (CR-28).
     /// </summary>
     public class DepartureMappingTests
     {
@@ -51,18 +51,33 @@ namespace Test.TripPlanner
         }
 
         [Fact]
-        public async Task ComplexTripResponse_BoardsTheFirstTransitLeg_SkippingLeadingWalks_AndDeduplicates()
+        public async Task ComplexTripResponse_DepartsAtTheFirstLeg_IncludingLeadingWalks_AndDeduplicatesTheSameService()
         {
             var result = await DeparturesFor(Fixture("ComplexTripResponse.json"));
 
-            // J2 and J6 start with a class-100 walk (05:41:30Z, 06:04Z); J4 and J8 repeat J3 and J7's departures
+            // C1 ruling, hand-computed from the fixture (UTC -> +10:00):
+            // J1 bus from 222316 05:37:54; J2 walk from Oatley Station 05:41:30, boards the 945 at Macquarie Pl 06:00:30;
+            // J3 bus from 222316 05:53; J4 the same 05:53 boarding as J3 (dropped); J5 bus 06:03; J6 walk 06:04, boards at
+            // Macquarie Pl 06:23; J7 bus from 222316 06:13; J8 the same 06:13 boarding as J7 (dropped)
             Assert.Equal(
-                new[] { "15:37:54", "16:00:30", "15:53:00", "16:03:00", "16:23:00", "16:13:00" },
+                new[] { "15:37:54", "15:41:30", "15:53:00", "16:03:00", "16:04:00", "16:13:00" },
                 result.Select(d => d.Origin.Time.ToString("HH:mm:ss", CultureInfo.InvariantCulture)));
             Assert.All(result, d => Assert.Equal(TimeSpan.FromHours(10), d.Origin.Time.Offset));
-            Assert.DoesNotContain(result, d => d.Origin.Time == At("2025-08-16T05:41:30Z"));
-            Assert.Equal("Macquarie Pl at The Strand", result[1].Origin.Place);
+            Assert.DoesNotContain(result, d => d.Origin.Time == At("2025-08-16T06:00:30Z") || d.Origin.Time == At("2025-08-16T06:23:00Z"));
+            Assert.Equal("Macquarie Pl at The Strand", result[1].Origin.Place); // where the first transit leg is boarded
+            Assert.Equal("Macquarie Pl at The Strand", result[4].Origin.Place);
             Assert.Equal("Town Hall Station, Platform 3", result[0].Destination.Place);
+        }
+
+        [Fact]
+        public async Task LeadingWalk_DepartsAtTheWalkStart_FallingBackToPlanned()
+        {
+            var summary = Assert.Single(await DeparturesFor(Response(Journey(
+                Leg(Stop("soon", "2025-08-16T05:41:00Z", "Oatley Station"), Stop("2025-08-16T06:00:00Z", null, "Macquarie Pl"), productClass: 100),
+                Leg(Stop("2025-08-16T06:00:30Z", null, "Macquarie Pl"), Stop("2025-08-16T06:40:00Z", null, "Central"), productClass: 5)))));
+
+            Assert.Equal(At("2025-08-16T05:41:00Z"), summary.Origin.Time);
+            Assert.Equal("Macquarie Pl", summary.Origin.Place);
         }
 
         [Fact]
@@ -146,14 +161,47 @@ namespace Test.TripPlanner
             Assert.Equal(At("2025-08-16T05:53:00Z"), Assert.Single(result).Origin.Time);
         }
 
+        /// <summary>
+        /// CR-27's symptom: a walk to the platform ahead of the same train gave an alarm ~11 minutes early plus a duplicate
+        /// alarm. Journeys boarding the same service collapse to the one with the latest first-leg departure (least waiting).
+        /// </summary>
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public async Task JourneysBoardingTheSameService_KeepTheLatestFirstLegDeparture_InTheFirstPosition(bool walkFirst)
+        {
+            var walkToTheSameTrain = Journey(
+                Leg(Stop("2025-08-16T05:42:00Z", null, "Oatley Station"), Stop("2025-08-16T05:50:00Z", null, "Oatley"), productClass: 100),
+                Leg(Stop("2025-08-16T05:53:00Z", null, "Oatley"), Stop("2025-08-16T06:40:00Z", null, "Central"), productClass: 1));
+            var direct = GoodJourney(departs: "2025-08-16T05:53:00Z", place: "Oatley");
+            var later = GoodJourney(departs: "2025-08-16T06:03:00Z", place: "Oatley");
+
+            var result = await DeparturesFor(walkFirst
+                ? Response(walkToTheSameTrain, later, direct)
+                : Response(direct, later, walkToTheSameTrain));
+
+            Assert.Equal(new[] { At("2025-08-16T05:53:00Z"), At("2025-08-16T06:03:00Z") }, result.Select(d => d.Origin.Time));
+            Assert.DoesNotContain(result, d => d.Origin.Time == At("2025-08-16T05:42:00Z"));
+        }
+
         [Fact]
-        public async Task DuplicateDepartureInstants_KeepTheFirstJourney()
+        public async Task SameBoardingStopAndTime_WithEqualDepartures_KeepTheFirstJourney()
         {
             var result = await DeparturesFor(Response(
-                GoodJourney(place: "First"),
-                GoodJourney(place: "Second")));
+                GoodJourney(place: "Oatley"),
+                Journey(Leg(Stop("2025-08-16T05:53:00Z", null, "Oatley"), Stop("2025-08-16T07:00:00Z", null, "Elsewhere"), productClass: 5))));
 
-            Assert.Equal("First", Assert.Single(result).Origin.Place);
+            Assert.Equal("Central", Assert.Single(result).Destination.Place);
+        }
+
+        [Fact]
+        public async Task SameDepartureInstant_FromDifferentBoardingStops_AreDistinctServices()
+        {
+            var result = await DeparturesFor(Response(
+                GoodJourney(place: "Oatley"),
+                GoodJourney(place: "Mortdale")));
+
+            Assert.Equal(new[] { "Oatley", "Mortdale" }, result.Select(d => d.Origin.Place));
         }
     }
 }

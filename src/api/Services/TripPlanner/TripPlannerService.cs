@@ -8,7 +8,7 @@ namespace AwtrixSharpWeb.Services.TripPlanner
     /// <summary>
     /// Transport NSW Trip Planner access. A singleton: every call builds a short-lived NSwag client over the named
     /// IHttpClientFactory client, so pooled handlers rotate (DNS changes are picked up), requests time out after
-    /// <see cref="HttpTimeout"/>, and callers can cancel (CR-29). BaseUrl comes from TransportOpenDataConfig (CR-36).
+    /// <see cref="HttpTimeout"/> (the whole call, response body included), and callers can cancel (CR-29). BaseUrl comes from TransportOpenDataConfig (CR-36).
     /// Times on the wire are Sydney wall clock (CR-26).
     /// </summary>
     public class TripPlannerService : ITripPlannerService
@@ -20,6 +20,9 @@ namespace AwtrixSharpWeb.Services.TripPlanner
         private readonly IHttpClientFactory _httpClientFactory;
         private readonly IOptions<TransportOpenDataConfig> _config;
         private readonly ILogger<TripPlannerService> _logger;
+
+        /// <summary>Drives the per-call <see cref="HttpTimeout"/>. Tests replace it with a FakeTimeProvider.</summary>
+        internal TimeProvider TimeProvider { get; set; } = TimeProvider.System;
 
         public TripPlannerService(
             IHttpClientFactory httpClientFactory,
@@ -37,14 +40,14 @@ namespace AwtrixSharpWeb.Services.TripPlanner
             var client = new StopfinderClient(httpClient);
             ApplyBaseUrl(url => client.BaseUrl = url);
 
-            return await client.RequestAsync(
+            return await WithTimeout("stop finder", token => client.RequestAsync(
                 OutputFormat4.RapidJSON,
                 Type_sf.Any,
                 query,
                 CoordOutputFormat3.EPSG4326,
                 null,
                 null,
-                cancellationToken);
+                token), cancellationToken);
         }
 
         public async Task<TripRequestResponse> GetTrips(string originStopId, string destinationStopId, DateTimeOffset fromWhen, CancellationToken cancellationToken = default)
@@ -57,7 +60,7 @@ namespace AwtrixSharpWeb.Services.TripPlanner
             var client = new TripClient(httpClient);
             ApplyBaseUrl(url => client.BaseUrl = url);
 
-            return await client.Request2Async(
+            return await WithTimeout("trip", token => client.Request2Async(
                 outputFormat: OutputFormat5.RapidJSON,
                 coordOutputFormat: CoordOutputFormat4.EPSG4326,
                 depArrMacro: DepArrMacro.Dep, // Departing after the specified time
@@ -87,7 +90,7 @@ namespace AwtrixSharpWeb.Services.TripPlanner
                 onlyITBicycle: null,
                 useElevationData: null,
                 elevFac: null,
-                cancellationToken: cancellationToken);
+                cancellationToken: token), cancellationToken);
         }
 
         public async Task<List<TripSummary>> GetNextDepartures(string originStopId, string destinationStopId, DateTimeOffset fromWhen, CancellationToken cancellationToken = default)
@@ -103,6 +106,25 @@ namespace AwtrixSharpWeb.Services.TripPlanner
 
             var trips = await GetTrips(originStopId, destinationStopId, fromWhen, cancellationToken);
             return DepartureMapper.Map(trips, _logger);
+        }
+
+        /// <summary>
+        /// WS6 review I1: HttpClient.Timeout stops at the response headers, but the generated clients read the body
+        /// separately, so a stalled body would hang the call. This bounds the whole call. A timeout (with the caller's token
+        /// still live) surfaces as <see cref="TimeoutException"/>, an ordinary failure, not a cancellation.
+        /// </summary>
+        private async Task<T> WithTimeout<T>(string operation, Func<CancellationToken, Task<T>> call, CancellationToken cancellationToken)
+        {
+            using var timeout = new CancellationTokenSource(HttpTimeout, TimeProvider);
+            using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeout.Token);
+            try
+            {
+                return await call(linked.Token);
+            }
+            catch (OperationCanceledException ex) when (timeout.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+            {
+                throw new TimeoutException($"Trip planner {operation} request did not complete within {HttpTimeout.TotalSeconds:0} s", ex);
+            }
         }
 
         private void ApplyBaseUrl(Action<string> apply)

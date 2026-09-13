@@ -1,8 +1,10 @@
 using System.Globalization;
+using System.Net;
 using System.Text.Json;
 using AwtrixSharpWeb.Services.TripPlanner;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Time.Testing;
 using TransportOpenData;
 using TransportOpenData.TripPlanner;
 using static Test.TripPlanner.TripPlannerTestData;
@@ -91,6 +93,54 @@ namespace Test.TripPlanner
             cts.Cancel();
 
             await Assert.ThrowsAnyAsync<OperationCanceledException>(() => call.WaitAsync(TimeSpan.FromSeconds(5)));
+        }
+
+        private static (StalledStream Body, StubHttpMessageHandler Handler) StalledBody()
+        {
+            var body = new StalledStream();
+            var handler = new StubHttpMessageHandler((_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StreamContent(body)
+            }));
+            return (body, handler);
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task StalledResponseBody_TimesOutAfterHttpTimeout_AsAnOrdinaryFailure(bool stopFinder)
+        {
+            // WS6 review I1: HttpClient.Timeout ends at the headers; the body read must be bounded too
+            var (body, handler) = StalledBody();
+            var time = new FakeTimeProvider(AnyTime);
+            var sut = CreateService(handler);
+            sut.TimeProvider = time;
+
+            Task call = stopFinder ? sut.FindStops("Central") : sut.GetNextDepartures("200080", "200060", AnyTime);
+            await body.ReadStarted.WaitAsync(TimeSpan.FromSeconds(5));
+
+            time.Advance(TripPlannerService.HttpTimeout - TimeSpan.FromSeconds(1));
+            Assert.False(call.IsCompleted);
+
+            time.Advance(TimeSpan.FromSeconds(1));
+            var ex = await Assert.ThrowsAsync<TimeoutException>(() => call.WaitAsync(TimeSpan.FromSeconds(5)));
+            Assert.IsAssignableFrom<OperationCanceledException>(ex.InnerException);
+        }
+
+        [Fact]
+        public async Task CancellingTheCallersToken_DuringAStalledBody_IsStillACancellation()
+        {
+            var (body, handler) = StalledBody();
+            var sut = CreateService(handler);
+            sut.TimeProvider = new FakeTimeProvider(AnyTime);
+            using var cts = new CancellationTokenSource();
+
+            var call = sut.GetNextDepartures("200080", "200060", AnyTime, cts.Token);
+            await body.ReadStarted.WaitAsync(TimeSpan.FromSeconds(5));
+            cts.Cancel();
+
+            var ex = await Assert.ThrowsAnyAsync<OperationCanceledException>(() => call.WaitAsync(TimeSpan.FromSeconds(5)));
+            Assert.IsNotType<TimeoutException>(ex);
         }
 
         [Fact]

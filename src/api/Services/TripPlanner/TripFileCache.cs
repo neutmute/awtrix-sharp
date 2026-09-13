@@ -16,7 +16,7 @@ namespace AwtrixSharpWeb.Services.TripPlanner
         /// <summary>A cached departure more than this far before the query time is taken to be after midnight</summary>
         internal static readonly TimeSpan RolloverTolerance = TimeSpan.FromHours(1);
 
-        private static readonly Regex SafeStopId = new("^[A-Za-z0-9_-]{1,64}$", RegexOptions.CultureInvariant);
+        private static readonly Regex SafeStopId = new(@"^[A-Za-z0-9_-]{1,64}\z", RegexOptions.CultureInvariant);
 
         private readonly string? _directory;
         private readonly ILogger _logger;

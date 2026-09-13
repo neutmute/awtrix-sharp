@@ -134,5 +134,19 @@ namespace Test.TripPlanner
         {
             Assert.Null(await Cache().TryLoadAsync(origin, destination, At("2025-01-01T08:00:00+11:00")));
         }
+
+        [Fact]
+        public async Task StopIdWithATrailingNewline_IsRejectedByTheAllowList()
+        {
+            // WS6 review m5: .NET "$" also matches before a final newline; the allow-list must reject it, not just miss the file
+            Assert.Null(await Cache().TryLoadAsync("123\n", "2", At("2025-01-01T08:00:00+11:00")));
+
+            _logger.Verify(x => x.Log(
+                LogLevel.Warning,
+                It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((state, _) => state.ToString()!.Contains("may only contain")),
+                It.IsAny<Exception?>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()), Times.Once);
+        }
     }
 }
