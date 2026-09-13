@@ -238,22 +238,5 @@ namespace AwtrixSharpWeb.Apps.TripTimer
             _timerService.MinuteChanged -= ClockTickMinute;
             await AppClear();
         }
-
-        new protected void Dispose(bool disposing)
-        {
-            if (disposing)
-            {
-                // Synchronous dispose path (not a tick handler); async disposal is WS4 scope
-                DeactivateAsync().GetAwaiter().GetResult();
-            }
-                        
-            base.Dispose(disposing);
-        }
-
-        public void Dispose()
-        {
-            Dispose(true);
-            GC.SuppressFinalize(this);
-        }
     }
 }

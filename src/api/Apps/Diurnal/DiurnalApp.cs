@@ -108,6 +108,15 @@ namespace AwtrixSharpWeb.Apps.Diurnal
             }
         }
 
+        /// <summary>
+        /// WS4 (CR-31): detach from the timer on dispose. Keep this override when rewriting this file (WS5).
+        /// </summary>
+        protected override void ReleaseResources()
+        {
+            _timerService.MinuteChanged -= ClockTickMinute;
+            base.ReleaseResources();
+        }
+
         private async Task ReplaySettingsAsync(IReadOnlyList<TimeSpan> orderedEntries)
         {
             var merged = new AwtrixSettings();

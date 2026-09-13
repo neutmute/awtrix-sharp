@@ -58,7 +58,16 @@ namespace AwtrixSharpWeb.Apps.MqttRender
                 buttonState.Click += (s, e) => Click?.Invoke(this, e);
                 buttonState.DoubleClick += (s, e) => DoubleClick?.Invoke(this, e);
             }
-            _mqttConnector.MessageReceived += RawMessageReceived;   
+            _mqttConnector.MessageReceived += RawMessageReceived;
+        }
+
+        /// <summary>
+        /// WS4 (CR-31): detach from the connector on dispose. Keep this override when rewriting this file.
+        /// </summary>
+        protected override void ReleaseResources()
+        {
+            _mqttConnector.MessageReceived -= RawMessageReceived;
+            base.ReleaseResources();
         }
 
         private async Task RawMessageReceived(MqttApplicationMessageReceivedEventArgs args)

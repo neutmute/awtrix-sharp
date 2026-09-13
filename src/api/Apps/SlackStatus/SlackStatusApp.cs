@@ -30,6 +30,15 @@ namespace AwtrixSharpWeb.Apps.SlackStatus
             Logger.LogInformation("Slack monitoring userId='{_trackingUserId}'", _trackingUserId);
         }
 
+        /// <summary>
+        /// WS4 (CR-31): detach from the Slack connector on dispose. Keep this override when rewriting this file (WS5).
+        /// </summary>
+        protected override void ReleaseResources()
+        {
+            _slackConnector.UserStatusChanged -= UserStatusChanged;
+            base.ReleaseResources();
+        }
+
         private void UserStatusChanged(object? sender, SlackUserStatusChangedEventArgs e)
         {
             if (_trackingUserId.Equals(e.UserId))

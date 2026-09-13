@@ -173,7 +173,9 @@ namespace Test.HostedServices
             Assert.Null(exception);
             Assert.Empty(conductor.FindApps(AppNames.MqttRenderApp));
             Assert.Single(conductor.FindApps(AppNames.DiurnalApp));
-            awtrix.Verify(a => a.Dismiss(device), Times.Once);
+            // Disposed: InitAsync's clear + the dispose clear. Dispose no longer dismisses other apps' notifications (CR-31).
+            awtrix.Verify(a => a.AppClear(device, AppNames.MqttRenderApp), Times.Exactly(2));
+            awtrix.Verify(a => a.Dismiss(It.IsAny<AwtrixAddress>()), Times.Never);
         }
 
         [Fact]

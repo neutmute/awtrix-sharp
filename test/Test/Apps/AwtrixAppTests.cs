@@ -14,6 +14,14 @@ namespace Test.Apps
     {
         public int InitializeCallCount { get; private set; }
 
+        public int ReleaseResourcesCallCount { get; private set; }
+
+        protected override void ReleaseResources()
+        {
+            ReleaseResourcesCallCount++;
+            base.ReleaseResources();
+        }
+
         public Exception? InitializeException { get; set; }
 
         public TestAwtrixApp(ILogger logger, AppConfig config, AwtrixAddress awtrixAddress, IAwtrixService awtrixService)
@@ -197,6 +205,33 @@ namespace Test.Apps
 
             sut.Dispose();
 
+            _mockAwtrixService.Verify(x => x.AppClear(_address, "MyApp"), Times.Once);
+        }
+
+        [Fact]
+        public async Task DisposeAsync_ThenDisposeAgain_ReleasesAndClearsOnce()
+        {
+            var sut = CreateSut("MyApp");
+
+            await sut.DisposeAsync();
+            await sut.DisposeAsync();
+            sut.Dispose();
+
+            Assert.Equal(1, sut.ReleaseResourcesCallCount);
+            _mockAwtrixService.Verify(x => x.AppClear(_address, "MyApp"), Times.Once);
+        }
+
+        [Fact]
+        public async Task Dispose_ReleasesSynchronously_AndDoesNotWaitForAppClear()
+        {
+            // CR-31: the sync path used to block on AppClear().Wait()
+            var sut = CreateSut("MyApp");
+            var neverCompletes = new TaskCompletionSource<bool>();
+            _mockAwtrixService.Setup(x => x.AppClear(_address, "MyApp")).Returns(neverCompletes.Task);
+
+            await Task.Run(() => sut.Dispose()).WaitAsync(TimeSpan.FromSeconds(5));
+
+            Assert.Equal(1, sut.ReleaseResourcesCallCount);
             _mockAwtrixService.Verify(x => x.AppClear(_address, "MyApp"), Times.Once);
         }
 

@@ -7,7 +7,7 @@ using static System.Net.Mime.MediaTypeNames;
 
 namespace AwtrixSharpWeb.Apps
 {
-    public abstract class ScheduledApp<TConfig> : AwtrixApp<TConfig>, IDisposable where TConfig : ScheduledAppConfig
+    public abstract class ScheduledApp<TConfig> : AwtrixApp<TConfig> where TConfig : ScheduledAppConfig
     {
         /// <summary>
         /// The current activation's (or pending cron wait's) CTS. Replaced only under <see cref="_ctsLock"/>;
@@ -41,16 +41,10 @@ namespace AwtrixSharpWeb.Apps
 
         protected abstract Task ActivateScheduledWork(CancellationTokenSource cts);
 
-        public void Dispose()
-        {
-            Dispose(true);
-        }
-
         /// <summary>
-        /// Cancels any active run (its finally block deactivates) and awaits the final clears so they
-        /// are published before the MQTT connector stops.
+        /// Ends the pending wait or active run; the run's teardown continues in the background. Never blocks.
         /// </summary>
-        public override async ValueTask DisposeAsync()
+        protected override void ReleaseResources()
         {
             Logger.LogInformation("Disposing app {App}", Config.Name);
 
@@ -63,29 +57,7 @@ namespace AwtrixSharpWeb.Apps
             }
             CancelAndDispose(current);
 
-            await Dismiss();
-            await AppClear();
-        }
-
-        protected void Dispose(bool disposing)
-        {
-            if (disposing)
-            {
-
-                Logger.LogInformation($"Disposing  App: {Config.Name}");
-
-                _ = Dismiss();
-                _ = AppClear();
-
-                CancellationTokenSource? current;
-                lock (_ctsLock)
-                {
-                    _disposed = true;
-                    current = _cts;
-                    _cts = null!;
-                }
-                CancelAndDispose(current);
-            }
+            base.ReleaseResources();
         }
 
         /// <summary>

@@ -154,7 +154,7 @@ namespace Test.Apps
 
             sut.Dispose();
 
-            _mockAwtrixService.Verify(x => x.Dismiss(_address), Times.AtLeastOnce);
+            _mockAwtrixService.Verify(x => x.Dismiss(It.IsAny<AwtrixAddress>()), Times.Never);
         }
 
         [Fact]
@@ -167,7 +167,7 @@ namespace Test.Apps
             await sut.DisposeAsync();
 
             await sut.ActivationEnded.Task.WaitAsync(TimeSpan.FromSeconds(5));
-            _mockAwtrixService.Verify(x => x.Dismiss(_address), Times.Once);
+            _mockAwtrixService.Verify(x => x.Dismiss(It.IsAny<AwtrixAddress>()), Times.Never);
             _mockAwtrixService.Verify(x => x.AppClear(_address, "MyApp"), Times.AtLeast(2)); // WakeUp's clear + dispose's clear
         }
 

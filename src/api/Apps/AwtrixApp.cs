@@ -13,6 +13,7 @@ namespace AwtrixSharpWeb.Apps
 
         private IAwtrixService AwtrixService;
         private int _initState;
+        private int _disposeState;
 
 
         public readonly TConfig Config;
@@ -111,18 +112,55 @@ namespace AwtrixSharpWeb.Apps
             return await AwtrixService.Set(AwtrixAddress, settings);
         }
 
-        public void Dispose()
+        /// <summary>
+        /// Conductor's shutdown path. Runs once: <see cref="ReleaseResources"/> (synchronous: cancel work,
+        /// unsubscribe), then awaits <see cref="DisposeCoreAsync"/> (final clears). Later calls return at once.
+        /// </summary>
+        public async ValueTask DisposeAsync()
         {
-            AppClear().Wait();
+            if (!TryBeginDispose())
+            {
+                return;
+            }
+
+            ReleaseResources();
+            await DisposeCoreAsync();
+            GC.SuppressFinalize(this);
         }
 
         /// <summary>
-        /// Shutdown path used by Conductor: clears this app's custom slot without blocking.
-        /// WS4 replaces this with one virtual dispose pattern across AwtrixApp/ScheduledApp/TripTimerApp.
+        /// For callers that cannot await (tests, using blocks). Runs once and never blocks on the network:
+        /// the final clears are started through FireAndLog and not awaited. Conductor uses DisposeAsync.
         /// </summary>
-        public virtual async ValueTask DisposeAsync()
+        public void Dispose()
         {
-            await AppClear();
+            if (!TryBeginDispose())
+            {
+                return;
+            }
+
+            ReleaseResources();
+            _ = FireAndLog(DisposeCoreAsync, nameof(Dispose));
+            GC.SuppressFinalize(this);
         }
+
+        protected bool IsDisposed => Volatile.Read(ref _disposeState) != 0;
+
+        /// <summary>
+        /// Synchronous, non-blocking release: cancel background work and unsubscribe from events.
+        /// Called at most once. Overrides call base.
+        /// </summary>
+        protected virtual void ReleaseResources()
+        {
+        }
+
+        /// <summary>
+        /// Final publishes after <see cref="ReleaseResources"/>. The default clears this app's custom slot.
+        /// Never dismisses notifications: that would remove other apps' notifications too (CR-31).
+        /// Overrides call base last.
+        /// </summary>
+        protected virtual Task DisposeCoreAsync() => AppClear();
+
+        private bool TryBeginDispose() => Interlocked.Exchange(ref _disposeState, 1) == 0;
     }
 }
