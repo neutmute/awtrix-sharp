@@ -9,7 +9,13 @@ namespace AwtrixSharpWeb.Apps
 {
     public abstract class ScheduledApp<TConfig> : AwtrixApp<TConfig>, IDisposable where TConfig : ScheduledAppConfig
     {
+        /// <summary>
+        /// The current activation's (or pending cron wait's) CTS. Replaced only under <see cref="_ctsLock"/>;
+        /// each activation captures its own instance rather than re-reading this field.
+        /// </summary>
         protected CancellationTokenSource _cts;
+        private readonly object _ctsLock = new();
+        private bool _disposed;
         /// <summary>
         /// waiting to wakeup
         /// </summary>
@@ -30,7 +36,7 @@ namespace AwtrixSharpWeb.Apps
         {
             CrontabSchedule = CrontabSchedule.Parse(Config.CronSchedule);
 
-            ScheduleNextWakeUp();
+            ScheduleNextWakeUp(owner: null);
         }
 
         protected abstract Task ActivateScheduledWork(CancellationTokenSource cts);
@@ -50,44 +56,67 @@ namespace AwtrixSharpWeb.Apps
                 _ = Dismiss();
                 _ = AppClear();
 
-                Dispose(_cts);
+                CancellationTokenSource? current;
+                lock (_ctsLock)
+                {
+                    _disposed = true;
+                    current = _cts;
+                    _cts = null!;
+                }
+                CancelAndDispose(current);
             }
         }
 
-        private bool Dispose(CancellationTokenSource cts)
+        /// <summary>
+        /// Only the code that swapped a CTS out of <see cref="_cts"/> (under <see cref="_ctsLock"/>) cancels and
+        /// disposes it, so each instance is torn down exactly once and never by a superseded activation.
+        /// </summary>
+        private static void CancelAndDispose(CancellationTokenSource? cts)
         {
             if (cts == null)
             {
-                return false; // Nothing to dispose
+                return; // Nothing to dispose
             }
             cts.Cancel();
             cts.Dispose();
-
-
-            return true;
         }
 
-        private void ScheduleNextWakeUp()
+        /// <param name="owner">
+        /// The CTS of the activation that just ended (null at start-up). A superseded activation — its CTS is no
+        /// longer current because ExecuteNow replaced it — must not touch the newer activation's CTS.
+        /// </param>
+        private void ScheduleNextWakeUp(CancellationTokenSource? owner)
         {
-            if (IsScheduled)
+            CancellationTokenSource previous;
+            CancellationTokenSource next;
+            lock (_ctsLock)
             {
-                return; // Already scheduled
-            }
+                if (_disposed || !ReferenceEquals(_cts, owner) || IsScheduled)
+                {
+                    return; // Disposed, superseded by a newer activation, or already scheduled
+                }
 
-            IsScheduled = true;
-            Dispose(_cts);
-            _cts = new CancellationTokenSource();
+                IsScheduled = true;
+                previous = _cts;
+                next = new CancellationTokenSource();
+                _cts = next;
+            }
+            CancelAndDispose(previous);
 
             // Start a background task to wait for the next scheduled time
             Task.Run(async () =>
             {
                 try
                 {
-                    await WaitForCronSchedule(_cts.Token);
+                    await WaitForCronSchedule(next);
                 }
                 catch (OperationCanceledException)
                 {
                     // Normal during cancellation
+                }
+                catch (ObjectDisposedException)
+                {
+                    // Superseded by ExecuteNow or Dispose while waking up
                 }
                 catch (Exception ex)
                 {
@@ -97,8 +126,10 @@ namespace AwtrixSharpWeb.Apps
             });
         }
 
-        private async Task WaitForCronSchedule(CancellationToken cancellationToken)
+        private async Task WaitForCronSchedule(CancellationTokenSource cts)
         {
+            var cancellationToken = cts.Token;
+
             // Wait until the next scheduled time
             var now = Clock.Now;
             var next = CrontabSchedule.GetNextOccurrence(now.DateTime);
@@ -108,32 +139,48 @@ namespace AwtrixSharpWeb.Apps
 
             await Task.Delay(delay, cancellationToken);
 
-            // Only invoke WakeUp if we weren't cancelled
-            if (!cancellationToken.IsCancellationRequested)
+            lock (_ctsLock)
             {
+                // Only invoke WakeUp if we weren't cancelled or superseded
+                if (cancellationToken.IsCancellationRequested || !ReferenceEquals(_cts, cts))
+                {
+                    return;
+                }
                 Logger.LogInformation($"Waking up for {Config.ActiveTime}");
-                _cts.CancelAfter(Config.ActiveTime);
-                await WakeUp();
+                cts.CancelAfter(Config.ActiveTime);
+                IsScheduled = false; // Reset the scheduled flag
             }
+            await WakeUp(cts);
         }
 
         public override void ExecuteNow()
         {
             Logger.LogInformation($"ExecuteNow() triggering immediate wake");
-            Dispose(_cts);
-            _cts = new CancellationTokenSource();
-            _ = WakeUp();
+            CancellationTokenSource previous;
+            var cts = new CancellationTokenSource();
+            lock (_ctsLock)
+            {
+                if (_disposed)
+                {
+                    cts.Dispose();
+                    return;
+                }
+                previous = _cts;
+                _cts = cts;
+                IsScheduled = false; // Reset the scheduled flag
+            }
+            CancelAndDispose(previous);
+            _ = WakeUp(cts);
         }
 
-        private async Task WakeUp()
+        private async Task WakeUp(CancellationTokenSource cts)
         {
-            IsScheduled = false; // Reset the scheduled flag
             var _activationStartTime = Clock.Now;
 
             try
             {
                 await AppClear();
-                await ActivateScheduledWork(_cts);
+                await ActivateScheduledWork(cts);
             }
             catch (Exception ex)
             {
@@ -144,7 +191,7 @@ namespace AwtrixSharpWeb.Apps
                 var activeTime = Clock.Now - _activationStartTime;
                 Logger.LogInformation($"{Config.Name} was active for {activeTime.TotalSeconds:F1} seconds. Dismissing notice");
 
-                ScheduleNextWakeUp();
+                ScheduleNextWakeUp(owner: cts);
             }
         }
 
