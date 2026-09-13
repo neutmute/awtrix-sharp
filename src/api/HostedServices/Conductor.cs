@@ -43,6 +43,7 @@ namespace AwtrixSharpWeb.HostedServices
         private readonly IHostEnvironment _hostEnvironment;
         private readonly ILoggerFactory _loggerFactory;
         private readonly AwtrixConfig _awtrixConfig;
+        private readonly SlackSettings? _slackSettings;
 
         private readonly object _registryLock = new();
         private readonly List<RegisteredApp> _registry = new();
@@ -71,9 +72,11 @@ namespace AwtrixSharpWeb.HostedServices
             , ISlackConnector slackConnector
             , IMqttConnector mqttConnector
             , IClock clock
-            , ILoggerFactory loggerFactory)
+            , ILoggerFactory loggerFactory
+            , IOptions<SlackSettings>? slackSettings = null)
         {
             _logger = logger;
+            _slackSettings = slackSettings?.Value;
             _awtrixConfig = awtrixConfig.Value;
             _slackConnector = slackConnector;
             _awtrixService = awtrixService;
@@ -293,6 +296,15 @@ namespace AwtrixSharpWeb.HostedServices
                     {
                         var appLogger = _loggerFactory.CreateLogger<SlackStatusApp>();
                         var slackStatusConfig = appConfig.As<SlackStatusAppConfig>();
+
+                        // CR-14: blank app-level SlackUserId falls back to Slack:UserId (AWTRIXSHARP_SLACK__USERID).
+                        // As<T>() cloned the keys, so the bound AwtrixConfig is not mutated.
+                        if (string.IsNullOrWhiteSpace(slackStatusConfig.Config.Get(SlackStatusApp.UserIdConfigKey))
+                            && !string.IsNullOrWhiteSpace(_slackSettings?.UserId))
+                        {
+                            slackStatusConfig.SetConfig(SlackStatusApp.UserIdConfigKey, _slackSettings.UserId);
+                        }
+
                         app = new SlackStatusApp(appLogger, slackStatusConfig, device, _awtrixService, _slackConnector);
                     }
                     break;

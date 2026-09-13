@@ -54,12 +54,8 @@ namespace AwtrixSharpWeb
         /// </summary>
         public static void AddAwtrixServices(IServiceCollection services, IConfiguration configuration)
         {
-            // Configure Trip Planner settings
-            services.Configure<TransportOpenDataConfig>(config =>
-            {
-                config.ApiKey = Environment.GetEnvironmentVariable("TRANSPORTOPENDATA__APIKEY") ?? "";
-                config.BaseUrl = configuration.GetSection("TransportOpenData:BaseUrl").Value ?? "https://api.transport.nsw.gov.au/v1/tp";
-            });
+            // Settings and secrets: IConfiguration first, literal environment variable as fallback (CR-14)
+            AddSettings(services, configuration);
 
             // Time
             services.AddSingleton(TimeProvider.System);
@@ -99,6 +95,34 @@ namespace AwtrixSharpWeb
             services.AddHostedService(sp => sp.GetRequiredService<Conductor>());
             services.AddHostedService(sp => sp.GetRequiredService<TimerService>());
         }
+
+        internal const string DefaultTransportOpenDataBaseUrl = "https://api.transport.nsw.gov.au/v1/tp";
+        internal const string TransportOpenDataApiKeyEnvironmentVariable = "TRANSPORTOPENDATA__APIKEY";
+
+        private static void AddSettings(IServiceCollection services, IConfiguration configuration)
+        {
+            // Explicit reads rather than Bind: the API key needs the literal TRANSPORTOPENDATA__APIKEY fallback, and a
+            // blank BaseUrl falls back to .../v1/tp. The named TransportOpenData HttpClient (WS6) reads ApiKey from these
+            // options when each client is created; TripPlannerService reads BaseUrl per call.
+            services.AddOptions<TransportOpenDataConfig>().Configure(config =>
+            {
+                config.ApiKey = FirstNonBlank(
+                    configuration["TransportOpenData:ApiKey"],
+                    Environment.GetEnvironmentVariable(TransportOpenDataApiKeyEnvironmentVariable)) ?? string.Empty;
+                config.BaseUrl = FirstNonBlank(configuration["TransportOpenData:BaseUrl"]) ?? DefaultTransportOpenDataBaseUrl;
+            });
+
+            services.AddOptions<SlackSettings>()
+                .Bind(configuration.GetSection(SlackSettings.SectionName))
+                .PostConfigure(settings => settings.WithEnvironmentFallback());
+
+            services.AddOptions<DataSettings>()
+                .Configure(settings => settings.DataDirectory = configuration[DataSettings.DataDirectoryKey])
+                .PostConfigure(settings => settings.WithEnvironmentFallback());
+        }
+
+        internal static string? FirstNonBlank(params string?[] values) =>
+            values.FirstOrDefault(v => !string.IsNullOrWhiteSpace(v));
 
         /// <summary>
         /// WebApplication.CreateBuilder already loads appsettings.json, appsettings.{Env}.json, user secrets,
@@ -143,6 +167,16 @@ namespace AwtrixSharpWeb
             var version = Assembly.GetExecutingAssembly().GetName().Version;
             logger.LogInformation("Starting AwtrixSharp v{Version}, {Commit}", version, GetGitCommitShort());
             logger.LogInformation("Environment: {Environment}", app.Environment.EnvironmentName);
+
+            var warnings = ConfigurationWarnings.Get(
+                app.Services.GetRequiredService<IOptions<AwtrixConfig>>().Value,
+                app.Services.GetRequiredService<IOptions<TransportOpenDataConfig>>().Value,
+                app.Services.GetRequiredService<IOptions<SlackSettings>>().Value);
+
+            foreach (var warning in warnings)
+            {
+                logger.LogWarning("Configuration: {Warning}", warning);
+            }
         }
 
         public static string? GetGitCommitShort() =>

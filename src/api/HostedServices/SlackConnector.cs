@@ -1,5 +1,7 @@
-﻿using AwtrixSharpWeb.Interfaces;
+﻿using AwtrixSharpWeb.Domain;
+using AwtrixSharpWeb.Interfaces;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using Newtonsoft.Json.Linq;
 using SlackNet;
 using SlackNet.Events;
@@ -28,10 +30,20 @@ namespace AwtrixSharpWeb.HostedServices
 
         public event EventHandler<SlackDndChangedEventArgs>? UserDnChanged;
 
-        public SlackConnector(ILogger<SlackConnector> logger)
+        private readonly IOptions<SlackSettings>? _slackSettings;
+
+        public SlackConnector(ILogger<SlackConnector> logger, IOptions<SlackSettings>? slackSettings = null)
         {
             _logger = logger;
+            _slackSettings = slackSettings;
         }
+
+        /// <summary>
+        /// Slack:AppToken from configuration; without options (hand-built instances) only the literal
+        /// AWTRIXSHARP_SLACK__APPTOKEN environment variable, as before (CR-14).
+        /// </summary>
+        internal string? ResolveAppToken() =>
+            (_slackSettings?.Value ?? new SlackSettings().WithEnvironmentFallback()).AppToken;
 
         public Task StartAsync(CancellationToken cancellationToken)
         {
@@ -51,11 +63,11 @@ namespace AwtrixSharpWeb.HostedServices
         {
             try
             {
-                var appToken = Environment.GetEnvironmentVariable("AWTRIXSHARP_SLACK__APPTOKEN"); // xapp-***
+                var appToken = ResolveAppToken(); // xapp-***
 
-                if (string.IsNullOrEmpty(appToken))
+                if (string.IsNullOrWhiteSpace(appToken))
                 {
-                    _logger.LogWarning("Slack AppToken not configured. Slack integration disabled.");
+                    _logger.LogWarning("Slack AppToken not configured (Slack:AppToken or AWTRIXSHARP_SLACK__APPTOKEN). Slack integration disabled.");
                     return;
                 }
 

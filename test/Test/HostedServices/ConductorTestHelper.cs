@@ -24,7 +24,8 @@ namespace Test.HostedServices
             IClock? clock = null,
             ITimerService? timerService = null,
             ITripPlannerService? tripPlanner = null,
-            ISlackConnector? slackConnector = null)
+            ISlackConnector? slackConnector = null,
+            SlackSettings? slackSettings = null)
         {
             config ??= new AwtrixConfig { Devices = Array.Empty<DeviceConfig>() };
 
@@ -46,7 +47,8 @@ namespace Test.HostedServices
                 slackConnector ?? new Mock<ISlackConnector>().Object,
                 mqttConnector ?? new Mock<IMqttConnector>().Object,
                 clock ?? new Clock(),
-                NullLoggerFactory.Instance);
+                NullLoggerFactory.Instance,
+                slackSettings: slackSettings is null ? null : Options.Create(slackSettings));
         }
 
         /// <summary>

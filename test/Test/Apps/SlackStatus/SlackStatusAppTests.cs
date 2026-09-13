@@ -37,6 +37,16 @@ namespace Test.Apps.SlackStatus
             config.ValueMaps = valueMaps.ToList();
             return new SlackStatusApp(NullLogger.Instance, config, _address, _awtrix.Object, _slack.Object);
         }
+
+        /// <summary>
+        /// With injected <see cref="SlackSettings"/> the app never reads the process environment (WS7/CR-14).
+        /// </summary>
+        protected SlackStatusApp CreateAppWithSettings(string trackingUserId, SlackSettings? slackSettings)
+        {
+            var config = new SlackStatusAppConfig { Type = AppName };
+            config.Config[SlackStatusApp.UserIdConfigKey] = trackingUserId;
+            return new SlackStatusApp(NullLogger.Instance, config, _address, _awtrix.Object, _slack.Object, slackSettings);
+        }
     }
 
     /// <summary>
@@ -245,23 +255,46 @@ namespace Test.Apps.SlackStatus
     }
 
     /// <summary>
-    /// The "no user id" path is only reachable with the environment fallback unset (WS7/CR-14 will move
-    /// that fallback to IConfiguration). The original value is restored in Dispose.
+    /// The only test that still touches the process environment: a hand-built app (no SlackSettings)
+    /// falls back to the literal AWTRIXSHARP_SLACK__USERID variable, as before. The original value is restored.
     /// </summary>
     [Collection(SlackUserIdEnvironmentCollection.Name)]
-    public class SlackStatusAppNoUserIdTests : SlackStatusAppTestBase, IDisposable
+    public class SlackStatusAppUserIdEnvironmentFallbackTests : SlackStatusAppTestBase
     {
-        private readonly string? _previousUserId;
-
-        public SlackStatusAppNoUserIdTests()
+        [Fact]
+        public async Task InitAsync_BlankUserId_NoSettings_UsesLiteralEnvironmentVariable()
         {
-            _previousUserId = Environment.GetEnvironmentVariable(SlackStatusApp.UserIdEnvironmentVariable);
-            Environment.SetEnvironmentVariable(SlackStatusApp.UserIdEnvironmentVariable, null);
+            var previous = Environment.GetEnvironmentVariable(SlackStatusApp.UserIdEnvironmentVariable);
+            Environment.SetEnvironmentVariable(SlackStatusApp.UserIdEnvironmentVariable, "U-FROM-ENV");
+            try
+            {
+                var app = CreateApp("");
+
+                await app.InitAsync();
+
+                _slack.VerifyAdd(s => s.UserStatusChanged += It.IsAny<EventHandler<SlackUserStatusChangedEventArgs>>(), Times.Once);
+            }
+            finally
+            {
+                Environment.SetEnvironmentVariable(SlackStatusApp.UserIdEnvironmentVariable, previous);
+            }
         }
+    }
 
-        public void Dispose()
+    /// <summary>
+    /// The "no user id" path, with configuration injected as empty SlackSettings (WS7/CR-14), so the
+    /// process environment is never read and these tests run in parallel.
+    /// </summary>
+    public class SlackStatusAppNoUserIdTests : SlackStatusAppTestBase
+    {
+        [Fact]
+        public async Task InitAsync_BlankUserId_UsesSlackSettingsUserId()
         {
-            Environment.SetEnvironmentVariable(SlackStatusApp.UserIdEnvironmentVariable, _previousUserId);
+            var app = CreateAppWithSettings("", new SlackSettings { UserId = "U-FROM-SETTINGS" });
+
+            await app.InitAsync();
+
+            _slack.VerifyAdd(s => s.UserStatusChanged += It.IsAny<EventHandler<SlackUserStatusChangedEventArgs>>(), Times.Once);
         }
 
         [Theory]
@@ -269,7 +302,7 @@ namespace Test.Apps.SlackStatus
         [InlineData("   ")]
         public async Task InitAsync_NoUserIdConfigured_DoesNotThrowOrSubscribe(string userId)
         {
-            var app = CreateApp(userId);
+            var app = CreateAppWithSettings(userId, new SlackSettings());
 
             var ex = await Record.ExceptionAsync(() => app.InitAsync());
 
@@ -280,7 +313,7 @@ namespace Test.Apps.SlackStatus
         [Fact]
         public async Task UserStatusChanged_AfterInitWithoutUserId_IsIgnored()
         {
-            var app = CreateApp("");
+            var app = CreateAppWithSettings("", new SlackSettings());
             await app.InitAsync();
             _awtrix.Invocations.Clear();
 

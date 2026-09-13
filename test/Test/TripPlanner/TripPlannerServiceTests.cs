@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Net;
 using System.Text.Json;
+using AwtrixSharpWeb.Domain;
 using AwtrixSharpWeb.Services.TripPlanner;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -321,6 +322,48 @@ namespace Test.TripPlanner
             finally
             {
                 Environment.SetEnvironmentVariable(DataDirectoryVariable, previousValue);
+            }
+        }
+
+        [Fact]
+        public async Task GetNextDepartures_UsesFileCacheDirectoryFromDataSettings_WhenEnvironmentVariableUnset()
+        {
+            var tempDir = Path.Combine(Path.GetTempPath(), "awtrixsharp-tests-" + Guid.NewGuid());
+            Directory.CreateDirectory(tempDir);
+            var previousValue = Environment.GetEnvironmentVariable(DataDirectoryVariable);
+
+            try
+            {
+                Environment.SetEnvironmentVariable(DataDirectoryVariable, null);
+                var fromWhen = new DateTimeOffset(2025, 1, 1, 8, 0, 0, TimeSpan.FromHours(11)); // 08:00 Sydney (AEDT) → file hour "08"
+                var cachedTrips = new List<TripSummary>
+                {
+                    new()
+                    {
+                        Origin = new TimePlace { Time = new DateTimeOffset(2000, 1, 1, 8, 30, 0, TimeSpan.FromHours(11)), Place = "ConfiguredCache" },
+                        Destination = new TimePlace { Time = new DateTimeOffset(2000, 1, 1, 9, 0, 0, TimeSpan.FromHours(11)), Place = "Destination" }
+                    }
+                };
+                File.WriteAllText(Path.Combine(tempDir, "trip_originA_destB_08.json"), JsonSerializer.Serialize(cachedTrips));
+
+                var handler = StubHttpMessageHandler.Json("{\"journeys\":[]}");
+                var sut = new TripPlannerService(
+                    new StubHttpClientFactory(handler),
+                    Options.Create(new TransportOpenDataConfig { BaseUrl = BaseUrl }),
+                    NullLogger<TripPlannerService>.Instance,
+                    Options.Create(new DataSettings { DataDirectory = tempDir }));
+
+                var result = await sut.GetNextDepartures("originA", "destB", fromWhen);
+
+                // CR-14: the cache folder came from DataSettings, so the API was never called
+                var summary = Assert.Single(result);
+                Assert.Equal("ConfiguredCache", summary.Origin.Place);
+                Assert.Empty(handler.RequestUris);
+            }
+            finally
+            {
+                Environment.SetEnvironmentVariable(DataDirectoryVariable, previousValue);
+                Directory.Delete(tempDir, true);
             }
         }
     }

@@ -1,3 +1,4 @@
+using AwtrixSharpWeb.Domain;
 using AwtrixSharpWeb.Interfaces;
 using Microsoft.Extensions.Options;
 using TransportOpenData;
@@ -20,6 +21,7 @@ namespace AwtrixSharpWeb.Services.TripPlanner
         private readonly IHttpClientFactory _httpClientFactory;
         private readonly IOptions<TransportOpenDataConfig> _config;
         private readonly ILogger<TripPlannerService> _logger;
+        private readonly IOptions<DataSettings>? _dataSettings;
 
         /// <summary>Drives the per-call <see cref="HttpTimeout"/>. Tests replace it with a FakeTimeProvider.</summary>
         internal TimeProvider TimeProvider { get; set; } = TimeProvider.System;
@@ -27,11 +29,13 @@ namespace AwtrixSharpWeb.Services.TripPlanner
         public TripPlannerService(
             IHttpClientFactory httpClientFactory,
             IOptions<TransportOpenDataConfig> config,
-            ILogger<TripPlannerService> logger)
+            ILogger<TripPlannerService> logger,
+            IOptions<DataSettings>? dataSettings = null)
         {
             _httpClientFactory = httpClientFactory;
             _config = config;
             _logger = logger;
+            _dataSettings = dataSettings;
         }
 
         public async Task<StopFinderResponse> FindStops(string query, CancellationToken cancellationToken = default)
@@ -96,7 +100,8 @@ namespace AwtrixSharpWeb.Services.TripPlanner
         public async Task<List<TripSummary>> GetNextDepartures(string originStopId, string destinationStopId, DateTimeOffset fromWhen, CancellationToken cancellationToken = default)
         {
             // Opt-in file cache; any problem with it falls back to the API (CR-37)
-            var cache = new TripFileCache(Environment.GetEnvironmentVariable(TripFileCache.DataDirectoryVariable), _logger);
+            // CR-14: Settings:DATA_DIRECTORY from configuration; hand-built instances read only the env var, as before
+            var cache = new TripFileCache((_dataSettings?.Value ?? new DataSettings().WithEnvironmentFallback()).DataDirectory, _logger);
             var cachedDepartures = await cache.TryLoadAsync(originStopId, destinationStopId, fromWhen, cancellationToken);
             if (cachedDepartures != null)
             {
