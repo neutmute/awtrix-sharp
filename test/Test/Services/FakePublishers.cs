@@ -50,8 +50,9 @@ namespace Test.Services
         public bool ReturnValue { get; set; } = true;
         public Exception? ThrowOnPublish { get; set; }
 
+        /// <remarks>The connector wraps a FakeMqttClient, so no MQTTnet client (or socket) is ever created.</remarks>
         public FakeMqttPublisher()
-            : base(new MqttConnector(NullLogger<MqttConnector>.Instance, Options.Create(new MqttSettings())), NullLogger<MqttPublisher>.Instance)
+            : base(new MqttConnector(NullLogger<MqttConnector>.Instance, Options.Create(new MqttSettings()), new Test.HostedServices.FakeMqttClient()), NullLogger<MqttPublisher>.Instance)
         {
         }
 

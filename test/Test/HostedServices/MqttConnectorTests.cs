@@ -20,7 +20,9 @@ namespace Test.HostedServices
             return new MqttConnector(
                 NullLogger<MqttConnector>.Instance,
                 Options.Create(settings ?? new MqttSettings()),
-                client);
+                client,
+                // No real timers: a reconnect backoff waits until the connector is stopped or disposed.
+                (_, token) => Task.Delay(Timeout.InfiniteTimeSpan, token));
         }
 
         [Fact]
