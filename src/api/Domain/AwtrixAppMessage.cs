@@ -1,4 +1,5 @@
-using System.Text.Json.Serialization;
+using System.Globalization;
+using System.Text.Json;
 
 namespace AwtrixSharpWeb.Domain
 {
@@ -6,10 +7,18 @@ namespace AwtrixSharpWeb.Domain
     /// <summary>
     /// Dictionary-based implementation of an Awtrix application message
     /// that stores all properties as string key-value pairs without default values.
+    /// Numbers are always formatted with the invariant culture. Array-valued keys are stored as
+    /// comma-separated strings ("1,2,3"; gradient "255,0,0;0,255,0") and emitted as JSON arrays by <see cref="ToJson"/>.
     /// </summary>
     public class AwtrixAppMessage : Dictionary<string, string>
     {
-        // Helper methods to set properties with proper key names matching the original class
+        private const string TextKey = "text";
+        private const string GradientKey = "gradient";
+
+        private static readonly HashSet<string> IntArrayKeys = new(StringComparer.Ordinal)
+        {
+            "line", "bar", "progressC", "progressBC"
+        };
 
         private string Get(string key)
         {
@@ -20,21 +29,17 @@ namespace AwtrixSharpWeb.Domain
             return null;
         }
 
-        public string Text => Get("text");
+        public string Text => Get(TextKey);
 
 
 
         public AwtrixAppMessage SetText(string value)
         {
-            this["text"] = value;
+            this[TextKey] = value;
             return this;
         }
 
-        public AwtrixAppMessage SetTextCase(int value)
-        {
-            this["textCase"] = value.ToString();
-            return this;
-        }
+        public AwtrixAppMessage SetTextCase(int value) => SetInt("textCase", value);
 
         public AwtrixAppMessage SetTopText(bool value)
         {
@@ -53,11 +58,7 @@ namespace AwtrixSharpWeb.Domain
         }
 
 
-        public AwtrixAppMessage SetTextOffset(int value)
-        {
-            this["textOffset"] = value.ToString();
-            return this;
-        }
+        public AwtrixAppMessage SetTextOffset(int value) => SetInt("textOffset", value);
 
         public AwtrixAppMessage SetCenter(bool value)
         {
@@ -73,20 +74,20 @@ namespace AwtrixSharpWeb.Domain
         {
             if (value != null && value.Length > 0)
             {
-                this["gradient"] = string.Join(';', value.Select(arr => string.Join(',', arr)));
+                this[GradientKey] = string.Join(';', value.Select(JoinInts));
             }
             return this;
         }
 
         public AwtrixAppMessage SetBlinkText(double value)
         {
-            this["blinkText"] = value.ToString();
+            this["blinkText"] = value.ToString(CultureInfo.InvariantCulture);
             return this;
         }
 
         public AwtrixAppMessage SetFadeText(double value)
         {
-            this["fadeText"] = value.ToString();
+            this["fadeText"] = value.ToString(CultureInfo.InvariantCulture);
             return this;
         }
 
@@ -108,11 +109,7 @@ namespace AwtrixSharpWeb.Domain
             return this;
         }
 
-        public AwtrixAppMessage SetPushIcon(int value)
-        {
-            this["pushIcon"] = value.ToString();
-            return this;
-        }
+        public AwtrixAppMessage SetPushIcon(int value) => SetInt("pushIcon", value);
 
         public AwtrixAppMessage SetDuration(int value)
         {
@@ -120,33 +117,21 @@ namespace AwtrixSharpWeb.Domain
             return this;
         }
 
-        public AwtrixAppMessage SetDuration(TimeSpan value)
-        {
-            this["duration"] = Convert.ToInt32(value.TotalSeconds).ToString();
-            return this;
-        }
+        public AwtrixAppMessage SetDuration(TimeSpan value) => SetInt("duration", Convert.ToInt32(value.TotalSeconds));
 
         public AwtrixAppMessage SetLine(int[] value)
         {
-            this["line"] = string.Join(',', value);
+            this["line"] = JoinInts(value);
             return this;
         }
 
-        public AwtrixAppMessage SetLifetime(int value)
-        {
-            this["lifetime"] = value.ToString();
-            return this;
-        }
+        public AwtrixAppMessage SetLifetime(int value) => SetInt("lifetime", value);
 
-        public AwtrixAppMessage SetLifetimeMode(int value)
-        {
-            this["lifetimeMode"] = value.ToString();
-            return this;
-        }
+        public AwtrixAppMessage SetLifetimeMode(int value) => SetInt("lifetimeMode", value);
 
         public AwtrixAppMessage SetBar(int[] value)
         {
-            this["bar"] = string.Join(',', value);
+            this["bar"] = JoinInts(value);
             return this;
         }
 
@@ -158,29 +143,21 @@ namespace AwtrixSharpWeb.Domain
             return this;
         }
 
-        public AwtrixAppMessage SetProgress(int value)
-        {
-            this["progress"] = value.ToString();
-            return this;
-        }
+        public AwtrixAppMessage SetProgress(int value) => SetInt("progress", value);
 
         public AwtrixAppMessage SetProgressC(int[] value)
         {
-            this["progressC"] = string.Join(',', value);
+            this["progressC"] = JoinInts(value);
             return this;
         }
 
         public AwtrixAppMessage SetProgressBC(int[] value)
         {
-            this["progressBC"] = string.Join(',', value);
+            this["progressBC"] = JoinInts(value);
             return this;
         }
 
-        public AwtrixAppMessage SetScrollSpeed(int value)
-        {
-            this["scrollSpeed"] = value.ToString();
-            return this;
-        }
+        public AwtrixAppMessage SetScrollSpeed(int value) => SetInt("scrollSpeed", value);
 
         public AwtrixAppMessage SetEffect(string value)
         {
@@ -188,11 +165,7 @@ namespace AwtrixSharpWeb.Domain
             return this;
         }
 
-        public AwtrixAppMessage SetEffectSpeed(int value)
-        {
-            this["effectSpeed"] = value.ToString();
-            return this;
-        }
+        public AwtrixAppMessage SetEffectSpeed(int value) => SetInt("effectSpeed", value);
 
         public AwtrixAppMessage SetEffectPalette(string value)
         {
@@ -209,6 +182,72 @@ namespace AwtrixSharpWeb.Domain
             return this;
         }
 
+        private AwtrixAppMessage SetInt(string key, int value)
+        {
+            this[key] = value.ToString(CultureInfo.InvariantCulture);
+            return this;
+        }
+
+        private static string JoinInts(int[] values)
+        {
+            return string.Join(',', values.Select(v => v.ToString(CultureInfo.InvariantCulture)));
+        }
+
+        /// <summary>
+        /// Parse "1,2,3" (whitespace around items allowed) into integers using the invariant culture.
+        /// </summary>
+        internal static bool TryParseIntArray(string? value, out int[] result)
+        {
+            result = Array.Empty<int>();
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return false;
+            }
+
+            var parts = value.Split(',', StringSplitOptions.TrimEntries);
+            var parsed = new int[parts.Length];
+            for (var i = 0; i < parts.Length; i++)
+            {
+                if (!int.TryParse(parts[i], NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out parsed[i]))
+                {
+                    return false;
+                }
+            }
+
+            result = parsed;
+            return true;
+        }
+
+        /// <summary>
+        /// Parse "255,0,0;0,255,0" into rows of integers using the invariant culture.
+        /// </summary>
+        internal static bool TryParseIntMatrix(string? value, out int[][] result)
+        {
+            result = Array.Empty<int[]>();
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return false;
+            }
+
+            var rows = value.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (rows.Length == 0)
+            {
+                return false;
+            }
+
+            var parsed = new int[rows.Length][];
+            for (var i = 0; i < rows.Length; i++)
+            {
+                if (!TryParseIntArray(rows[i], out parsed[i]))
+                {
+                    return false;
+                }
+            }
+
+            result = parsed;
+            return true;
+        }
+
         public override string ToString()
         {
             return string.Join(
@@ -220,38 +259,42 @@ namespace AwtrixSharpWeb.Domain
 
         public string ToJson()
         {
-            // Create a new dictionary to modify if needed
             var dictionaryToSerialize = new Dictionary<string, object>(this.Count);
-            
-            // Copy all items from this dictionary to the new one
+
             foreach (var kvp in this)
             {
-                // Check if it's the text property and if it starts with "[
-                // In which case its an encoded JSON object
-                if (kvp.Key == "text" && kvp.Value != null && kvp.Value.StartsWith("["))
+                dictionaryToSerialize[kvp.Key] = ToJsonValue(kvp.Key, kvp.Value);
+            }
+
+            return JsonSerializer.Serialize(dictionaryToSerialize);
+        }
+
+        private static object ToJsonValue(string key, string value)
+        {
+            // Text starting with "[" is an encoded JSON array of coloured text fragments
+            if (key == TextKey && value != null && value.StartsWith("["))
+            {
+                try
                 {
-                    try
-                    {
-                        // Try to parse the text as JSON
-                        var jsonElement = System.Text.Json.JsonSerializer.Deserialize<System.Text.Json.JsonElement>(kvp.Value);
-                        dictionaryToSerialize[kvp.Key] = jsonElement; // Add as JSON object
-                    }
-                    catch
-                    {
-                        // If parsing fails, use the original string
-                        dictionaryToSerialize[kvp.Key] = kvp.Value;
-                    }
+                    return JsonSerializer.Deserialize<JsonElement>(value);
                 }
-                else
+                catch
                 {
-                    // Add other properties as is
-                    dictionaryToSerialize[kvp.Key] = kvp.Value;
+                    return value;
                 }
             }
-            
-            // Serialize the modified dictionary
-            var json = System.Text.Json.JsonSerializer.Serialize(dictionaryToSerialize);
-            return json;
+
+            if (IntArrayKeys.Contains(key) && TryParseIntArray(value, out var array))
+            {
+                return array;
+            }
+
+            if (key == GradientKey && TryParseIntMatrix(value, out var matrix))
+            {
+                return matrix;
+            }
+
+            return value;
         }
     }
 }
