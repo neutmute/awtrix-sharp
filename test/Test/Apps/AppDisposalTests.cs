@@ -48,6 +48,8 @@ namespace Test.Apps
             var slack = new Mock<ISlackConnector>();
             var config = new SlackStatusAppConfig();
             config.WithName(AppNames.SlackStatusApp);
+            // WS5: without a user id the app no longer subscribes; set one so this never depends on the env var
+            config.Config[SlackStatusApp.UserIdConfigKey] = "U123";
             var app = new SlackStatusApp(NullLogger.Instance, config, Address(), new Mock<IAwtrixService>().Object, slack.Object);
             await app.InitAsync();
 

@@ -1,4 +1,4 @@
-﻿using AwtrixSharpWeb.Domain;
+using AwtrixSharpWeb.Domain;
 using AwtrixSharpWeb.HostedServices;
 using AwtrixSharpWeb.Interfaces;
 using AwtrixSharpWeb.Services;
@@ -10,8 +10,13 @@ namespace AwtrixSharpWeb.Apps.SlackStatus
     /// </summary>
     public class SlackStatusApp : AwtrixApp<SlackStatusAppConfig>
     {
-        ISlackConnector _slackConnector;
-        string _trackingUserId;
+        public const string UserIdConfigKey = "SlackUserId";
+        public const string UserIdEnvironmentVariable = "AWTRIXSHARP_SLACK__USERID";
+
+        private const int DefaultDurationSeconds = 50;
+
+        private readonly ISlackConnector _slackConnector;
+        private string? _trackingUserId;
 
         public SlackStatusApp(
             ILogger logger
@@ -25,13 +30,24 @@ namespace AwtrixSharpWeb.Apps.SlackStatus
 
         protected override void Initialize()
         {
+            var userId = Config.Config.Get(UserIdConfigKey, UserIdEnvironmentVariable);
+
+            if (string.IsNullOrWhiteSpace(userId))
+            {
+                Logger.LogWarning(
+                    "SlackStatusApp on {BaseTopic}: no Slack user id configured (Config:{ConfigKey} or {EnvironmentVariable}); Slack status will not be shown",
+                    AwtrixAddress.BaseTopic, UserIdConfigKey, UserIdEnvironmentVariable);
+                return;
+            }
+
+            _trackingUserId = userId.Trim();
             _slackConnector.UserStatusChanged += UserStatusChanged;
-            _trackingUserId = Config.Config.Get("SlackUserId", "AWTRIXSHARP_SLACK__USERID");
-            Logger.LogInformation("Slack monitoring userId='{_trackingUserId}'", _trackingUserId);
+            Logger.LogInformation("Slack monitoring userId='{SlackUserId}'", _trackingUserId);
         }
 
         /// <summary>
-        /// WS4 (CR-31): detach from the Slack connector on dispose. Keep this override when rewriting this file (WS5).
+        /// WS4 (CR-31): detach from the Slack connector on dispose. Keep this override when rewriting this file.
+        /// Removing a handler that was never added (no user id) is a no-op.
         /// </summary>
         protected override void ReleaseResources()
         {
@@ -41,49 +57,56 @@ namespace AwtrixSharpWeb.Apps.SlackStatus
 
         private void UserStatusChanged(object? sender, SlackUserStatusChangedEventArgs e)
         {
-            if (_trackingUserId.Equals(e.UserId))
+            if (e is null || _trackingUserId is null || !string.Equals(_trackingUserId, e.UserId, StringComparison.Ordinal))
             {
-                Logger.LogInformation($"SlackApp: {e.ToString()}");
-                bool result;
-                if (e.StatusText == string.Empty)
-                {
-                    Logger.LogInformation("Clearing status");
-                    result = AppClear().Result;
-                }
-                else
-                {
-                    var message = new AwtrixAppMessage();
-
-                    // Look for a matching value map
-                    if (!DecorateIfMatch(e.StatusText, message))
-                    {
-                        if (!DecorateIfMatch(e.StatusEmoji, message))
-                        {
-                            // No mapping found, use default behavior
-                            message.SetText(e.StatusText);
-                            message.SetDuration(50);
-                        }
-                    }
-
-                    Logger.LogInformation(message.ToString());
-                    result = AppUpdate(message).Result;
-                }
+                return;
             }
+
+            // Never block or throw on SlackNet's dispatch thread
+            _ = FireAndLog(() => ShowStatusAsync(e), nameof(UserStatusChanged));
         }
 
-        private bool DecorateIfMatch(string value, AwtrixAppMessage message)
+        private async Task ShowStatusAsync(SlackUserStatusChangedEventArgs e)
         {
-            var valueMap = Config.FindMatchingValueMap(value);
+            Logger.LogInformation("SlackApp: {SlackStatus}", e);
 
-            if (valueMap != null)
+            if (string.IsNullOrEmpty(e.StatusText))
             {
-                Logger.LogInformation("ValueMap matched for'{value}'", value);
-
-                valueMap.Decorate(message, Logger);
-
-                return true;
+                Logger.LogInformation("Clearing status");
+                await AppClear();
+                return;
             }
-            return false;
+
+            var message = new AwtrixAppMessage();
+
+            // Look for a matching value map on the text, then the emoji
+            if (!DecorateIfMatch(e.StatusText, message) && !DecorateIfMatch(e.StatusEmoji, message))
+            {
+                // No mapping found, use default behavior
+                message.SetText(e.StatusText);
+                message.SetDuration(DefaultDurationSeconds);
+            }
+
+            Logger.LogInformation("Slack status message: {Message}", message);
+            await AppUpdate(message);
+        }
+
+        private bool DecorateIfMatch(string? value, AwtrixAppMessage message)
+        {
+            if (string.IsNullOrEmpty(value))
+            {
+                return false;
+            }
+
+            var valueMap = Config.FindMatchingValueMap(value);
+            if (valueMap == null)
+            {
+                return false;
+            }
+
+            Logger.LogInformation("ValueMap matched for '{Value}'", value);
+            valueMap.Decorate(message, Logger);
+            return true;
         }
     }
 }
