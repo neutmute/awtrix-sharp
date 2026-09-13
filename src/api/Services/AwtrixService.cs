@@ -1,58 +1,61 @@
-﻿using AwtrixSharpWeb.Domain;
+using AwtrixSharpWeb.Domain;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace AwtrixSharpWeb.Services
 {
-
-
     public class AwtrixService : IAwtrixService
     {
-        HttpPublisher _httpPublisher;
-        MqttPublisher _mqttPublisher;
+        private readonly HttpPublisher _httpPublisher;
+        private readonly MqttPublisher _mqttPublisher;
+        private readonly ILogger _logger;
 
-        public AwtrixService(HttpPublisher httpPublisher, MqttPublisher mqttPublisher)
+        public AwtrixService(HttpPublisher httpPublisher, MqttPublisher mqttPublisher, ILogger<AwtrixService>? logger = null)
         {
             _httpPublisher = httpPublisher;
             _mqttPublisher = mqttPublisher;
+            _logger = (ILogger?)logger ?? NullLogger.Instance;
         }
 
         /// <summary>
         /// https://blueforcer.github.io/awtrix3/#/api?id=change-settings
         /// </summary>
-        public async Task<bool> Set(AwtrixAddress awtrixAddress, AwtrixSettings settings)
+        public Task<bool> Set(AwtrixAddress awtrixAddress, AwtrixSettings settings)
         {
+            var baseTopic = awtrixAddress.BaseTopic;
             var payload = settings.ToJson();
-            return await ResolvePublisher(awtrixAddress.BaseTopic).Publish(awtrixAddress.BaseTopic + $"/settings", payload);
+            return SafePublish(baseTopic, p => p.Publish(baseTopic + "/settings", payload));
         }
-
 
         /// <summary>
         /// https://blueforcer.github.io/awtrix3/#/api?id=sound-playback
         /// </summary>
-        public async Task<bool> PlayRtttl(AwtrixAddress awtrixAddress, string rtttl)
+        public Task<bool> PlayRtttl(AwtrixAddress awtrixAddress, string rtttl)
         {
-            return await ResolvePublisher(awtrixAddress.BaseTopic).Publish(awtrixAddress.BaseTopic + $"/rtttl", rtttl);
+            var baseTopic = awtrixAddress.BaseTopic;
+            return SafePublish(baseTopic, p => p.Publish(baseTopic + "/rtttl", rtttl));
         }
 
-        public async Task<bool> AppUpdate(AwtrixAddress awtrixAddress, string appName, AwtrixAppMessage message)
+        public Task<bool> AppUpdate(AwtrixAddress awtrixAddress, string appName, AwtrixAppMessage message)
         {
-            return await Publish(awtrixAddress.BaseTopic + $"/custom/{appName}", message);
+            var baseTopic = awtrixAddress.BaseTopic;
+            return SafePublish(baseTopic, p => p.Publish(baseTopic + $"/custom/{appName}", message));
         }
 
-        public async Task<bool> AppClear(AwtrixAddress awtrixAddress, string appName)
+        public Task<bool> AppClear(AwtrixAddress awtrixAddress, string appName)
         {
-            return await Publish(awtrixAddress.BaseTopic + $"/custom/{appName}", null);
+            var baseTopic = awtrixAddress.BaseTopic;
+            return SafePublish(baseTopic, p => p.Publish(baseTopic + $"/custom/{appName}", (AwtrixAppMessage?)null));
         }
 
-        public async Task<bool> Notify(AwtrixAddress awtrixAddress, AwtrixAppMessage message)
+        public Task<bool> Notify(AwtrixAddress awtrixAddress, AwtrixAppMessage message)
         {
             if (String.IsNullOrWhiteSpace(message.Text))
             {
-                return await Dismiss(awtrixAddress);
+                return Dismiss(awtrixAddress);
             }
-            else
-            {
-                return await Publish(awtrixAddress.BaseTopic + "/notify", message);
-            }
+
+            var baseTopic = awtrixAddress.BaseTopic;
+            return SafePublish(baseTopic, p => p.Publish(baseTopic + "/notify", message));
         }
 
         /// <summary>
@@ -84,17 +87,34 @@ namespace AwtrixSharpWeb.Services
             return (p, blink);
         }
 
-
         /// <remarks>https://blueforcer.github.io/awtrix3/#/api?id=dismiss-notification</remarks>
-        public async Task<bool> Dismiss(AwtrixAddress awtrixAddress)
+        public Task<bool> Dismiss(AwtrixAddress awtrixAddress)
         {
-            return await Publish(awtrixAddress.BaseTopic + "/notify/dismiss", null);
+            var baseTopic = awtrixAddress.BaseTopic;
+            return SafePublish(baseTopic, p => p.Publish(baseTopic + "/notify/dismiss", (AwtrixAppMessage?)null));
         }
 
-        private async Task<bool> Publish(string topic, AwtrixAppMessage? message)
+        /// <summary>
+        /// Defensive wrapper: publishers must not throw, but if one does the failure is contained here.
+        /// Publishers log the failure reason themselves, so a plain false is only logged at Debug.
+        /// </summary>
+        private async Task<bool> SafePublish(string baseTopic, Func<AwtrixPublisher, Task<bool>> publish)
         {
-            return await ResolvePublisher(topic).Publish(topic, message);
-            
+            try
+            {
+                var publisher = ResolvePublisher(baseTopic);
+                var delivered = await publish(publisher);
+                if (!delivered)
+                {
+                    _logger.LogDebug("Publish via {Publisher} for {BaseTopic} was not delivered", publisher.GetType().Name, baseTopic);
+                }
+                return delivered;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Publisher threw for {BaseTopic}; treating as not delivered", baseTopic);
+                return false;
+            }
         }
 
         private AwtrixPublisher ResolvePublisher(string topic)

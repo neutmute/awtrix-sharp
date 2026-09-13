@@ -25,7 +25,9 @@ namespace Test.Apps.SlackStatus
         {
             var mqttConnector = new MqttConnector(new Mock<ILogger<MqttConnector>>().Object, Options.Create(new MqttSettings()));
             var mqttPublisher = new MqttPublisher(mqttConnector, new Mock<ILogger<MqttPublisher>>().Object);
-            var httpPublisher = new HttpPublisher(new Mock<ILogger<HttpPublisher>>().Object);
+            var httpPublisher = new HttpPublisher(
+                new Mock<ILogger<HttpPublisher>>().Object,
+                new Test.Services.StubHttpClientFactory(Test.Services.StubHttpMessageHandler.Returning(System.Net.HttpStatusCode.OK)));
             return new AwtrixService(httpPublisher, mqttPublisher);
         }
 

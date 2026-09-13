@@ -1,3 +1,4 @@
+using System.Net;
 using AwtrixSharpWeb.HostedServices;
 using AwtrixSharpWeb.Services;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -8,9 +9,8 @@ namespace Test.Services
 {
     /// <summary>
     /// Test double for HttpPublisher that captures the last published url/payload
-    /// instead of making a real HTTP call. HttpPublisher owns its HttpClient
-    /// internally (no injection seam), so we override the abstract Publish(url, payload)
-    /// method to intercept before any real network I/O happens.
+    /// instead of making a real HTTP call. Overrides the abstract Publish(url, payload)
+    /// so the stub IHttpClientFactory passed to the base is never used.
     /// </summary>
     public class FakeHttpPublisher : HttpPublisher
     {
@@ -18,8 +18,10 @@ namespace Test.Services
         public string? LastPayload { get; private set; }
         public int PublishCallCount { get; private set; }
         public bool ReturnValue { get; set; } = true;
+        public Exception? ThrowOnPublish { get; set; }
 
-        public FakeHttpPublisher() : base(NullLogger<HttpPublisher>.Instance)
+        public FakeHttpPublisher()
+            : base(NullLogger<HttpPublisher>.Instance, new StubHttpClientFactory(StubHttpMessageHandler.Returning(HttpStatusCode.OK)))
         {
         }
 
@@ -28,6 +30,10 @@ namespace Test.Services
             LastUrl = url;
             LastPayload = payload;
             PublishCallCount++;
+            if (ThrowOnPublish != null)
+            {
+                throw ThrowOnPublish;
+            }
             return Task.FromResult(ReturnValue);
         }
     }
@@ -42,6 +48,7 @@ namespace Test.Services
         public string? LastPayload { get; private set; }
         public int PublishCallCount { get; private set; }
         public bool ReturnValue { get; set; } = true;
+        public Exception? ThrowOnPublish { get; set; }
 
         public FakeMqttPublisher()
             : base(new MqttConnector(NullLogger<MqttConnector>.Instance, Options.Create(new MqttSettings())), NullLogger<MqttPublisher>.Instance)
@@ -53,6 +60,10 @@ namespace Test.Services
             LastUrl = url;
             LastPayload = payload;
             PublishCallCount++;
+            if (ThrowOnPublish != null)
+            {
+                throw ThrowOnPublish;
+            }
             return Task.FromResult(ReturnValue);
         }
     }

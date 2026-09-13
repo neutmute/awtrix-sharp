@@ -1,15 +1,14 @@
-﻿using AwtrixSharpWeb.Domain;
-using System.Net.Http;
+using AwtrixSharpWeb.Domain;
 
 namespace AwtrixSharpWeb.Services
 {
     public abstract class AwtrixPublisher
     {
-        ILogger _logger;
+        protected ILogger Logger { get; }
 
         protected AwtrixPublisher(ILogger logger)
         {
-            _logger = logger;
+            Logger = logger;
         }
 
         public string ToJson(AwtrixAppMessage? message)
@@ -24,13 +23,18 @@ namespace AwtrixSharpWeb.Services
             }
         }
 
+        /// <summary>
+        /// Transport primitive. Contract: MUST NOT throw. Returns true only when the transport
+        /// confirmed the hand-off (HTTP 2xx / MQTT client publish completed); every failure is
+        /// logged by the implementation and reported as false.
+        /// </summary>
         public abstract Task<bool> Publish(string url, string payload);
 
         public async Task<bool> Publish(string url, AwtrixAppMessage? message)
         {
             var json = ToJson(message);
             var publisherType = this.GetType().Name;
-            _logger.LogDebug("{publisherType} Publishing to {url} with payload: {json}", publisherType, url, json);
+            Logger.LogDebug("{publisherType} Publishing to {url} with payload: {json}", publisherType, url, json);
             return await Publish(url, json);
         }
     }

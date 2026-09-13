@@ -175,5 +175,21 @@ namespace Test.Services
 
             Assert.False(result);
         }
+
+        [Fact]
+        public async Task PublisherThatThrows_IsContainedAndReportedAsFalse()
+        {
+            var (service, _, mqtt) = CreateService();
+            mqtt.ThrowOnPublish = new InvalidOperationException("contract violation");
+            var address = new AwtrixAddress { BaseTopic = "awtrix/clock1" };
+
+            var notify = await service.Notify(address, new AwtrixAppMessage().SetText("hi"));
+            var update = await service.AppUpdate(address, "MyApp", new AwtrixAppMessage().SetText("42"));
+            var set = await service.Set(address, new AwtrixSettings().SetBrightness(5));
+
+            Assert.False(notify);
+            Assert.False(update);
+            Assert.False(set);
+        }
     }
 }

@@ -1,22 +1,45 @@
-﻿using AwtrixSharpWeb.Domain;
-using AwtrixSharpWeb.HostedServices;
+using System.Text;
 
 namespace AwtrixSharpWeb.Services
 {
+    /// <summary>
+    /// Publishes to an Awtrix device's HTTP API. Never throws: every failure is logged and reported as false.
+    /// </summary>
     public class HttpPublisher : AwtrixPublisher
     {
-        private readonly HttpClient _httpClient;
+        public const string HttpClientName = "AwtrixHttpPublisher";
 
-        public HttpPublisher(ILogger<HttpPublisher> logger) : base(logger)
+        public static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(5);
+
+        private readonly IHttpClientFactory _httpClientFactory;
+
+        public HttpPublisher(ILogger<HttpPublisher> logger, IHttpClientFactory httpClientFactory) : base(logger)
         {
-            _httpClient = new HttpClient();
+            _httpClientFactory = httpClientFactory;
         }
 
         public override async Task<bool> Publish(string url, string payload)
         {
-            var content = new StringContent(payload, System.Text.Encoding.UTF8, "application/json");
-            var response = await _httpClient.PostAsync(url, content);
-            return response.IsSuccessStatusCode;
+            try
+            {
+                var client = _httpClientFactory.CreateClient(HttpClientName);
+                using var content = new StringContent(payload ?? string.Empty, Encoding.UTF8, "application/json");
+                using var response = await client.PostAsync(url, content);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    return true;
+                }
+
+                Logger.LogWarning("HTTP publish to {Url} returned {StatusCode}", url, (int)response.StatusCode);
+                return false;
+            }
+            catch (Exception ex)
+            {
+                // Routine when a device is offline: log type + message, not the stack trace
+                Logger.LogWarning("HTTP publish to {Url} failed: {ErrorType}: {Error}", url, ex.GetType().Name, ex.Message);
+                return false;
+            }
         }
     }
 }

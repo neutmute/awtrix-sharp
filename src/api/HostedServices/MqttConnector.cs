@@ -82,13 +82,10 @@ namespace AwtrixSharpWeb.HostedServices
             }
         }
 
-        public async Task PublishAsync(string topic, string payload)
+        public async Task<bool> PublishAsync(string topic, string payload)
         {
-            var payloadLog = payload;
-            if (string.IsNullOrEmpty(payload))
-            {
-                payloadLog = "<empty>";
-            }
+            payload ??= string.Empty;
+            var payloadLog = payload.Length == 0 ? "<empty>" : payload;
             _log.LogDebug("Publishing MQTT to topic {Topic} with payload {Payload}", topic, payloadLog);
 
             var message = new MqttApplicationMessageBuilder()
@@ -99,11 +96,23 @@ namespace AwtrixSharpWeb.HostedServices
             try
             {
                 await _client.PublishAsync(message, CancellationToken.None);
+                return true;
             }
-            catch(Exception e)
+            catch (Exception e)
             {
-                _log.LogError($"Failed to publish message {message} ({e.Message})");
-                await ConnectAsync(); // Attempt to reconnect if publish fails
+                _log.LogError("Failed to publish MQTT message to {Topic} ({Error})", topic, e.Message);
+
+                // Reconnect-on-failure is preserved until WS2 replaces it; it must never escape.
+                try
+                {
+                    await ConnectAsync();
+                }
+                catch (Exception reconnectEx)
+                {
+                    _log.LogError(reconnectEx, "MQTT reconnect after failed publish also failed");
+                }
+
+                return false;
             }
         }
 

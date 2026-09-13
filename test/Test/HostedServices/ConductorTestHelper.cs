@@ -1,3 +1,4 @@
+using System.Net;
 using AwtrixSharpWeb.Domain;
 using AwtrixSharpWeb.Services;
 using AwtrixSharpWeb.HostedServices;
@@ -6,6 +7,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
+using Test.Services;
 using TransportOpenData.TripPlanner;
 
 namespace Test.HostedServices
@@ -40,7 +42,9 @@ namespace Test.HostedServices
                 NullLogger<TripPlannerService>.Instance);
             var mqttConnector = new MqttConnector(NullLogger<MqttConnector>.Instance, Options.Create(new MqttSettings()));
             var mqttPublisher = new MqttPublisher(mqttConnector, NullLogger<MqttPublisher>.Instance);
-            var httpPublisher = new HttpPublisher(NullLogger<HttpPublisher>.Instance);
+            var httpPublisher = new HttpPublisher(
+                NullLogger<HttpPublisher>.Instance,
+                new StubHttpClientFactory(StubHttpMessageHandler.Returning(HttpStatusCode.OK)));
             var slackConnector = new SlackConnector(NullLogger<SlackConnector>.Instance);
 
             return new Conductor(

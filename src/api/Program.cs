@@ -2,6 +2,7 @@ using AwtrixSharpWeb.Apps;
 using AwtrixSharpWeb.Apps.Configs;
 using AwtrixSharpWeb.Domain;
 using AwtrixSharpWeb.HostedServices;
+using AwtrixSharpWeb.Interfaces;
 using AwtrixSharpWeb.Services;
 using AwtrixSharpWeb.Services.TripPlanner;
 using Microsoft.Extensions.Configuration;
@@ -43,6 +44,8 @@ namespace AwtrixSharpWeb
             services.AddTransient<TripPlannerService>();
 
             services.AddSingleton<MqttConnector>();
+            services.AddSingleton<IMqttConnector>(sp => sp.GetRequiredService<MqttConnector>());
+            services.AddHttpClient(HttpPublisher.HttpClientName, client => client.Timeout = HttpPublisher.DefaultTimeout);
             services.AddSingleton<SlackConnector>();
             services.AddSingleton<HttpPublisher>();
             services.AddSingleton<MqttPublisher>();

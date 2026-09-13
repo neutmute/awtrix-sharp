@@ -1,22 +1,30 @@
-﻿using AwtrixSharpWeb.Domain;
-using AwtrixSharpWeb.HostedServices;
-using Microsoft.Extensions.Logging;
+using AwtrixSharpWeb.Interfaces;
 
 namespace AwtrixSharpWeb.Services
 {
+    /// <summary>
+    /// Publishes to an Awtrix device over MQTT. Never throws: failures are reported as false.
+    /// </summary>
     public class MqttPublisher : AwtrixPublisher
     {
-        MqttConnector _mqttService;
+        private readonly IMqttConnector _mqttConnector;
 
-        public MqttPublisher(MqttConnector mqttService, ILogger<MqttPublisher> logger) : base(logger)
+        public MqttPublisher(IMqttConnector mqttConnector, ILogger<MqttPublisher> logger) : base(logger)
         {
-            _mqttService = mqttService;
+            _mqttConnector = mqttConnector;
         }
 
         public override async Task<bool> Publish(string topic, string payload)
         {
-            await _mqttService.PublishAsync(topic, payload);
-            return true;
+            try
+            {
+                return await _mqttConnector.PublishAsync(topic, payload);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning(ex, "MQTT publish to {Topic} failed", topic);
+                return false;
+            }
         }
     }
 }
