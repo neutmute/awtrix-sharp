@@ -74,10 +74,19 @@ Run: `grep -n "public static void AddAwtrixServices\|private static void SetupCo
 Expected:
 - `public static void AddAwtrixServices(IServiceCollection services, IConfiguration configuration)`
 - `SetupConfiguration` still contains `.AddJsonFile("appsettings.json", ...)`
-- `services.Configure<TransportOpenDataConfig>(config => { config.ApiKey = Environment.GetEnvironmentVariable("TRANSPORTOPENDATA__APIKEY") ...` (WS6 may have moved the HttpClient registrations, but this options block should still exist)
+- `services.Configure<TransportOpenDataConfig>(config => { config.ApiKey = Environment.GetEnvironmentVariable("TRANSPORTOPENDATA__APIKEY") ...` exactly as before WS6 (WS6 spec §9.3 leaves this block untouched)
 - `UseDeveloperExceptionPage` is still unconditional.
 
-If WS6 moved the TfNSW options block elsewhere (for example an `AddTripPlanner` extension), apply Task 2 Step 3's `AddOptions<TransportOpenDataConfig>` block **in place of that block**, wherever it lives.
+Run: `grep -n "AddHttpClient(TripPlannerService.HttpClientName\|AddSingleton<TripPlannerService>\|AddSingleton<ITripPlannerService>\|AddHttpClient<TripClient>\|AddHttpClient<StopfinderClient>\|AddTransient<TripPlannerService>" src/api/Program.cs`
+Expected (WS6 Task 2 Step 7):
+- `services.AddHttpClient(TripPlannerService.HttpClientName, (serviceProvider, client) =>` (reads `IOptions<TransportOpenDataConfig>.Value.ApiKey` when a client is created, so Task 2's `AddSettings` flows into the `apikey` header with no further change)
+- `services.AddSingleton<TripPlannerService>();` and `services.AddSingleton<ITripPlannerService>(...)`
+- no `AddHttpClient<TripClient>`, `AddHttpClient<StopfinderClient>` or `AddTransient<TripPlannerService>`
+
+Task 2 Step 3 replaces only the `Configure<TransportOpenDataConfig>` block; leave the named client and singleton registrations as WS6 wrote them. If the options block has moved elsewhere (for example an `AddTripPlanner` extension), apply Task 2 Step 3's `AddOptions<TransportOpenDataConfig>` block **in place of that block**, wherever it lives.
+
+Run: `grep -n "BaseUrl" src/transportOpenData/TransportOpenDataConfig.cs`
+Expected: `public string BaseUrl { get; set; } = "https://api.transport.nsw.gov.au/v1/tp";` (WS6 changed the class default from `/v1`).
 
 - [ ] **Step 3: Conductor per-app guard and registry (WS3)**
 
@@ -103,19 +112,43 @@ Expected: `Task InitAsync();` and `public async Task StartAsync(`.
 Run: `grep -n "FirstOrDefault\|NotFound\|DateTimeOffset.Parse\|ToActionResult" src/api/Controllers/TripTimerController.cs`
 Expected: `TestTimingConfig` uses `FirstOrDefault` and returns `NotFound(...)`, and still calls `DateTimeOffset.Parse(departureTime)`.
 
-Run: `grep -n "DateTime.Parse\|DateTimeOffset.Parse\|GetNextDepartures\|GetTrips" src/api/Controllers/TripPlannerController.cs`
-Record whether WS6 changed `GetNextDepartures`/`GetTrips` to take `DateTimeOffset`. If it did, Task 6 parses with `DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.AssumeLocal, out var fromTimestamp)` instead of `DateTime.TryParse`, and the en-AU test still expects `itdDate "20250102"`.
+Run: `grep -n "DateTime.Parse\|DateTimeOffset.Parse\|TransportTime.TryParseQuery\|FormatException\|GetNextDepartures\|GetTrips\|CancellationToken cancellationToken" src/api/Controllers/TripPlannerController.cs`
+Expected (WS6 Task 2 Step 6):
+- no `DateTime.Parse` / `DateTimeOffset.Parse`
+- `GetDepartures` and `GetTrip` each contain, **inside** the `try`, `if (!TransportTime.TryParseQuery(fromDateTime, out var fromTimestamp))` followed by `throw new FormatException($"'{fromDateTime}' is not a recognised date/time"); // 500 as before; WS7 makes this a 400`
+- the actions take `CancellationToken cancellationToken = default` and pass it to `GetNextDepartures(originId, destinationId, fromTimestamp, cancellationToken)` / `GetTrips(..., cancellationToken)`
 
-- [ ] **Step 5: TripPlannerService config (WS6)**
+Task 6 keeps `TransportTime.TryParseQuery` (invariant culture; offset-less means Sydney wall clock). Do **not** switch to `DateTime.TryParse`/`DateTimeOffset.TryParse(..., AssumeLocal)`: that would reintroduce host-timezone dependence (WS6 CR-26).
+
+- [ ] **Step 5: TripPlannerService, cache and test doubles (WS6)**
 
 Run: `grep -rn "DATA_DIRECTORY" src/api --include=*.cs`
-Expected: `Services/TripPlanner/TripPlannerService.cs` (and `Debug/SlackUserHarvester.cs`, which is out of scope). If WS6 moved the cache read into another class (for example `TripCache`), apply Task 2's `DataSettings` change to **that** class's constructor and call site instead, and put the options test in that class's test file.
+Expected: `Services/TripPlanner/TripFileCache.cs` (the constant `DataDirectoryVariable`) and `Debug/SlackUserHarvester.cs` (out of scope). There is no `TryLocalCache` method any more.
 
-Run: `grep -n "public TripPlannerService(" -A 6 src/api/Services/TripPlanner/TripPlannerService.cs`
-Record the constructor. Task 2 appends `IOptions<DataSettings>? dataSettings = null` as the last parameter.
+Run: `grep -n "new TripFileCache(" src/api/Services/TripPlanner/TripPlannerService.cs`
+Expected: exactly one match, inside `GetNextDepartures`:
+`var cache = new TripFileCache(Environment.GetEnvironmentVariable(TripFileCache.DataDirectoryVariable), _logger);`
+This is the only env-var read Task 2 replaces (only the constructor argument changes).
 
-Run: `grep -n "GetNextDepartures(" src/api/Interfaces/ITripPlannerService.cs`
-Record the parameter type (`DateTime` or `DateTimeOffset`) for Task 2's cache test.
+Run: `grep -n "public TripPlannerService(" -A 4 src/api/Services/TripPlanner/TripPlannerService.cs`
+Expected: `(IHttpClientFactory httpClientFactory, IOptions<TransportOpenDataConfig> config, ILogger<TripPlannerService> logger)`. Task 2 appends `IOptions<DataSettings>? dataSettings = null` as the last parameter.
+
+Run: `grep -n "GetNextDepartures(\|GetTrips(\|FindStops(" src/api/Interfaces/ITripPlannerService.cs`
+Expected: `DateTimeOffset fromWhen, CancellationToken cancellationToken = default` on `GetNextDepartures` and `GetTrips`; `CancellationToken cancellationToken = default` on `FindStops`.
+
+Run: `grep -n "class StubHttpMessageHandler\|class StubHttpClientFactory\|public const string BaseUrl\|public static TripPlannerService CreateService" test/Test/TripPlanner/TripPlannerTestDoubles.cs`
+Expected: all four exist (`TripPlannerTestData.BaseUrl`, `TripPlannerTestData.CreateService(HttpMessageHandler, ILogger<TripPlannerService>?, string)`). Task 2's cache test and Task 6's controller tests use them.
+
+Run: `grep -n "DataDirectoryVariable =\|using static Test.TripPlanner.TripPlannerTestData\|GetNextDepartures_UnreadableCacheFile_FallsBackToTheApi\|Mock<TripClient>\|_mockTripClient" test/Test/TripPlanner/TripPlannerServiceTests.cs`
+Expected: the `DataDirectoryVariable` constant, the `using static`, and the `GetNextDepartures_UnreadableCacheFile_FallsBackToTheApi` test; **no** `Mock<TripClient>` or `_mockTripClient`.
+
+Run: `grep -n "private static TripPlannerController Create\|_InvalidDateTime_Returns500\|GetSystemUnderTest\|_mockTripClient" test/Test/TripPlanner/TripPlannerControllerTests.cs`
+Expected: `private static TripPlannerController Create(HttpMessageHandler handler)`, `GetDepartures_InvalidDateTime_Returns500` and `GetTrip_InvalidDateTime_Returns500`; **no** `GetSystemUnderTest` or `_mockTripClient`.
+
+Run: `grep -rn "GetNextDepartures(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<DateTime>())" test/Test`
+Expected: no matches. Every Moq setup of `GetNextDepartures` has four arguments: `(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>())`. Any setup added or edited during WS7 must use that form.
+
+If any of these differ, apply Task 2 / Task 6 to the shape actually present, following WS6 spec §9, rather than to the code shown here.
 
 - [ ] **Step 6: Config classes and ValueMap (WS5)**
 
@@ -326,11 +359,12 @@ Claude-Session: https://claude.ai/code/session_01X4dSCGSE1jGmwbMREypUyt"
 - Modify: `src/api/Program.cs` (`AddAwtrixServices`, new `AddSettings`, `LogStartup`)
 - Modify: `src/api/HostedServices/SlackConnector.cs` (constructor, `ExecuteAsync` token read)
 - Modify: `src/api/HostedServices/Conductor.cs` (constructor, `SlackStatusApp` factory branch)
-- Modify: `src/api/Services/TripPlanner/TripPlannerService.cs` (constructor, `TryLocalCache`)
+- Modify: `src/api/Services/TripPlanner/TripPlannerService.cs` (constructor, the `new TripFileCache(...)` argument in `GetNextDepartures`)
 - Modify: `test/Test/HostedServices/ConductorTestHelper.cs`, `test/Test/TripPlanner/TripPlannerServiceTests.cs`
 
 **Interfaces:**
 - Consumes: `Program.AddAwtrixServices(IServiceCollection, IConfiguration)`; `ConductorTestHelper.Create(...)`; `Conductor.FindApps(string, string? = null)`; `IAwtrixApp.GetConfig() : IAppConfig`.
+- Consumes (WS6): `TripPlannerService(IHttpClientFactory, IOptions<TransportOpenDataConfig>, ILogger<TripPlannerService>)`; `internal sealed TripFileCache(string? directory, ILogger logger)`; `ITripPlannerService.GetNextDepartures(string, string, DateTimeOffset, CancellationToken = default)`; test doubles `StubHttpMessageHandler`, `StubHttpClientFactory`, `TripPlannerTestData.BaseUrl`.
 - Produces:
   - `public class SlackSettings { const string SectionName = "Slack"; const string AppTokenEnvironmentVariable; const string UserIdEnvironmentVariable; string? AppToken; string? UserId; SlackSettings WithEnvironmentFallback(); }`
   - `public class DataSettings { const string DataDirectoryKey = "Settings:DATA_DIRECTORY"; const string DataDirectoryEnvironmentVariable; string? DataDirectory; DataSettings WithEnvironmentFallback(); }`
@@ -584,49 +618,47 @@ namespace Test.HostedServices
 }
 ```
 
-Append this test inside `TripPlannerServiceTests` (after `GetNextDepartures_NoEnvVarSet_FallsBackToTripClient`), and add `using AwtrixSharpWeb.Domain;` and `using Microsoft.Extensions.Options;` at the top of `test/Test/TripPlanner/TripPlannerServiceTests.cs`. If Task 0 Step 5 recorded `GetNextDepartures(..., DateTimeOffset)`, pass `new DateTimeOffset(fromWhen)`.
+Append this test inside `TripPlannerServiceTests` (after `GetNextDepartures_UnreadableCacheFile_FallsBackToTheApi`, the last test WS6 added), and add `using AwtrixSharpWeb.Domain;` at the top of `test/Test/TripPlanner/TripPlannerServiceTests.cs`. WS6's file already has `System.Text.Json`, `Microsoft.Extensions.Logging.Abstractions`, `Microsoft.Extensions.Options`, `TransportOpenData`, `using static Test.TripPlanner.TripPlannerTestData;` and the `DataDirectoryVariable` constant. The service runs over WS6's stub handler (no mocked generated clients), and the query instant carries the Sydney offset because the cache file's hour key is the Sydney hour.
 
 ```csharp
         [Fact]
         public async Task GetNextDepartures_UsesFileCacheDirectoryFromDataSettings_WhenEnvironmentVariableUnset()
         {
-            // Arrange
             var tempDir = Path.Combine(Path.GetTempPath(), "awtrixsharp-tests-" + Guid.NewGuid());
             Directory.CreateDirectory(tempDir);
-            var envVarName = "AWTRIXSHARP_SETTINGS__DATA_DIRECTORY";
-            var previousValue = Environment.GetEnvironmentVariable(envVarName);
+            var previousValue = Environment.GetEnvironmentVariable(DataDirectoryVariable);
 
             try
             {
-                Environment.SetEnvironmentVariable(envVarName, null);
-                var fromWhen = new DateTime(2025, 1, 1, 8, 0, 0);
-                var offset = DateTimeOffset.Now.Offset;
+                Environment.SetEnvironmentVariable(DataDirectoryVariable, null);
+                var fromWhen = new DateTimeOffset(2025, 1, 1, 8, 0, 0, TimeSpan.FromHours(11)); // 08:00 Sydney (AEDT) → file hour "08"
                 var cachedTrips = new List<TripSummary>
                 {
-                    new TripSummary
+                    new()
                     {
-                        Origin = new TimePlace { Time = new DateTimeOffset(2000, 1, 1, 6, 30, 0, offset), Place = "ConfiguredCache" },
-                        Destination = new TimePlace { Time = new DateTimeOffset(2000, 1, 1, 7, 0, 0, offset), Place = "Destination" }
+                        Origin = new TimePlace { Time = new DateTimeOffset(2000, 1, 1, 8, 30, 0, TimeSpan.FromHours(11)), Place = "ConfiguredCache" },
+                        Destination = new TimePlace { Time = new DateTimeOffset(2000, 1, 1, 9, 0, 0, TimeSpan.FromHours(11)), Place = "Destination" }
                     }
                 };
-                File.WriteAllText(Path.Combine(tempDir, $"trip_originA_destB_{fromWhen:HH}.json"), JsonSerializer.Serialize(cachedTrips));
+                File.WriteAllText(Path.Combine(tempDir, "trip_originA_destB_08.json"), JsonSerializer.Serialize(cachedTrips));
 
+                var handler = StubHttpMessageHandler.Json("{\"journeys\":[]}");
                 var sut = new TripPlannerService(
-                    _mockStopFinderClient.Object,
-                    _mockTripClient.Object,
-                    _mockLogger.Object,
+                    new StubHttpClientFactory(handler),
+                    Options.Create(new TransportOpenDataConfig { BaseUrl = BaseUrl }),
+                    NullLogger<TripPlannerService>.Instance,
                     Options.Create(new DataSettings { DataDirectory = tempDir }));
 
-                // Act
                 var result = await sut.GetNextDepartures("originA", "destB", fromWhen);
 
-                // Assert
+                // CR-14: the cache folder came from DataSettings, so the API was never called
                 var summary = Assert.Single(result);
                 Assert.Equal("ConfiguredCache", summary.Origin.Place);
+                Assert.Empty(handler.RequestUris);
             }
             finally
             {
-                Environment.SetEnvironmentVariable(envVarName, previousValue);
+                Environment.SetEnvironmentVariable(DataDirectoryVariable, previousValue);
                 Directory.Delete(tempDir, true);
             }
         }
@@ -667,7 +699,7 @@ For the current WS1 shape that looks like this (keep any extra WS3 parameters in
 - [ ] **Step 2: Run the tests and confirm they fail**
 
 Run: `dotnet test test/Test/Test.csproj --filter "FullyQualifiedName~Test.Configuration.SettingsResolutionTests|FullyQualifiedName~Test.Configuration.ConfigurationWarningsTests|FullyQualifiedName~Test.HostedServices.ConductorSlackSettingsTests|FullyQualifiedName~TripPlannerServiceTests"`
-Expected: build FAILS with `CS0246: The type or namespace name 'SlackSettings' could not be found` (also `DataSettings`, `ConfigurationWarnings`).
+Expected: build FAILS with `CS0246: The type or namespace name 'SlackSettings' could not be found` (also `DataSettings`, `ConfigurationWarnings`), and `CS1729` on the four-argument `TripPlannerService` constructor.
 
 - [ ] **Step 3: Implement settings classes and registration**
 
@@ -811,8 +843,9 @@ with
 
         private static void AddSettings(IServiceCollection services, IConfiguration configuration)
         {
-            // Explicit reads rather than Bind: TransportOpenDataConfig.BaseUrl defaults to .../v1 in the class,
-            // while this service has always used .../v1/tp.
+            // Explicit reads rather than Bind: the API key needs the literal TRANSPORTOPENDATA__APIKEY fallback, and a
+            // blank BaseUrl falls back to .../v1/tp. The named TransportOpenData HttpClient (WS6) reads ApiKey from these
+            // options when each client is created; TripPlannerService reads BaseUrl per call.
             services.AddOptions<TransportOpenDataConfig>().Configure(config =>
             {
                 config.ApiKey = FirstNonBlank(
@@ -922,22 +955,61 @@ with
 
 (If WS3 changed the branch to `return new SlackStatusApp(...)`, keep that return style; insert only the `if` block after `As<SlackStatusAppConfig>()`.)
 
-`src/api/Services/TripPlanner/TripPlannerService.cs`:
-- add `using AwtrixSharpWeb.Domain;` and `using Microsoft.Extensions.Options;`
-- add the field `private readonly IOptions<DataSettings>? _dataSettings;`
-- append `, IOptions<DataSettings>? dataSettings = null` as the **last** constructor parameter, and in the body `_dataSettings = dataSettings;`
-- in `TryLocalCache`, replace
+`src/api/Services/TripPlanner/TripPlannerService.cs` (post-WS6 shape; `using Microsoft.Extensions.Options;` is already present):
+- add `using AwtrixSharpWeb.Domain;`
+- replace the fields and constructor
 
 ```csharp
-            var cacheFolder = Environment.GetEnvironmentVariable("AWTRIXSHARP_SETTINGS__DATA_DIRECTORY");
+        private readonly IHttpClientFactory _httpClientFactory;
+        private readonly IOptions<TransportOpenDataConfig> _config;
+        private readonly ILogger<TripPlannerService> _logger;
+
+        public TripPlannerService(
+            IHttpClientFactory httpClientFactory,
+            IOptions<TransportOpenDataConfig> config,
+            ILogger<TripPlannerService> logger)
+        {
+            _httpClientFactory = httpClientFactory;
+            _config = config;
+            _logger = logger;
+        }
+```
+
+with
+
+```csharp
+        private readonly IHttpClientFactory _httpClientFactory;
+        private readonly IOptions<TransportOpenDataConfig> _config;
+        private readonly ILogger<TripPlannerService> _logger;
+        private readonly IOptions<DataSettings>? _dataSettings;
+
+        public TripPlannerService(
+            IHttpClientFactory httpClientFactory,
+            IOptions<TransportOpenDataConfig> config,
+            ILogger<TripPlannerService> logger,
+            IOptions<DataSettings>? dataSettings = null)
+        {
+            _httpClientFactory = httpClientFactory;
+            _config = config;
+            _logger = logger;
+            _dataSettings = dataSettings;
+        }
+```
+
+- in `GetNextDepartures`, replace
+
+```csharp
+            var cache = new TripFileCache(Environment.GetEnvironmentVariable(TripFileCache.DataDirectoryVariable), _logger);
 ```
 
 with
 
 ```csharp
             // CR-14: Settings:DATA_DIRECTORY from configuration; hand-built instances read only the env var, as before
-            var cacheFolder = (_dataSettings?.Value ?? new DataSettings().WithEnvironmentFallback()).DataDirectory;
+            var cache = new TripFileCache((_dataSettings?.Value ?? new DataSettings().WithEnvironmentFallback()).DataDirectory, _logger);
 ```
+
+Leave the rest of `GetNextDepartures` (cache hit → return, otherwise `GetTrips` + `DepartureMapper.Map`) and `TripFileCache` unchanged. `TripFileCache.DataDirectoryVariable` stays as a constant; WS6's env-var cache tests still set that variable and still pass, because `CreateService` passes no `DataSettings`.
 
 - [ ] **Step 5: Run the tests and confirm they pass**
 
@@ -950,7 +1022,7 @@ Run: `dotnet test`
 Expected: 0 failed.
 
 Run: `grep -rn "GetEnvironmentVariable" src/api --include=*.cs`
-Expected: only `Domain/SlackSettings.cs`, `Domain/DataSettings.cs`, `Program.cs` (the TfNSW fallback), `Apps/Configs/AppConfigKeys.cs` (the `Get(key, envVar)` fallback) and `Debug/SlackUserHarvester.cs` (out of scope, WS8).
+Expected: only `Domain/SlackSettings.cs`, `Domain/DataSettings.cs`, `Program.cs` (the TfNSW fallback), `Apps/Configs/AppConfigKeys.cs` (the `Get(key, envVar)` fallback) and `Debug/SlackUserHarvester.cs` (out of scope, WS8). `Services/TripPlanner/TripPlannerService.cs` and `TripFileCache.cs` must not appear.
 
 - [ ] **Step 7: Commit**
 
@@ -2465,12 +2537,13 @@ Claude-Session: https://claude.ai/code/session_01X4dSCGSE1jGmwbMREypUyt"
 
 **Files:**
 - Modify: `src/api/Controllers/TripTimerController.cs` (`TestTimingConfig`)
-- Modify: `src/api/Controllers/TripPlannerController.cs` (`GetDepartures`, `GetTrip`, new `TryParseFromDateTime`)
+- Modify: `src/api/Controllers/TripPlannerController.cs` (`GetDepartures`, `GetTrip`: WS6's `TransportTime.TryParseQuery` check moves before the `try` and returns 400)
 - Modify: `test/Test/Apps/TripTimer/TripTimerControllerTests.cs` (add test)
 - Modify: `test/Test/TripPlanner/TripPlannerControllerTests.cs` (replace two tests, add one)
 
 **Interfaces:**
 - Consumes: WS3's `TripTimerController(Conductor)` and `Conductor.FindApps(string, string? = null)`; `ConductorTestHelper.Create()`.
+- Consumes (WS6): `TransportTime.TryParseQuery(string?, out DateTimeOffset)` (invariant culture; offset-less = Sydney wall clock); `TripPlannerControllerTests.Create(HttpMessageHandler)` over `TripPlannerTestData.CreateService`; `StubHttpMessageHandler.Json(...)` and `RequestUris`.
 - Produces: `BadRequestObjectResult` with `{ message }` for unparseable `departureTime` / `fromDateTime`.
 
 - [ ] **Step 1: Write the failing tests**
@@ -2490,7 +2563,7 @@ Append to the `TripTimerControllerTests` class in `test/Test/Apps/TripTimer/Trip
         }
 ```
 
-In `test/Test/TripPlanner/TripPlannerControllerTests.cs`:
+In `test/Test/TripPlanner/TripPlannerControllerTests.cs` (WS6's stub-handler version; it builds the controller with `Create(handler)`, which is `new TripPlannerController(TripPlannerTestData.CreateService(handler), NullLogger<TripPlannerController>.Instance)`):
 - add `using System.Globalization;`
 - replace the whole `GetDepartures_InvalidDateTime_Returns500` and `GetTrip_InvalidDateTime_Returns500` tests with:
 
@@ -2498,44 +2571,44 @@ In `test/Test/TripPlanner/TripPlannerControllerTests.cs`:
         [Fact]
         public async Task GetDepartures_InvalidDateTime_Returns400()
         {
-            var sut = GetSystemUnderTest();
+            var handler = StubHttpMessageHandler.Json("{}");
+            var sut = Create(handler);
 
             var result = await sut.GetDepartures("200080", "200060", "not-a-date");
 
             Assert.IsType<BadRequestObjectResult>(result);
+            Assert.Empty(handler.RequestUris);
         }
 
         [Fact]
         public async Task GetTrip_InvalidDateTime_Returns400()
         {
-            var sut = GetSystemUnderTest();
+            var handler = StubHttpMessageHandler.Json("{}");
+            var sut = Create(handler);
 
             var result = await sut.GetTrip("200080", "200060", "not-a-date");
 
             Assert.IsType<BadRequestObjectResult>(result);
+            Assert.Empty(handler.RequestUris);
         }
 
         [Fact]
         public async Task GetTrip_ParsesFromDateTimeWithInvariantCulture_RegardlessOfHostCulture()
         {
-            // en-AU would read 01/02/2025 as 1 February; invariant reads it as 2 January
+            // en-AU would read 01/02/2025 as 1 February; invariant reads it as 2 January (offset-less → Sydney wall clock)
             var previous = CultureInfo.CurrentCulture;
             CultureInfo.CurrentCulture = new CultureInfo("en-AU");
             try
             {
-                SetupTripClientResult(new TripRequestResponse { Journeys = new List<TripRequestResponseJourney>() });
-                var sut = GetSystemUnderTest();
+                var handler = StubHttpMessageHandler.Json("{\"journeys\":[]}");
+                var sut = Create(handler);
 
                 var result = await sut.GetTrip("200080", "200060", "01/02/2025 06:00");
 
                 Assert.IsType<OkObjectResult>(result);
-                _mockTripClient.Verify(x => x.Request2Async(
-                    It.IsAny<OutputFormat5>(), It.IsAny<CoordOutputFormat4>(), It.IsAny<DepArrMacro>(), "20250102", It.IsAny<string>(),
-                    It.IsAny<Type_origin>(), It.IsAny<string>(), It.IsAny<Type_destination>(), It.IsAny<string>(), It.IsAny<int?>(),
-                    It.IsAny<Wheelchair?>(), It.IsAny<ExcludedMeans2?>(), It.IsAny<ExclMOT_12?>(), It.IsAny<ExclMOT_22?>(), It.IsAny<ExclMOT_42?>(),
-                    It.IsAny<ExclMOT_52?>(), It.IsAny<ExclMOT_72?>(), It.IsAny<ExclMOT_92?>(), It.IsAny<ExclMOT_112?>(), It.IsAny<TfNSWTR?>(),
-                    It.IsAny<string>(), It.IsAny<int?>(), It.IsAny<bool?>(), It.IsAny<int?>(), It.IsAny<BikeProfSpeed?>(), It.IsAny<int?>(),
-                    It.IsAny<int?>(), It.IsAny<int?>(), It.IsAny<int?>()), Times.Once);
+                var uri = Assert.Single(handler.RequestUris).ToString();
+                Assert.Contains("itdDate=20250102", uri);
+                Assert.Contains("itdTime=0600", uri);
             }
             finally
             {
@@ -2544,15 +2617,13 @@ In `test/Test/TripPlanner/TripPlannerControllerTests.cs`:
         }
 ```
 
-(If WS6 made the service add a cancellation token or change `Request2Async`'s argument list, copy the matcher list from `SetupTripClientResult` in the same file and keep `"20250102"` as the fourth argument.)
-
 - [ ] **Step 2: Run the tests and confirm they fail**
 
 Run: `dotnet test test/Test/Test.csproj --filter "FullyQualifiedName~TripTimerControllerTests|FullyQualifiedName~TripPlannerControllerTests"`
 Expected: FAIL:
 - `TestTimingConfig_InvalidDepartureTime_ReturnsBadRequest` fails with `FormatException`.
-- Both `*_InvalidDateTime_Returns400` tests fail with `ObjectResult` (500).
-- `GetTrip_ParsesFromDateTimeWithInvariantCulture_...` fails its verification (`itdDate` was `20250201`).
+- Both `*_InvalidDateTime_Returns400` tests fail with `ObjectResult` (500), because WS6 throws `FormatException` inside the `try`.
+- `GetTrip_ParsesFromDateTimeWithInvariantCulture_...` already **passes** (WS6's `TransportTime.TryParseQuery` is invariant). It stays as a regression guard for CR-15.
 
 - [ ] **Step 3: Implement `TripTimerController.TestTimingConfig`**
 
@@ -2587,34 +2658,64 @@ In `src/api/Controllers/TripTimerController.cs`:
 
 - [ ] **Step 4: Implement `TripPlannerController` parsing**
 
-In `src/api/Controllers/TripPlannerController.cs`:
-- add `using System.Globalization;`
-- in `GetDepartures`, remove `var fromTimestamp = DateTime.Parse(fromDateTime);` from inside the `try`, and insert before the `try`:
+In `src/api/Controllers/TripPlannerController.cs` (post-WS6 shape), keep `TransportTime.TryParseQuery`; only the failure path changes from a thrown `FormatException` (500) to 400, and the check moves before the `try`. No helper and no `System.Globalization` using are needed.
+
+In `GetDepartures`, replace
 
 ```csharp
-            if (!TryParseFromDateTime(fromDateTime, out var fromTimestamp))
+            try
+            {
+                // An offset-less value is Sydney wall clock, whatever the host TZ (CR-26)
+                if (!TransportTime.TryParseQuery(fromDateTime, out var fromTimestamp))
+                {
+                    throw new FormatException($"'{fromDateTime}' is not a recognised date/time"); // 500 as before; WS7 makes this a 400
+                }
+
+                var result = await _tripPlannerService.GetNextDepartures(originId, destinationId, fromTimestamp, cancellationToken);
+```
+
+with
+
+```csharp
+            // An offset-less value is Sydney wall clock, whatever the host TZ (CR-26); invariant culture, 400 when unparseable (CR-15)
+            if (!TransportTime.TryParseQuery(fromDateTime, out var fromTimestamp))
             {
                 return BadRequest(new { message = $"fromDateTime '{fromDateTime}' is not a valid date/time; use yyyy-MM-ddTHH:mm" });
             }
+
+            try
+            {
+                var result = await _tripPlannerService.GetNextDepartures(originId, destinationId, fromTimestamp, cancellationToken);
 ```
 
-- in `GetTrip`, make exactly the same change (remove the in-`try` `DateTime.Parse` line; insert the same block before the `try`).
-- add at the bottom of the class:
+In `GetTrip`, replace
 
 ```csharp
-        /// <summary>
-        /// CR-15: invariant culture so the result does not depend on the host's regional settings.
-        /// </summary>
-        private static bool TryParseFromDateTime(string? value, out DateTime result) =>
-            DateTime.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.None, out result);
+            try
+            {
+                if (!TransportTime.TryParseQuery(fromDateTime, out var fromTimestamp))
+                {
+                    throw new FormatException($"'{fromDateTime}' is not a recognised date/time"); // 500 as before; WS7 makes this a 400
+                }
+
+                var result = await _tripPlannerService.GetTrips(originId, destinationId, fromTimestamp, cancellationToken);
 ```
 
-If Task 0 Step 4 recorded that WS6 changed the service to take `DateTimeOffset`, use this helper instead (same call sites):
+with
 
 ```csharp
-        private static bool TryParseFromDateTime(string? value, out DateTimeOffset result) =>
-            DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.AssumeLocal, out result);
+            // An offset-less value is Sydney wall clock, whatever the host TZ (CR-26); invariant culture, 400 when unparseable (CR-15)
+            if (!TransportTime.TryParseQuery(fromDateTime, out var fromTimestamp))
+            {
+                return BadRequest(new { message = $"fromDateTime '{fromDateTime}' is not a valid date/time; use yyyy-MM-ddTHH:mm" });
+            }
+
+            try
+            {
+                var result = await _tripPlannerService.GetTrips(originId, destinationId, fromTimestamp, cancellationToken);
 ```
+
+Upstream failures inside the `try` still return 500, as today.
 
 - [ ] **Step 5: Run the tests and confirm they pass**
 
@@ -2629,6 +2730,9 @@ Expected: 0 failed.
 Run: `grep -rn "DateTime.Parse(\|DateTimeOffset.Parse(\|\.First()" src/api/Controllers`
 Expected: no matches.
 
+Run: `grep -n "FormatException\|TransportTime.TryParseQuery" src/api/Controllers/TripPlannerController.cs`
+Expected: no `FormatException`; exactly two `TransportTime.TryParseQuery` matches.
+
 - [ ] **Step 7: Commit**
 
 ```bash
@@ -2636,10 +2740,11 @@ git add src/api/Controllers/TripTimerController.cs src/api/Controllers/TripPlann
 git commit -m "fix(api): return 400 for invalid date query parameters, parse invariantly
 
 CR-15: TripTimer test/alarm-timings threw an unhandled FormatException
-and TripPlanner departures/trip returned 500 for a bad fromDateTime;
-all three parsed with the host culture. They now use the invariant
-culture and return 400 with { message }. Routes, parameters and
-success responses are unchanged.
+for a bad departureTime and parsed it with the host culture; it now
+parses invariantly and returns 400. TripPlanner departures/trip keep
+WS6's TransportTime.TryParseQuery (invariant, offset-less = Sydney) but
+return 400 with { message } instead of 500 for a bad fromDateTime.
+Routes, parameters and success responses are unchanged.
 
 Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>
 Claude-Session: https://claude.ai/code/session_01X4dSCGSE1jGmwbMREypUyt"
@@ -2663,6 +2768,12 @@ Claude-Session: https://claude.ai/code/session_01X4dSCGSE1jGmwbMREypUyt"
 | Task 0 verification of WS1-WS6 shapes | 0 |
 
 - **Placeholder scan:** every code step has full code. The only conditional instructions are Task 0-driven adaptations, and each gives exact replacement code.
+- **WS6 alignment (revised 2026-09-14, against `docs/superpowers/plans/2026-09-13-ws6-trip-planner.md` and WS6 spec §9):**
+  - Task 2: `TripPlannerService` ctor `(IHttpClientFactory, IOptions<TransportOpenDataConfig>, ILogger<TripPlannerService>, IOptions<DataSettings>? = null)`; the only replaced env-var read is the `new TripFileCache(...)` argument in `GetNextDepartures`; the cache test runs over `StubHttpClientFactory`/`StubHttpMessageHandler` with a Sydney-offset query instant.
+  - Task 2: the `Configure<TransportOpenDataConfig>` block WS6 leaves untouched is the one replaced by `AddSettings`; WS6's named client and singleton registrations are kept.
+  - Task 6: `TripPlannerController` keeps `TransportTime.TryParseQuery`; WS6's `FormatException` throw becomes `BadRequest`. Controller tests use WS6's `Create(handler)`.
+  - Task 0 Step 5 checks that no `GetNextDepartures` Moq setup uses the three-argument `DateTime` form.
+  - `TripTimerController`/`TripTimerAppConfig` are not changed by WS6; Tasks 4 and 6 apply to them as written.
 - **Type consistency:**
   - `SlackSettings.WithEnvironmentFallback()`, `DataSettings.DataDirectoryKey`, `ApiKeyMiddleware.HeaderName`, `ApiSettings.KeyConfigurationKey`, `AppConfigValidationException.AppType/Device/Errors` and `ConductorTestHelper.Create(..., slackSettings:)` are used with the same names in every task.
   - `EnsureValid(string? device)` is called with `device.BaseTopic`.

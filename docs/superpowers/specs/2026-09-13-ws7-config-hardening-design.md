@@ -11,6 +11,10 @@
 - **Execution order:** WS2 → WS3 → WS4 → WS5 → WS6 → **WS7** → WS8. WS7 is written against today's source plus the WS3 design; Task 0 of the plan verifies the assumed shapes.
 - **Plan:** `docs/superpowers/plans/2026-09-13-ws7-config-hardening.md`
 - **Status:** Approved for implementation. The owner was unavailable, so the planner made the decisions below and recorded them for review.
+- **Revision 2026-09-14 (WS6 alignment, see WS6 spec §9):**
+  - **D9:** `TripPlannerController` parses `fromDateTime` with WS6's `TransportTime.TryParseQuery`, not `DateTime.TryParse(..., InvariantCulture, None)`. It is still invariant-culture, but an offset-less value means Sydney wall clock. Only the failure path changes (500 → 400).
+  - **D2:** the "Why not `Bind`" rationale is stale, because WS6 changed the `TransportOpenDataConfig.BaseUrl` class default to `/v1/tp`. The explicit reads stay for the `TRANSPORTOPENDATA__APIKEY` fallback and the blank-`BaseUrl` default.
+  - Everything else is unchanged.
 
 ---
 
