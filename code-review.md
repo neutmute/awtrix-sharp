@@ -1011,6 +1011,25 @@ From the workstream ledgers, additional minor items were explicitly left for the
 - MqttConnector/HttpPublisher warnings still log `ex.Message` only in a few remaining spots rather than the full exception. (WS8 ledger)
 - Swagger's "Authorize" API-key UI hint is fixed at process startup; rotating `Api:Key` live updates enforcement but not the UI hint until restart. (WS7)
 
+### Follow-ups from the final whole-branch review (Minor, not blocking)
+
+From `.superpowers/sdd/final-review.md` §3 (final review on HEAD 60fda07; no Critical/Important findings; these do not block merge):
+
+| # | Location | Suggested fix |
+|---|---|---|
+| m1 | `docs/RELEASE-NOTES-feature-redo.md` (untracked) | Correct the shutdown/Dismiss wording and the literal-env-var-fallback wording before publishing. |
+| m2 | Dockerfile / readme compose example | Add `stop_grace_period: 30s` to the readme compose example (or note it in the release notes) so Conductor disposal against an offline HTTP device isn't SIGKILLed. |
+| m3 | `HostedServices/Conductor.cs:183`, `:196` | Drop the `{Reason}` placeholder from `LogError(ex, ...)` — it duplicates `ex.Message` already carried by the exception. |
+| m4 | `Services/AwtrixPublisher.cs:45` (and `SlackConnector.cs` `{statusChangedEvent}`) | Rename the lower-case Debug log placeholders to PascalCase for consistency; consider Trace level given it logs the full payload every publish. |
+| m5 | `Controllers/DiagnosticsController.cs:22,36`; `HostedServices/Conductor.cs:49,98`; `Services/TripPlanner/TripFileCache.cs:14` | Remove the unused injected `Conductor`, the unread `_hostEnvironment` field, and the unused `DataDirectoryVariable` constant. |
+| m6 | `Apps/SlackStatus/SlackStatusApp.cs:14,39`; `HostedServices/SlackConnector.cs:41`; `Services/TripPlanner/TripPlannerService.cs:104` | Make the options parameters required and drop the local env-fallback paths duplicated from `SlackSettings`/`DataSettings` (used only by tests). |
+| m7 | `Apps/AwtrixApp.cs:59`; `HostedServices/Conductor.cs:364-369` | Return 404/400 from the start endpoint for app types that don't support `ExecuteNow`, or document the no-op as a known limitation. |
+| m8 | `HostedServices/MqttConnector.cs:202,404` | Pass a bounded token (e.g. 10 s) to `PublishAsync`/`SubscribeAsync` instead of `CancellationToken.None`, so a half-open TCP connection doesn't wait out MQTTnet's ~100 s default. |
+| m9 | `Apps/ScheduledApp.cs` `StartActivation` ← `Conductor.BindButtons` | Dispatch `ExecuteNow` via `Task.Run` in the button handler (currently runs synchronously on MQTTnet's dispatch thread), or document the QoS-0-only constraint. |
+| m10 | `Apps/TripTimer/TripTimerApp.cs:314,338` | Format `nextAlarm.ToLocalTime()` so the clock text and the alarm-minute text use the same time base (they can differ when the host's UTC offset from Sydney isn't a whole hour). |
+| m11 | `test/Test/HostedServices/TimerServiceEventTests.cs:151` | Replace the real `Task.Delay(10)` pump loop with a spin on `raised.Task` driven only by `FakeTimeProvider` advances. |
+| m12 | Startup | Document that Kestrel starts listening only after hosted services start (up to ~10 s MQTT connect timeout plus concurrent `InitAsync` AppClear calls), or connect MQTT in the background without an initial await. |
+
 ### See also
 - Release notes for the person running this service: `docs/RELEASE-NOTES-feature-redo.md`
 - Per-workstream specs and plans: `docs/superpowers/specs/2026-09-13-ws1-runtime-resilience.md` through `...-ws8-build-cleanup.md` (and matching `-design.md` files), `docs/superpowers/plans/` (implementation plans referenced from each `ws*-report.md`)
