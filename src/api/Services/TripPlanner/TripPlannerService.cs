@@ -1,4 +1,3 @@
-using System.Text.Json;
 using AwtrixSharpWeb.Interfaces;
 using Microsoft.Extensions.Options;
 using TransportOpenData;
@@ -93,8 +92,10 @@ namespace AwtrixSharpWeb.Services.TripPlanner
 
         public async Task<List<TripSummary>> GetNextDepartures(string originStopId, string destinationStopId, DateTimeOffset fromWhen, CancellationToken cancellationToken = default)
         {
-            var cachedDepartures = await TryLocalCache(originStopId, destinationStopId, TransportTime.ToTransportZone(fromWhen));
-            if (cachedDepartures.Count > 0)
+            // Opt-in file cache; any problem with it falls back to the API (CR-37)
+            var cache = new TripFileCache(Environment.GetEnvironmentVariable(TripFileCache.DataDirectoryVariable), _logger);
+            var cachedDepartures = await cache.TryLoadAsync(originStopId, destinationStopId, fromWhen, cancellationToken);
+            if (cachedDepartures != null)
             {
                 _logger.LogInformation("Using {TripCount} cached trip entries", cachedDepartures.Count);
                 return cachedDepartures;
@@ -112,39 +113,6 @@ namespace AwtrixSharpWeb.Services.TripPlanner
             {
                 apply(baseUrl);
             }
-        }
-
-        // Replaced by TripFileCache in Task 4
-        private async Task<List<TripSummary>> TryLocalCache(string originStopId, string destinationStopId, DateTimeOffset fromWhen)
-        {
-            // Transport NSW data connection times aren't great, so allow override via file cache
-            var cacheFolder = Environment.GetEnvironmentVariable("AWTRIXSHARP_SETTINGS__DATA_DIRECTORY");
-
-            if (!string.IsNullOrEmpty(cacheFolder))
-            {
-                var cacheFilename = $"trip_{originStopId}_{destinationStopId}_{fromWhen:HH}.json";
-                var fullCachePath = Path.Combine(cacheFolder, cacheFilename);
-                if (File.Exists(fullCachePath))
-                {
-                    _logger.LogInformation("Loading trip data from {CacheFile}", fullCachePath);
-                    var cachedJson = await File.ReadAllTextAsync(fullCachePath);
-                    var cachedTrips = JsonSerializer.Deserialize<List<TripSummary>>(cachedJson)!;
-
-                    var now = DateTimeOffset.Now;
-                    foreach (var trip in cachedTrips)
-                    {
-                        // Adjust times to be today
-                        trip.Origin.Time = new DateTimeOffset(now.Year, now.Month, now.Day,
-                            trip.Origin.Time.Hour, trip.Origin.Time.Minute, trip.Origin.Time.Second, now.Offset);
-                        trip.Destination.Time = new DateTimeOffset(now.Year, now.Month, now.Day,
-                            trip.Destination.Time.Hour, trip.Destination.Time.Minute, trip.Destination.Time.Second, now.Offset);
-                    }
-
-                    return cachedTrips;
-                }
-            }
-
-            return new List<TripSummary>();
         }
     }
 }

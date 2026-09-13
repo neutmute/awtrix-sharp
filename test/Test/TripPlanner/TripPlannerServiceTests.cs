@@ -197,13 +197,12 @@ namespace Test.TripPlanner
             try
             {
                 var fromWhen = new DateTimeOffset(2025, 1, 1, 8, 0, 0, TimeSpan.FromHours(11)); // 08:00 Sydney (AEDT)
-                var now = DateTimeOffset.Now;
                 var cachedTrips = new List<TripSummary>
                 {
                     new()
                     {
-                        Origin = new TimePlace { Time = new DateTimeOffset(2000, 1, 1, 6, 30, 15, now.Offset), Place = "CachedOrigin" },
-                        Destination = new TimePlace { Time = new DateTimeOffset(2000, 1, 1, 7, 0, 45, now.Offset), Place = "CachedDestination" }
+                        Origin = new TimePlace { Time = new DateTimeOffset(2000, 1, 1, 8, 30, 15, TimeSpan.FromHours(11)), Place = "CachedOrigin" },
+                        Destination = new TimePlace { Time = new DateTimeOffset(2000, 1, 1, 9, 0, 45, TimeSpan.FromHours(11)), Place = "CachedDestination" }
                     }
                 };
                 File.WriteAllText(Path.Combine(tempDir, "trip_originA_destB_08.json"), JsonSerializer.Serialize(cachedTrips));
@@ -216,11 +215,35 @@ namespace Test.TripPlanner
 
                 var summary = Assert.Single(result);
                 Assert.Equal("CachedOrigin", summary.Origin.Place);
-                Assert.Equal(now.Day, summary.Origin.Time.Day); // re-dating is corrected in Task 4
-                Assert.Equal(6, summary.Origin.Time.Hour);
-                Assert.Equal(30, summary.Origin.Time.Minute);
-                Assert.Equal(15, summary.Origin.Time.Second);
+                Assert.Equal(new DateTimeOffset(2025, 1, 1, 8, 30, 15, TimeSpan.FromHours(11)), summary.Origin.Time); // the query's date, not today's
                 Assert.Empty(handler.RequestUris);
+            }
+            finally
+            {
+                Environment.SetEnvironmentVariable(DataDirectoryVariable, previousValue);
+                Directory.Delete(tempDir, true);
+            }
+        }
+
+        [Fact]
+        public async Task GetNextDepartures_UnreadableCacheFile_FallsBackToTheApi()
+        {
+            var tempDir = Path.Combine(Path.GetTempPath(), "awtrixsharp-tests-" + Guid.NewGuid());
+            Directory.CreateDirectory(tempDir);
+            var previousValue = Environment.GetEnvironmentVariable(DataDirectoryVariable);
+
+            try
+            {
+                File.WriteAllText(Path.Combine(tempDir, "trip_200080_200060_09.json"), "{ not json");
+                Environment.SetEnvironmentVariable(DataDirectoryVariable, tempDir);
+                var (sut, handler) = ServiceReturning(Response(Journey(Leg(
+                    Stop("2024-06-01T00:05:00Z", null, "Central"),
+                    Stop("2024-06-01T00:35:00Z", null, "Circular Quay")))));
+
+                var result = await sut.GetNextDepartures("200080", "200060", AnyTime); // 09:00 Sydney
+
+                Assert.Equal("Central", Assert.Single(result).Origin.Place);
+                Assert.Single(handler.RequestUris);
             }
             finally
             {
