@@ -121,5 +121,27 @@ namespace Test.Apps.MqttRender
 
             sut.Dispose();
         }
+
+        [Fact]
+        public void ExecuteNow_RetainedMessageDeliveredDuringSubscribe_IsRendered()
+        {
+            var sut = CreateSut("read/topic");
+            // Simulate the broker delivering a retained message before Subscribe returns (CR-33)
+            _mockMqttConnector
+                .Setup(x => x.Subscribe("read/topic"))
+                .Callback<string>(topic => _mockMqttConnector.Raise(
+                    x => x.MessageReceived += null,
+                    new object[] { MqttTestHelpers.CreateReceivedArgs(topic, "retained value") }))
+                .Returns(Task.CompletedTask);
+
+            sut.ExecuteNow();
+
+            _mockAwtrixService.Verify(x => x.AppUpdate(
+                _address,
+                "MqttRenderApp",
+                It.Is<AwtrixAppMessage>(m => m.Text == "retained value")), Times.Once);
+
+            sut.Dispose();
+        }
     }
 }

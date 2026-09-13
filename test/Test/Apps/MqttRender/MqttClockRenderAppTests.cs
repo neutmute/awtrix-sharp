@@ -99,5 +99,26 @@ namespace Test.Apps.MqttRender
 
             sut.Dispose();
         }
+
+        [Fact]
+        public void ExecuteNow_RetainedMessageDeliveredDuringSubscribe_IsRendered()
+        {
+            var sut = CreateSut("read/topic");
+            _mockMqttConnector
+                .Setup(x => x.Subscribe("read/topic"))
+                .Callback<string>(topic => _mockMqttConnector.Raise(
+                    x => x.MessageReceived += null,
+                    new object[] { MqttTestHelpers.CreateReceivedArgs(topic, "22.5C") }))
+                .Returns(Task.CompletedTask);
+
+            sut.ExecuteNow();
+
+            _mockAwtrixService.Verify(x => x.AppUpdate(
+                _address,
+                "MqttClockRenderApp",
+                It.Is<AwtrixAppMessage>(m => m.Text != null && m.Text.EndsWith(" 22.5C"))), Times.Once);
+
+            sut.Dispose();
+        }
     }
 }

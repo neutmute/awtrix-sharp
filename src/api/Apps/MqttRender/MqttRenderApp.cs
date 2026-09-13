@@ -31,8 +31,9 @@ namespace AwtrixSharpWeb.Apps.MqttRender
 
         protected override async Task ActivateScheduledWork(CancellationTokenSource cts)
         {
-            await _mqttConnector.Subscribe(Config.ReadTopic);
+            // Attach first: a retained message can arrive before Subscribe returns (CR-33)
             _mqttConnector.MessageReceived += RawMessageReceived;
+            await _mqttConnector.Subscribe(Config.ReadTopic);
 
             try
             {
