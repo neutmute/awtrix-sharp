@@ -12,11 +12,11 @@ namespace Test.Configuration
 {
     /// <summary>
     /// CR-14: secrets and settings come from IConfiguration (appsettings, user secrets, AWTRIXSHARP_ provider),
-    /// falling back to the literal environment variable names.
+    /// falling back to the literal environment variable names (see <see cref="SettingsEnvironmentFallbackTests"/>).
     /// </summary>
     public class SettingsResolutionTests
     {
-        private static ServiceProvider Build(Dictionary<string, string?>? settings = null)
+        internal static ServiceProvider Build(Dictionary<string, string?>? settings = null)
         {
             var services = new ServiceCollection();
             services.AddLogging();
@@ -37,15 +37,6 @@ namespace Test.Configuration
             using var provider = Build(new() { ["TransportOpenData:ApiKey"] = "key-from-config" });
 
             Assert.Equal("key-from-config", provider.GetRequiredService<IOptions<TransportOpenDataConfig>>().Value.ApiKey);
-        }
-
-        [Fact]
-        public void TransportOpenDataApiKey_FallsBackToLiteralEnvironmentVariable()
-        {
-            using var provider = Build();
-
-            var expected = Environment.GetEnvironmentVariable("TRANSPORTOPENDATA__APIKEY") ?? string.Empty;
-            Assert.Equal(expected, provider.GetRequiredService<IOptions<TransportOpenDataConfig>>().Value.ApiKey);
         }
 
         [Fact]
@@ -95,13 +86,89 @@ namespace Test.Configuration
 
             Assert.Equal("xapp-from-options", connector.ResolveAppToken());
         }
+    }
+
+    /// <summary>
+    /// CR-14 literal environment-variable fallbacks. Each test sets the variable itself, so deleting a fallback fails a
+    /// test whatever the developer's environment holds: configuration absent + variable set uses the variable;
+    /// configuration present + variable set keeps the configuration value.
+    /// </summary>
+    [Collection(ProcessEnvironmentCollection.Name)]
+    public class SettingsEnvironmentFallbackTests
+    {
+        private const string ApiKeyVariable = AwtrixSharpWeb.Program.TransportOpenDataApiKeyEnvironmentVariable;
 
         [Fact]
-        public void SlackConnector_ResolveAppToken_WithoutOptions_UsesLiteralEnvironmentVariable()
-        {
-            var connector = new SlackConnector(NullLogger<SlackConnector>.Instance);
+        public void TransportOpenDataApiKey_ConfigAbsent_UsesLiteralEnvironmentVariable() =>
+            ProcessEnvironmentCollection.WithVariable(ApiKeyVariable, "key-from-env", () =>
+            {
+                using var provider = SettingsResolutionTests.Build();
 
-            Assert.Equal(Environment.GetEnvironmentVariable("AWTRIXSHARP_SLACK__APPTOKEN"), connector.ResolveAppToken());
-        }
+                Assert.Equal("key-from-env", provider.GetRequiredService<IOptions<TransportOpenDataConfig>>().Value.ApiKey);
+            });
+
+        [Fact]
+        public void TransportOpenDataApiKey_ConfigPresent_WinsOverEnvironmentVariable() =>
+            ProcessEnvironmentCollection.WithVariable(ApiKeyVariable, "key-from-env", () =>
+            {
+                using var provider = SettingsResolutionTests.Build(new() { ["TransportOpenData:ApiKey"] = "key-from-config" });
+
+                Assert.Equal("key-from-config", provider.GetRequiredService<IOptions<TransportOpenDataConfig>>().Value.ApiKey);
+            });
+
+        [Fact]
+        public void SlackSettings_ConfigAbsent_UseLiteralEnvironmentVariables() =>
+            ProcessEnvironmentCollection.WithVariable(SlackSettings.AppTokenEnvironmentVariable, "xapp-from-env", () =>
+            ProcessEnvironmentCollection.WithVariable(SlackSettings.UserIdEnvironmentVariable, "U-FROM-ENV", () =>
+            {
+                using var provider = SettingsResolutionTests.Build();
+
+                var slack = provider.GetRequiredService<IOptions<SlackSettings>>().Value;
+                Assert.Equal("xapp-from-env", slack.AppToken);
+                Assert.Equal("U-FROM-ENV", slack.UserId);
+            }));
+
+        [Fact]
+        public void SlackSettings_ConfigPresent_WinOverEnvironmentVariables() =>
+            ProcessEnvironmentCollection.WithVariable(SlackSettings.AppTokenEnvironmentVariable, "xapp-from-env", () =>
+            ProcessEnvironmentCollection.WithVariable(SlackSettings.UserIdEnvironmentVariable, "U-FROM-ENV", () =>
+            {
+                using var provider = SettingsResolutionTests.Build(new()
+                {
+                    ["Slack:AppToken"] = "xapp-from-config",
+                    ["Slack:UserId"] = "U-FROM-CONFIG",
+                });
+
+                var slack = provider.GetRequiredService<IOptions<SlackSettings>>().Value;
+                Assert.Equal("xapp-from-config", slack.AppToken);
+                Assert.Equal("U-FROM-CONFIG", slack.UserId);
+            }));
+
+        [Fact]
+        public void DataDirectory_ConfigAbsent_UsesEnvironmentVariable() =>
+            ProcessEnvironmentCollection.WithVariable(DataSettings.DataDirectoryEnvironmentVariable, "/from-env", () =>
+            {
+                using var provider = SettingsResolutionTests.Build();
+
+                Assert.Equal("/from-env", provider.GetRequiredService<IOptions<DataSettings>>().Value.DataDirectory);
+            });
+
+        [Fact]
+        public void DataDirectory_ConfigPresent_WinsOverEnvironmentVariable() =>
+            ProcessEnvironmentCollection.WithVariable(DataSettings.DataDirectoryEnvironmentVariable, "/from-env", () =>
+            {
+                using var provider = SettingsResolutionTests.Build(new() { ["Settings:DATA_DIRECTORY"] = "/from-config" });
+
+                Assert.Equal("/from-config", provider.GetRequiredService<IOptions<DataSettings>>().Value.DataDirectory);
+            });
+
+        [Fact]
+        public void SlackConnector_ResolveAppToken_WithoutOptions_UsesLiteralEnvironmentVariable() =>
+            ProcessEnvironmentCollection.WithVariable(SlackSettings.AppTokenEnvironmentVariable, "xapp-from-env", () =>
+            {
+                var connector = new SlackConnector(NullLogger<SlackConnector>.Instance);
+
+                Assert.Equal("xapp-from-env", connector.ResolveAppToken());
+            });
     }
 }

@@ -37,16 +37,6 @@ namespace Test.Apps.SlackStatus
             config.ValueMaps = valueMaps.ToList();
             return new SlackStatusApp(NullLogger.Instance, config, _address, _awtrix.Object, _slack.Object);
         }
-
-        /// <summary>
-        /// With injected <see cref="SlackSettings"/> the app never reads the process environment (WS7/CR-14).
-        /// </summary>
-        protected SlackStatusApp CreateAppWithSettings(string trackingUserId, SlackSettings? slackSettings)
-        {
-            var config = new SlackStatusAppConfig { Type = AppName };
-            config.Config[SlackStatusApp.UserIdConfigKey] = trackingUserId;
-            return new SlackStatusApp(NullLogger.Instance, config, _address, _awtrix.Object, _slack.Object, slackSettings);
-        }
     }
 
     /// <summary>
@@ -245,84 +235,71 @@ namespace Test.Apps.SlackStatus
     }
 
     /// <summary>
-    /// Serialises tests that mutate the process-wide AWTRIXSHARP_SLACK__USERID environment variable.
-    /// DisableParallelization makes xUnit run this collection on its own, after the parallel collections.
+    /// The user id resolution path production uses (Conductor has already applied Slack:UserId, see
+    /// ConductorSlackSettingsTests and SlackWiringTests): Config:SlackUserId, else the literal AWTRIXSHARP_SLACK__USERID
+    /// variable. Each test sets that variable explicitly (restored afterwards) in the non-parallel environment collection.
     /// </summary>
-    [CollectionDefinition(Name, DisableParallelization = true)]
-    public class SlackUserIdEnvironmentCollection
+    [Collection(ProcessEnvironmentCollection.Name)]
+    public class SlackStatusAppUserIdTests : SlackStatusAppTestBase
     {
-        public const string Name = "SlackUserIdEnvironment";
-    }
+        private const string Variable = SlackStatusApp.UserIdEnvironmentVariable;
 
-    /// <summary>
-    /// The only test that still touches the process environment: a hand-built app (no SlackSettings)
-    /// falls back to the literal AWTRIXSHARP_SLACK__USERID variable, as before. The original value is restored.
-    /// </summary>
-    [Collection(SlackUserIdEnvironmentCollection.Name)]
-    public class SlackStatusAppUserIdEnvironmentFallbackTests : SlackStatusAppTestBase
-    {
+        private void Raise(string userId, string statusText) =>
+            _slack.Raise(s => s.UserStatusChanged += null, _slack.Object,
+                new SlackUserStatusChangedEventArgs { UserId = userId, StatusText = statusText });
+
         [Fact]
-        public async Task InitAsync_BlankUserId_NoSettings_UsesLiteralEnvironmentVariable()
-        {
-            var previous = Environment.GetEnvironmentVariable(SlackStatusApp.UserIdEnvironmentVariable);
-            Environment.SetEnvironmentVariable(SlackStatusApp.UserIdEnvironmentVariable, "U-FROM-ENV");
-            try
+        public Task InitAsync_BlankUserId_TracksUserFromLiteralEnvironmentVariable() =>
+            ProcessEnvironmentCollection.WithVariable(Variable, "U-FROM-ENV", async () =>
             {
                 var app = CreateApp("");
-
                 await app.InitAsync();
 
-                _slack.VerifyAdd(s => s.UserStatusChanged += It.IsAny<EventHandler<SlackUserStatusChangedEventArgs>>(), Times.Once);
-            }
-            finally
-            {
-                Environment.SetEnvironmentVariable(SlackStatusApp.UserIdEnvironmentVariable, previous);
-            }
-        }
-    }
+                Raise("U-FROM-ENV", "In a meeting");
 
-    /// <summary>
-    /// The "no user id" path, with configuration injected as empty SlackSettings (WS7/CR-14), so the
-    /// process environment is never read and these tests run in parallel.
-    /// </summary>
-    public class SlackStatusAppNoUserIdTests : SlackStatusAppTestBase
-    {
+                Assert.Equal("In a meeting", Assert.Single(_published).Text);
+            });
+
         [Fact]
-        public async Task InitAsync_BlankUserId_UsesSlackSettingsUserId()
-        {
-            var app = CreateAppWithSettings("", new SlackSettings { UserId = "U-FROM-SETTINGS" });
+        public Task InitAsync_ConfiguredUserId_WinsOverEnvironmentVariable() =>
+            ProcessEnvironmentCollection.WithVariable(Variable, "U-FROM-ENV", async () =>
+            {
+                var app = CreateApp("U-FROM-CONFIG");
+                await app.InitAsync();
 
-            await app.InitAsync();
+                Raise("U-FROM-ENV", "Ignored");
+                Raise("U-FROM-CONFIG", "In a meeting");
 
-            _slack.VerifyAdd(s => s.UserStatusChanged += It.IsAny<EventHandler<SlackUserStatusChangedEventArgs>>(), Times.Once);
-        }
+                Assert.Equal("In a meeting", Assert.Single(_published).Text);
+            });
 
         [Theory]
         [InlineData("")]
         [InlineData("   ")]
-        public async Task InitAsync_NoUserIdConfigured_DoesNotThrowOrSubscribe(string userId)
-        {
-            var app = CreateAppWithSettings(userId, new SlackSettings());
+        public Task InitAsync_NoUserIdConfigured_DoesNotThrowOrSubscribe(string userId) =>
+            ProcessEnvironmentCollection.WithVariable(Variable, null, async () =>
+            {
+                var app = CreateApp(userId);
 
-            var ex = await Record.ExceptionAsync(() => app.InitAsync());
+                var ex = await Record.ExceptionAsync(() => app.InitAsync());
 
-            Assert.Null(ex);
-            _slack.VerifyAdd(s => s.UserStatusChanged += It.IsAny<EventHandler<SlackUserStatusChangedEventArgs>>(), Times.Never);
-        }
+                Assert.Null(ex);
+                _slack.VerifyAdd(s => s.UserStatusChanged += It.IsAny<EventHandler<SlackUserStatusChangedEventArgs>>(), Times.Never);
+            });
 
         [Fact]
-        public async Task UserStatusChanged_AfterInitWithoutUserId_IsIgnored()
-        {
-            var app = CreateAppWithSettings("", new SlackSettings());
-            await app.InitAsync();
-            _awtrix.Invocations.Clear();
+        public Task UserStatusChanged_AfterInitWithoutUserId_IsIgnored() =>
+            ProcessEnvironmentCollection.WithVariable(Variable, null, async () =>
+            {
+                var app = CreateApp("");
+                await app.InitAsync();
+                _awtrix.Invocations.Clear();
 
-            // Not subscribed; even a directly raised event for an empty user id must publish nothing
-            var ex = Record.Exception(() => _slack.Raise(s => s.UserStatusChanged += null, _slack.Object,
-                new SlackUserStatusChangedEventArgs { UserId = "", StatusText = "In a meeting" }));
+                // Not subscribed; even a directly raised event for an empty user id must publish nothing
+                var ex = Record.Exception(() => Raise("", "In a meeting"));
 
-            Assert.Null(ex);
-            Assert.Empty(_awtrix.Invocations);
-        }
+                Assert.Null(ex);
+                Assert.Empty(_awtrix.Invocations);
+            });
     }
 }

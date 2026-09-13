@@ -25,25 +25,18 @@ namespace AwtrixSharpWeb.Apps.SlackStatus
             , SlackStatusAppConfig config
             , AwtrixAddress awtrixAddress
             , IAwtrixService awtrixService
-            , ISlackConnector slackConnector
-            , SlackSettings? slackSettings = null) : base(logger, config, awtrixAddress, awtrixService)
+            , ISlackConnector slackConnector) : base(logger, config, awtrixAddress, awtrixService)
         {
             _slackConnector = slackConnector;
-            _slackSettings = slackSettings;
         }
 
         /// <summary>
-        /// Optional injected Slack settings (CR-14). When supplied, a blank SlackUserId falls back to
-        /// <see cref="SlackSettings.UserId"/> (which already carries the environment fallback when bound through DI);
-        /// when null (hand-built instances), the literal AWTRIXSHARP_SLACK__USERID variable is read, as before.
+        /// The tracked user is Config:SlackUserId. In production Conductor has already filled a blank value from
+        /// Slack:UserId (CR-14); a value that is still blank falls back to the literal AWTRIXSHARP_SLACK__USERID variable.
         /// </summary>
-        private readonly SlackSettings? _slackSettings;
-
         protected override void Initialize()
         {
-            var userId = _slackSettings == null
-                ? Config.Config.Get(UserIdConfigKey, UserIdEnvironmentVariable)
-                : Program.FirstNonBlank(Config.Config.Get(UserIdConfigKey), _slackSettings.UserId);
+            var userId = Config.Config.Get(UserIdConfigKey, UserIdEnvironmentVariable);
 
             if (string.IsNullOrWhiteSpace(userId))
             {

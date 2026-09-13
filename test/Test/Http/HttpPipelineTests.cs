@@ -15,15 +15,12 @@ namespace Test.Http
         private static async Task<WebApplication> StartAsync(string environment, Dictionary<string, string?>? settings = null)
         {
             // CreateBuilder loads appsettings.json from the content root while it is constructed, before the
-            // Sources.Clear() below. The test output folder carries an empty (BOM-only) appsettings.json that does
-            // not parse, so host over a fresh empty folder instead.
-            var contentRoot = Path.Combine(Path.GetTempPath(), "awtrixsharp-ws7-http-" + Guid.NewGuid());
-            Directory.CreateDirectory(contentRoot);
-
+            // Sources.Clear() below. The test output folder's appsettings.json is "{}", so it can be the content root:
+            // no temporary folder is created (or leaked).
             var builder = WebApplication.CreateBuilder(new WebApplicationOptions
             {
                 EnvironmentName = environment,
-                ContentRootPath = contentRoot,
+                ContentRootPath = AppContext.BaseDirectory,
             });
             builder.WebHost.UseTestServer();
             builder.Configuration.Sources.Clear();
