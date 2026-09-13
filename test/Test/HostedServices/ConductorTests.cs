@@ -127,6 +127,14 @@ namespace Test.HostedServices
         }
 
         [Fact]
+        public void AppNamesConfigurable_ListsConfigTypes_WithoutAutoCreatedButtonApp()
+        {
+            Assert.Equal(
+                new[] { AppNames.DiurnalApp, AppNames.TripTimerApp, AppNames.SlackStatusApp, AppNames.MqttRenderApp, AppNames.MqttClockRenderApp },
+                AppNames.Configurable);
+        }
+
+        [Fact]
         public void FindApps_WhenNoAppsRegistered_ReturnsEmptyList()
         {
             var conductor = ConductorTestHelper.Create();

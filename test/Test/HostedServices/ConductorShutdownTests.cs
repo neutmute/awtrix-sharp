@@ -104,9 +104,29 @@ namespace Test.HostedServices
         }
 
         [Fact]
-        public void AppDisposeTimeout_CoversTwoHttpPublishTimeouts()
+        public void AppDisposeTimeout_DefaultsToTwoHttpPublishTimeouts()
         {
-            Assert.Equal(TimeSpan.FromSeconds(10), Conductor.AppDisposeTimeout);
+            Assert.Equal(TimeSpan.FromSeconds(10), Conductor.DefaultAppDisposeTimeout);
+            Assert.Equal(Conductor.DefaultAppDisposeTimeout, ConductorTestHelper.Create().AppDisposeTimeout);
+        }
+
+        [Fact]
+        public async Task StopAsync_WhenAnAppDisposeHangs_GivesUpAfterTheTimeout_AndDisposesOthers()
+        {
+            var conductor = ConductorTestHelper.Create();
+            conductor.AppDisposeTimeout = TimeSpan.FromMilliseconds(50);
+            var hung = ConductorTestHelper.MockApp("awtrix/clock1", AppNames.TripTimerApp);
+            hung.Setup(a => a.DisposeAsync()).Returns(new ValueTask(new TaskCompletionSource().Task));
+            var healthy = ConductorTestHelper.MockApp("awtrix/clock1", AppNames.DiurnalApp);
+            conductor.RegisterApp(hung.Object);
+            conductor.RegisterApp(healthy.Object);
+
+            var exception = await Record.ExceptionAsync(
+                () => conductor.StopAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(5)));
+
+            Assert.Null(exception);
+            hung.Verify(a => a.DisposeAsync(), Times.Once);
+            healthy.Verify(a => a.DisposeAsync(), Times.Once);
         }
     }
 }

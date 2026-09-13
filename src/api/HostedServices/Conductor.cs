@@ -21,9 +21,15 @@ namespace AwtrixSharpWeb.HostedServices
         public const string MqttClockRenderApp = "MqttClockRenderApp";
 
         /// <summary>
-        /// Every Type the factory can build, listed in "unknown app type" warnings.
+        /// Every Type the factory can build.
         /// </summary>
         public static readonly string[] All = { DiurnalApp, ButtonApp, TripTimerApp, SlackStatusApp, MqttRenderApp, MqttClockRenderApp };
+
+        /// <summary>
+        /// Types a device's Apps list may name, listed in "unknown app type" warnings. ButtonApp is created
+        /// automatically for every MQTT device, so it is not offered as a configurable type.
+        /// </summary>
+        public static readonly string[] Configurable = All.Where(type => type != ButtonApp).ToArray();
     }
 
     /// <summary>
@@ -50,9 +56,14 @@ namespace AwtrixSharpWeb.HostedServices
         private int _started;
 
         /// <summary>
-        /// Per-app disposal budget: two sequential 5 s HTTP publishes (Dismiss + AppClear) to an offline device.
+        /// Default per-app disposal budget: two sequential 5 s HTTP publishes (Dismiss + AppClear) to an offline device.
         /// </summary>
-        internal static readonly TimeSpan AppDisposeTimeout = TimeSpan.FromSeconds(10);
+        internal static readonly TimeSpan DefaultAppDisposeTimeout = TimeSpan.FromSeconds(10);
+
+        /// <summary>
+        /// Per-app disposal budget used by <see cref="StopAsync"/>. Internal and settable so tests can exercise the timeout path.
+        /// </summary>
+        internal TimeSpan AppDisposeTimeout { get; set; } = DefaultAppDisposeTimeout;
 
         /// <summary>
         /// An app keyed by the device it drives and its configured Type.
@@ -317,7 +328,7 @@ namespace AwtrixSharpWeb.HostedServices
                         "Unknown app type '{AppType}' on device '{Device}'; skipping. Known types: {KnownTypes}",
                         appConfig.Type,
                         device.BaseTopic,
-                        string.Join(", ", AppNames.All));
+                        string.Join(", ", AppNames.Configurable));
                     return null;
             }
 
