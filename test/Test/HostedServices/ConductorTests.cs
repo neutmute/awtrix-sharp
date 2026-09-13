@@ -1,3 +1,4 @@
+using System.Net;
 using System.Reflection;
 using AwtrixSharpWeb.Apps.Configs;
 using AwtrixSharpWeb.Apps.Diurnal;
@@ -7,16 +8,18 @@ using AwtrixSharpWeb.Apps.TripTimer;
 using AwtrixSharpWeb.Domain;
 using AwtrixSharpWeb.HostedServices;
 using AwtrixSharpWeb.Interfaces;
+using AwtrixSharpWeb.Services;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
+using Test.Apps;
+using Test.Services;
 
 namespace Test.HostedServices
 {
     /// <summary>
-    /// Covers Conductor's app factory switch, ExecuteNow's guard clauses, and FindApps
-    /// filtering. Conductor.StartAsync() itself is NOT exercised here because it calls
-    /// IAwtrixApp.Init(), which synchronously blocks on a real MQTT/HTTP publish attempt
-    /// for every app (Conductor hard-codes `new AwtrixService(_httpPublisher, _mqttPublisher)`
-    /// with no injection seam) - see the final report's testability blockers.
+    /// Covers Conductor's app factory switch, ExecuteNow's guard clauses, FindApps filtering,
+    /// and StartAsync/StopAsync. Conductor depends only on interfaces, so StartAsync runs over
+    /// mocks (ConductorTestHelper) without a broker or network.
     /// </summary>
     public class ConductorTests
     {
@@ -198,6 +201,87 @@ namespace Test.HostedServices
 
             app1.Verify(a => a.Dispose(), Times.Once);
             app2.Verify(a => a.Dispose(), Times.Once);
+        }
+
+        private static readonly DateTimeOffset HalfPastMidnight = new DateTimeOffset(2026, 9, 13, 0, 30, 0, TimeSpan.FromHours(10));
+
+        [Fact]
+        public async Task StartAsync_HttpDevice_DoesNotCreateButtonApp()
+        {
+            var device = new DeviceConfig { BaseTopic = "http://192.168.1.50/api" };
+            device.Apps.Add(AppConfig.Empty().WithName(AppNames.DiurnalApp));
+            var awtrix = new Mock<IAwtrixService>();
+            var mqtt = new Mock<IMqttConnector>();
+            var conductor = ConductorTestHelper.Create(
+                new AwtrixConfig { Devices = new[] { device } },
+                awtrixService: awtrix.Object,
+                mqttConnector: mqtt.Object,
+                clock: new MockClock(HalfPastMidnight));
+
+            await conductor.StartAsync(CancellationToken.None);
+
+            Assert.Empty(conductor.FindApps(AppNames.ButtonApp));
+            Assert.Single(conductor.FindApps(AppNames.DiurnalApp));
+            mqtt.Verify(m => m.Subscribe(It.IsAny<string>()), Times.Never);
+            awtrix.Verify(a => a.AppClear(device, AppNames.DiurnalApp), Times.Once);
+        }
+
+        [Fact]
+        public async Task StartAsync_MqttDevice_CreatesButtonAppAndSubscribesToButtons()
+        {
+            var device = new DeviceConfig { BaseTopic = "awtrix/clock1" };
+            var mqtt = new Mock<IMqttConnector>();
+            var conductor = ConductorTestHelper.Create(
+                new AwtrixConfig { Devices = new[] { device } },
+                mqttConnector: mqtt.Object,
+                clock: new MockClock(HalfPastMidnight));
+
+            await conductor.StartAsync(CancellationToken.None);
+
+            Assert.Single(conductor.FindApps(AppNames.ButtonApp));
+            mqtt.Verify(m => m.Subscribe("awtrix/clock1/stats/buttonLeft"), Times.Once);
+            mqtt.Verify(m => m.Subscribe("awtrix/clock1/stats/buttonSelect"), Times.Once);
+            mqtt.Verify(m => m.Subscribe("awtrix/clock1/stats/buttonRight"), Times.Once);
+        }
+
+        [Fact]
+        public async Task StartAsync_WithUnreachableHttpDevice_Completes()
+        {
+            // CR-02 scenario: device unplugged at startup must not fail host start
+            var offline = new StubHttpMessageHandler((_, _) => throw new HttpRequestException("No route to host"));
+            var httpPublisher = new HttpPublisher(NullLogger<HttpPublisher>.Instance, new StubHttpClientFactory(offline));
+            var awtrixService = new AwtrixService(httpPublisher, new FakeMqttPublisher());
+
+            var device = new DeviceConfig { BaseTopic = "http://192.168.1.50/api" };
+            var diurnal = AppConfig.Empty().WithName(AppNames.DiurnalApp);
+            diurnal.Config["0000"] = "Brightness=8"; // before "now", so startup replay publishes too
+            device.Apps.Add(diurnal);
+
+            var conductor = ConductorTestHelper.Create(
+                new AwtrixConfig { Devices = new[] { device } },
+                awtrixService: awtrixService,
+                clock: new MockClock(HalfPastMidnight));
+
+            var exception = await Record.ExceptionAsync(() => conductor.StartAsync(CancellationToken.None));
+
+            Assert.Null(exception);
+            Assert.Single(conductor.FindApps(AppNames.DiurnalApp));
+            Assert.NotEmpty(offline.Requests);
+        }
+
+        [Fact]
+        public async Task StopAsync_WhenOneAppDisposeThrows_StillDisposesOthers()
+        {
+            var conductor = ConductorTestHelper.Create();
+            var throwing = new Mock<IAwtrixApp>();
+            throwing.Setup(a => a.Dispose()).Throws(new AggregateException(new HttpRequestException("offline")));
+            var healthy = new Mock<IAwtrixApp>();
+            SetAppsList(conductor, new List<IAwtrixApp> { throwing.Object, healthy.Object });
+
+            var exception = await Record.ExceptionAsync(() => conductor.StopAsync(CancellationToken.None));
+
+            Assert.Null(exception);
+            healthy.Verify(a => a.Dispose(), Times.Once);
         }
 
         private static void SetAppsList(AwtrixSharpWeb.HostedServices.Conductor conductor, List<IAwtrixApp> apps)

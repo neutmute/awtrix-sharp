@@ -17,14 +17,14 @@ namespace AwtrixSharpWeb.Controllers
         private readonly ILogger<DiagnosticsController> _logger;
         private readonly AwtrixConfig _awtrixConfig;
         private readonly MqttConnector _mqttService;
-        private readonly AwtrixService _awtrixService;
+        private readonly IAwtrixService _awtrixService;
         private readonly Conductor _conductor;
 
         public DiagnosticsController(
             ILogger<DiagnosticsController> logger
             , IOptions<AwtrixConfig> devices
             , MqttConnector mqttService
-            , AwtrixService awtrixService
+            , IAwtrixService awtrixService
             , Conductor conductor
             )
         {

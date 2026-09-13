@@ -1,4 +1,4 @@
-﻿using AwtrixSharpWeb.Apps.Configs;
+using AwtrixSharpWeb.Apps.Configs;
 using AwtrixSharpWeb.Apps.Diurnal;
 using AwtrixSharpWeb.Apps.MqttRender;
 using AwtrixSharpWeb.Apps.SlackStatus;
@@ -6,10 +6,8 @@ using AwtrixSharpWeb.Apps.TripTimer;
 using AwtrixSharpWeb.Domain;
 using AwtrixSharpWeb.Interfaces;
 using AwtrixSharpWeb.Services;
-using AwtrixSharpWeb.Services.TripPlanner;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
-using System.Text.Json;
 
 namespace AwtrixSharpWeb.HostedServices
 {
@@ -20,7 +18,7 @@ namespace AwtrixSharpWeb.HostedServices
         public const string TripTimerApp = "TripTimerApp";
         public const string SlackStatusApp = "SlackStatusApp";
         public const string MqttRenderApp = "MqttRenderApp";
-        public const string MqttClockRenderApp = "MqttClockRenderApp";        
+        public const string MqttClockRenderApp = "MqttClockRenderApp";
     }
 
     /// <summary>
@@ -29,39 +27,38 @@ namespace AwtrixSharpWeb.HostedServices
     public class Conductor : IHostedService
     {
         private readonly ILogger<Conductor> _logger;
-        private readonly SlackConnector _slackConnector;
-        private readonly MqttConnector _mqttConnector;
-        private readonly HttpPublisher _httpPublisher;
-        private readonly MqttPublisher _mqttPublisher;
-        private readonly TripPlannerService _tripPlanner;
-        private readonly TimerService _timerService;
+        private readonly ISlackConnector _slackConnector;
+        private readonly IMqttConnector _mqttConnector;
+        private readonly IAwtrixService _awtrixService;
+        private readonly ITripPlannerService _tripPlanner;
+        private readonly ITimerService _timerService;
+        private readonly IClock _clock;
         private readonly IHostEnvironment _hostEnvironment;
         private readonly ILoggerFactory _loggerFactory;
         AwtrixConfig _awtrixConfig;
 
         List<IAwtrixApp> _apps;
 
-
         public Conductor(
             ILogger<Conductor> logger
             , IHostEnvironment env
             , IOptions<AwtrixConfig> awtrixConfig
-            , TimerService timerService
-            , TripPlannerService tripPlanner
-            , MqttPublisher mqttPublisher
-            , HttpPublisher httpPublisher
-            , SlackConnector slackConnector
-            , MqttConnector mqttConnector
+            , ITimerService timerService
+            , ITripPlannerService tripPlanner
+            , IAwtrixService awtrixService
+            , ISlackConnector slackConnector
+            , IMqttConnector mqttConnector
+            , IClock clock
             , ILoggerFactory loggerFactory)
         {
             _logger = logger;
             _awtrixConfig = awtrixConfig.Value;
             _slackConnector = slackConnector;
-            _httpPublisher = httpPublisher;
-            _mqttPublisher = mqttPublisher;
+            _awtrixService = awtrixService;
             _mqttConnector = mqttConnector;
             _tripPlanner = tripPlanner;
             _timerService = timerService;
+            _clock = clock;
             _hostEnvironment = env;
             _loggerFactory = loggerFactory;
 
@@ -72,28 +69,39 @@ namespace AwtrixSharpWeb.HostedServices
         {
             foreach (var device in _awtrixConfig.Devices)
             {
-                var buttonApp = (ButtonApp) AppFactory(device, AppConfig.Empty().WithName(AppNames.ButtonApp));
-                _apps.Add(buttonApp);
+                ButtonApp? buttonApp = null;
 
-                buttonApp.Click += (s, e) =>
+                if (device.IsHttp)
                 {
-                    _logger.LogInformation("{Button} button clicked on {Device}", e.Button, device.BaseTopic);
-                };
+                    _logger.LogInformation(
+                        "Device {Device} uses the HTTP transport; hardware buttons are not supported, ButtonApp not created",
+                        device.BaseTopic);
+                }
+                else
+                {
+                    buttonApp = (ButtonApp)AppFactory(device, AppConfig.Empty().WithName(AppNames.ButtonApp));
+                    _apps.Add(buttonApp);
 
-                buttonApp.DoubleClick += (s, e) =>
-                {
-                    _logger.LogInformation("{Button} button double-clicked on {Device}", e.Button, device.BaseTopic);
-                };
+                    buttonApp.Click += (s, e) =>
+                    {
+                        _logger.LogInformation("{Button} button clicked on {Device}", e.Button, device.BaseTopic);
+                    };
+
+                    buttonApp.DoubleClick += (s, e) =>
+                    {
+                        _logger.LogInformation("{Button} button double-clicked on {Device}", e.Button, device.BaseTopic);
+                    };
+                }
 
                 foreach (var appConfig in device.Apps)
                 {
                     // Log the app configuration to debug configuration binding issues
                     LogAppConfigDetails(appConfig);
 
-                    var app = AppFactory(device, appConfig);     
-                    
+                    var app = AppFactory(device, appConfig);
+
                     // Hacky binding for now
-                    if (app is TripTimerApp tripTimerApp)
+                    if (app is TripTimerApp tripTimerApp && buttonApp != null)
                     {
                         buttonApp.DoubleClick += (s, e) =>
                         {
@@ -107,7 +115,7 @@ namespace AwtrixSharpWeb.HostedServices
                     _apps.Add(app);
                 }
 
-                foreach(var app in _apps)
+                foreach (var app in _apps)
                 {
                     app.Init();
                 }
@@ -134,22 +142,17 @@ namespace AwtrixSharpWeb.HostedServices
         {
             IAwtrixApp app;
 
-            var awtrixService = new AwtrixService(_httpPublisher, _mqttPublisher);
-            var clock = new Clock();
-
-            var isDev = _hostEnvironment.IsDevelopment();
-
             _logger.LogInformation(
                 "Creating {AppName} for {device}"
-                ,appConfig.Name
-                ,device.BaseTopic);
+                , appConfig.Name
+                , device.BaseTopic);
 
             switch (appConfig.Type)
             {
                 case AppNames.DiurnalApp:
                     {
                         var appLogger = _loggerFactory.CreateLogger<DiurnalApp>();
-                        app = new DiurnalApp(appLogger, clock, _timerService, appConfig, device, awtrixService);
+                        app = new DiurnalApp(appLogger, _clock, _timerService, appConfig, device, _awtrixService);
                     }
                     break;
 
@@ -157,7 +160,7 @@ namespace AwtrixSharpWeb.HostedServices
                     {
                         var appLogger = _loggerFactory.CreateLogger<TripTimerApp>();
                         var tripTimerConfig = appConfig.As<TripTimerAppConfig>();
-                        app = new TripTimerApp(appLogger, clock, device, awtrixService, _timerService, tripTimerConfig, _tripPlanner);
+                        app = new TripTimerApp(appLogger, _clock, device, _awtrixService, _timerService, tripTimerConfig, _tripPlanner);
                     }
                     break;
 
@@ -165,7 +168,7 @@ namespace AwtrixSharpWeb.HostedServices
                     {
                         var appLogger = _loggerFactory.CreateLogger<MqttRenderApp>();
                         var mqttConfig = appConfig.As<MqttAppConfig>();
-                        app = new ButtonApp(appLogger, mqttConfig, device, awtrixService, _mqttConnector);
+                        app = new ButtonApp(appLogger, mqttConfig, device, _awtrixService, _mqttConnector);
                     }
                     break;
 
@@ -173,7 +176,7 @@ namespace AwtrixSharpWeb.HostedServices
                     {
                         var appLogger = _loggerFactory.CreateLogger<MqttRenderApp>();
                         var mqttConfig = appConfig.As<MqttAppConfig>();
-                        app = new MqttRenderApp(appLogger, clock, mqttConfig, device, awtrixService, _mqttConnector);
+                        app = new MqttRenderApp(appLogger, _clock, mqttConfig, device, _awtrixService, _mqttConnector);
                     }
                     break;
 
@@ -181,7 +184,7 @@ namespace AwtrixSharpWeb.HostedServices
                     {
                         var appLogger = _loggerFactory.CreateLogger<MqttClockRenderApp>();
                         var mqttConfig = appConfig.As<MqttAppConfig>();
-                        app = new MqttClockRenderApp(appLogger, clock, mqttConfig, device, awtrixService, _mqttConnector, _timerService);
+                        app = new MqttClockRenderApp(appLogger, _clock, mqttConfig, device, _awtrixService, _mqttConnector, _timerService);
                     }
                     break;
 
@@ -189,12 +192,12 @@ namespace AwtrixSharpWeb.HostedServices
                     {
                         var appLogger = _loggerFactory.CreateLogger<SlackStatusApp>();
                         var slackStatusConfig = appConfig.As<SlackStatusAppConfig>();
-                        app = new SlackStatusApp(appLogger, slackStatusConfig, device, awtrixService, _slackConnector);
+                        app = new SlackStatusApp(appLogger, slackStatusConfig, device, _awtrixService, _slackConnector);
                     }
                     break;
 
                 default:
-                   throw new NotImplementedException(appConfig.Type);
+                    throw new NotImplementedException(appConfig.Type);
             }
 
             return app;
@@ -238,7 +241,19 @@ namespace AwtrixSharpWeb.HostedServices
         public Task StopAsync(CancellationToken cancellationToken)
         {
             _logger.LogInformation("Conductor stopping");
-            _apps.ForEach(a => a.Dispose());
+
+            foreach (var app in _apps)
+            {
+                try
+                {
+                    app.Dispose();
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error disposing {AppType} on {Device}", app.GetConfig()?.Type, app.AwtrixAddress);
+                }
+            }
+
             return Task.CompletedTask;
         }
     }

@@ -1,17 +1,11 @@
-using AwtrixSharpWeb.Apps;
-using AwtrixSharpWeb.Apps.Configs;
 using AwtrixSharpWeb.Domain;
 using AwtrixSharpWeb.HostedServices;
 using AwtrixSharpWeb.Interfaces;
 using AwtrixSharpWeb.Services;
 using AwtrixSharpWeb.Services.TripPlanner;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.OpenApi.Models;
 using System.Reflection;
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using TransportOpenData;
 using TransportOpenData.TripPlanner;
 
@@ -30,49 +24,9 @@ namespace AwtrixSharpWeb
 
             ConfigureLogging(builder);
 
-
-            // Configure Trip Planner settings
-            services.Configure<TransportOpenDataConfig>(config =>
-            {
-                config.ApiKey = Environment.GetEnvironmentVariable("TRANSPORTOPENDATA__APIKEY") ?? "";
-                config.BaseUrl = builder.Configuration.GetSection("TransportOpenData:BaseUrl").Value ?? "https://api.transport.nsw.gov.au/v1/tp";
-            });
-
             services.AddControllers();
 
-            services.AddTransient<AwtrixService>();
-            services.AddTransient<TripPlannerService>();
-
-            services.AddSingleton<MqttConnector>();
-            services.AddSingleton<IMqttConnector>(sp => sp.GetRequiredService<MqttConnector>());
-            services.AddHttpClient(HttpPublisher.HttpClientName, client => client.Timeout = HttpPublisher.DefaultTimeout);
-            services.AddSingleton<SlackConnector>();
-            services.AddSingleton<HttpPublisher>();
-            services.AddSingleton<MqttPublisher>();
-            services.AddSingleton<Conductor>();
-            services.AddSingleton<TimerService>();
-
-            // Register the Trip Planner clients with HTTP client factory
-            services.AddHttpClient<StopfinderClient>((serviceProvider, client) =>
-            {
-                var config = serviceProvider.GetRequiredService<IOptions<TransportOpenDataConfig>>();
-
-                // Set the authorization header
-                client.DefaultRequestHeaders.Add("Authorization", $"apikey {config.Value.ApiKey}");
-            });
-
-            services.AddHttpClient<TripClient>((serviceProvider, client) =>
-            {
-                var config = serviceProvider.GetRequiredService<IOptions<TransportOpenDataConfig>>();
-
-                // Set the authorization header
-                client.DefaultRequestHeaders.Add("Authorization", $"apikey {config.Value.ApiKey}");
-            });
-
-            services.AddHostedService(sp => sp.GetService<MqttConnector>());
-            services.AddHostedService(sp => sp.GetService<SlackConnector>());
-            services.AddHostedService(sp => sp.GetService<Conductor>());
-            services.AddHostedService(sp => sp.GetService<TimerService>());
+            AddAwtrixServices(services, configuration);
 
             RegisterSwagger(services);
 
@@ -93,6 +47,66 @@ namespace AwtrixSharpWeb
             app.MapControllers();
 
             app.Run();
+        }
+
+        /// <summary>
+        /// Application services (everything except MVC and Swagger). Public so the DI graph can be validated in tests.
+        /// </summary>
+        public static void AddAwtrixServices(IServiceCollection services, IConfiguration configuration)
+        {
+            // Configure Trip Planner settings
+            services.Configure<TransportOpenDataConfig>(config =>
+            {
+                config.ApiKey = Environment.GetEnvironmentVariable("TRANSPORTOPENDATA__APIKEY") ?? "";
+                config.BaseUrl = configuration.GetSection("TransportOpenData:BaseUrl").Value ?? "https://api.transport.nsw.gov.au/v1/tp";
+            });
+
+            // Time
+            services.AddSingleton(TimeProvider.System);
+            services.AddSingleton<IClock, Clock>();
+
+            // Trip planner
+            services.AddTransient<TripPlannerService>();
+            services.AddTransient<ITripPlannerService>(sp => sp.GetRequiredService<TripPlannerService>());
+
+            services.AddHttpClient<StopfinderClient>((serviceProvider, client) =>
+            {
+                var config = serviceProvider.GetRequiredService<IOptions<TransportOpenDataConfig>>();
+
+                // Set the authorization header
+                client.DefaultRequestHeaders.Add("Authorization", $"apikey {config.Value.ApiKey}");
+            });
+
+            services.AddHttpClient<TripClient>((serviceProvider, client) =>
+            {
+                var config = serviceProvider.GetRequiredService<IOptions<TransportOpenDataConfig>>();
+
+                // Set the authorization header
+                client.DefaultRequestHeaders.Add("Authorization", $"apikey {config.Value.ApiKey}");
+            });
+
+            // Connectors
+            services.AddSingleton<MqttConnector>();
+            services.AddSingleton<IMqttConnector>(sp => sp.GetRequiredService<MqttConnector>());
+            services.AddSingleton<SlackConnector>();
+            services.AddSingleton<ISlackConnector>(sp => sp.GetRequiredService<SlackConnector>());
+
+            // Publishing
+            services.AddHttpClient(HttpPublisher.HttpClientName, client => client.Timeout = HttpPublisher.DefaultTimeout);
+            services.AddSingleton<HttpPublisher>();
+            services.AddSingleton<MqttPublisher>();
+            services.AddSingleton<IAwtrixService, AwtrixService>();
+
+            // Orchestration
+            services.AddSingleton<TimerService>();
+            services.AddSingleton<ITimerService>(sp => sp.GetRequiredService<TimerService>());
+            services.AddSingleton<Conductor>();
+
+            // Hosted services start in this order and stop in reverse
+            services.AddHostedService(sp => sp.GetRequiredService<MqttConnector>());
+            services.AddHostedService(sp => sp.GetRequiredService<SlackConnector>());
+            services.AddHostedService(sp => sp.GetRequiredService<Conductor>());
+            services.AddHostedService(sp => sp.GetRequiredService<TimerService>());
         }
 
         private static void SetupConfiguration(ConfigurationManager configuration, IServiceCollection services)

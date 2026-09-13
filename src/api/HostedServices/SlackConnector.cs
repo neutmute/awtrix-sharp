@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.Logging;
+﻿using AwtrixSharpWeb.Interfaces;
+using Microsoft.Extensions.Logging;
 using Newtonsoft.Json.Linq;
 using SlackNet;
 using SlackNet.Events;
@@ -15,7 +16,7 @@ using System.Threading.Tasks;
 namespace AwtrixSharpWeb.HostedServices
 {
 
-    public class SlackConnector : IHostedService, IEventHandler<UserChange>
+    public class SlackConnector : IHostedService, IEventHandler<UserChange>, ISlackConnector
     {
         private readonly ILogger<SlackConnector> _logger;
         private Task? _executingTask;

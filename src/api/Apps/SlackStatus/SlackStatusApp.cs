@@ -1,5 +1,6 @@
 ﻿using AwtrixSharpWeb.Domain;
 using AwtrixSharpWeb.HostedServices;
+using AwtrixSharpWeb.Interfaces;
 using AwtrixSharpWeb.Services;
 
 namespace AwtrixSharpWeb.Apps.SlackStatus
@@ -9,15 +10,15 @@ namespace AwtrixSharpWeb.Apps.SlackStatus
     /// </summary>
     public class SlackStatusApp : AwtrixApp<SlackStatusAppConfig>
     {
-        SlackConnector _slackConnector;
+        ISlackConnector _slackConnector;
         string _trackingUserId;
 
         public SlackStatusApp(
             ILogger logger
             , SlackStatusAppConfig config
             , AwtrixAddress awtrixAddress
-            , AwtrixService awtrixService
-            , SlackConnector slackConnector) : base(logger, config, awtrixAddress, awtrixService)
+            , IAwtrixService awtrixService
+            , ISlackConnector slackConnector) : base(logger, config, awtrixAddress, awtrixService)
         {
             _slackConnector = slackConnector;
         }
