@@ -213,7 +213,10 @@ namespace AwtrixSharpWeb.Apps
                 _pendingWait = null;
                 _nextWakeUp = null;
 
-                activation = new ScheduledActivation(++_activationCount, trigger, Time.GetLocalNow(), activeTime, Time, _lifetime.Token);
+                var number = ++_activationCount;
+                // WS4 review m1: a throwing token callback is logged, never propagated into supersede/teardown/dispose
+                activation = new ScheduledActivation(number, trigger, Time.GetLocalNow(), activeTime, Time, _lifetime.Token,
+                    ex => Logger.LogWarning(ex, "{App} activation #{Number}: a cancellation callback threw; continuing", Config.Name, number));
                 _active = activation;
 
                 previousRun = _lastRun;

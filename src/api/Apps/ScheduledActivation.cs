@@ -16,13 +16,16 @@ namespace AwtrixSharpWeb.Apps
         private readonly CancellationScope _scope;
         private readonly TaskCompletionSource _ended = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        internal ScheduledActivation(int number, ActivationTrigger trigger, DateTimeOffset startedAt, TimeSpan activeTime, TimeProvider timeProvider, CancellationToken lifetime)
+        /// <param name="onCallbackError">
+        /// Receives exceptions thrown by callbacks registered on <see cref="Token"/>; ending the window never rethrows them.
+        /// </param>
+        internal ScheduledActivation(int number, ActivationTrigger trigger, DateTimeOffset startedAt, TimeSpan activeTime, TimeProvider timeProvider, CancellationToken lifetime, Action<AggregateException>? onCallbackError = null)
         {
             Number = number;
             Trigger = trigger;
             StartedAt = startedAt;
             ActiveTime = activeTime;
-            _scope = new CancellationScope(lifetime, activeTime, timeProvider);
+            _scope = new CancellationScope(lifetime, activeTime, timeProvider, onCallbackError);
             Token = _scope.Token;
             Token.Register(static state => ((TaskCompletionSource)state!).TrySetResult(), _ended);
         }

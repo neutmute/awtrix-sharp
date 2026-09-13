@@ -515,6 +515,75 @@ namespace Test.Apps
             await other.Ended.WaitAsync(Guard);
         }
 
+        /// <summary>Every activation registers a token callback that throws, then reports itself once registered.</summary>
+        private static ChannelReader<ScheduledActivation> RegisterThrowingTokenCallback(TestScheduledApp sut)
+        {
+            var registered = Channel.CreateUnbounded<ScheduledActivation>();
+            sut.ActivateWork = activation =>
+            {
+                activation.Token.Register(() => throw new InvalidOperationException("token callback failure"));
+                registered.Writer.TryWrite(activation);
+                return Task.CompletedTask;
+            };
+            return registered.Reader;
+        }
+
+        private void VerifyCallbackWarningLogged() =>
+            _logger.Verify(x => x.Log(
+                LogLevel.Warning,
+                It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((state, _) => state.ToString()!.Contains("MyApp")),
+                It.Is<Exception?>(ex => ex is AggregateException),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()), Times.AtLeastOnce);
+
+        [Fact]
+        public async Task ThrowingTokenCallback_WhenActiveTimeElapses_IsLogged_AndTheNextCronActivationStillHappens()
+        {
+            // WS4 review m1: a callback exception escaping cancellation used to halt the schedule until restart
+            var sut = CreateSut();
+            var registered = RegisterThrowingTokenCallback(sut);
+            await sut.InitAsync();
+
+            _time.Advance(TimeSpan.FromMinutes(1));
+            var first = await Next(registered);
+
+            Assert.Null(Record.Exception(() => _time.Advance(ActiveTime)));
+            await sut.LastRun.WaitAsync(Guard);
+            Assert.True(first.IsEnded);
+            Assert.Equal(Eight.AddDays(1), sut.NextWakeUp);
+
+            _time.Advance(Eight.AddDays(1) - _time.GetUtcNow());
+            var second = await Next(registered);
+            Assert.Equal((2, ActivationTrigger.Cron), (second.Number, second.Trigger));
+
+            await sut.DisposeAsync(); // the lifetime cancel meets the second activation's throwing callback
+            VerifyCallbackWarningLogged();
+            VerifyErrorsLogged(Times.Never());
+        }
+
+        [Fact]
+        public async Task ThrowingTokenCallback_WhenSupersededByExecuteNow_DoesNotThrowToTheCaller_AndTheNewActivationRuns()
+        {
+            var sut = CreateSut();
+            var registered = RegisterThrowingTokenCallback(sut);
+            await sut.InitAsync();
+
+            sut.ExecuteNow();
+            var first = await Next(registered);
+
+            Assert.Null(Record.Exception(() => sut.ExecuteNow()));
+            var second = await Next(registered);
+
+            Assert.True(first.IsEnded);
+            Assert.Equal(2, second.Number);
+            Assert.Equal(new[] { "activate#1", "deactivate#1", "activate#2" }, sut.Events);
+
+            await sut.DisposeAsync();
+            await sut.LastRun.WaitAsync(Guard);
+            VerifyCallbackWarningLogged();
+            VerifyErrorsLogged(Times.Never());
+        }
+
         [Theory]
         [InlineData(-60, 0)]
         [InlineData(0, 0)]
