@@ -1,4 +1,4 @@
-﻿namespace AwtrixSharpWeb.Services.TripPlanner
+namespace AwtrixSharpWeb.Services.TripPlanner
 {
     public class TripSummary
     {
@@ -19,14 +19,14 @@
 
         public override string ToString()
         {
-            return $"{Origin} -> {Destination} ({TravelTime:mm} mins)";
+            return $"{Origin} -> {Destination} ({(int)TravelTime.TotalMinutes} mins)";
         }
 
         public static TripSummary Factory(DateTimeOffset time, string place = "")
         {
             return new TripSummary
             {
-                Origin = TimePlace.Factory(time),
+                Origin = TimePlace.Factory(time, place),
                 Destination = new TimePlace()
             };
         }

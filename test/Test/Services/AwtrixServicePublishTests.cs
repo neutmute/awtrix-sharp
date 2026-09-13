@@ -240,5 +240,37 @@ namespace Test.Services
             Assert.Equal(1, http.PublishCallCount);
             Assert.Equal(0, mqtt.PublishCallCount);
         }
+
+        [Fact]
+        public async Task NullAddress_ReturnsFalse_WithoutThrowingOrPublishing()
+        {
+            var (service, http, mqtt) = CreateService();
+            var message = new AwtrixAppMessage().SetText("Hello");
+
+            Assert.False(await service.Notify(null!, message));
+            Assert.False(await service.Dismiss(null!));
+            Assert.False(await service.AppUpdate(null!, "MyApp", message));
+            Assert.False(await service.AppClear(null!, "MyApp"));
+            Assert.False(await service.Set(null!, new AwtrixSettings()));
+            Assert.False(await service.PlayRtttl(null!, "tune:d=4,o=5,b=100:c"));
+
+            Assert.Equal(0, mqtt.PublishCallCount);
+            Assert.Equal(0, http.PublishCallCount);
+        }
+
+        [Fact]
+        public async Task NullPayloadArgument_ReturnsFalse_WithoutThrowingOrPublishing()
+        {
+            var (service, http, mqtt) = CreateService();
+            var address = new AwtrixAddress { BaseTopic = "awtrix/clock1" };
+
+            Assert.False(await service.Notify(address, null!));
+            Assert.False(await service.AppUpdate(address, "MyApp", null!));
+            Assert.False(await service.Set(address, null!));
+            Assert.False(await service.PlayRtttl(address, null!));
+
+            Assert.Equal(0, mqtt.PublishCallCount);
+            Assert.Equal(0, http.PublishCallCount);
+        }
     }
 }

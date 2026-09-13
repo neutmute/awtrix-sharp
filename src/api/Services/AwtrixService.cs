@@ -21,6 +21,11 @@ namespace AwtrixSharpWeb.Services
         /// </summary>
         public Task<bool> Set(AwtrixAddress awtrixAddress, AwtrixSettings settings)
         {
+            if (IsNull(awtrixAddress, nameof(awtrixAddress), nameof(Set)) || IsNull(settings, nameof(settings), nameof(Set)))
+            {
+                return Task.FromResult(false);
+            }
+
             var baseTopic = awtrixAddress.BaseTopic;
             var payload = settings.ToJson();
             return SafePublish(baseTopic, p => p.Publish(baseTopic + "/settings", payload));
@@ -31,24 +36,44 @@ namespace AwtrixSharpWeb.Services
         /// </summary>
         public Task<bool> PlayRtttl(AwtrixAddress awtrixAddress, string rtttl)
         {
+            if (IsNull(awtrixAddress, nameof(awtrixAddress), nameof(PlayRtttl)) || IsNull(rtttl, nameof(rtttl), nameof(PlayRtttl)))
+            {
+                return Task.FromResult(false);
+            }
+
             var baseTopic = awtrixAddress.BaseTopic;
             return SafePublish(baseTopic, p => p.Publish(baseTopic + "/rtttl", rtttl));
         }
 
         public Task<bool> AppUpdate(AwtrixAddress awtrixAddress, string appName, AwtrixAppMessage message)
         {
+            if (IsNull(awtrixAddress, nameof(awtrixAddress), nameof(AppUpdate)) || IsNull(message, nameof(message), nameof(AppUpdate)))
+            {
+                return Task.FromResult(false);
+            }
+
             var baseTopic = awtrixAddress.BaseTopic;
             return SafePublish(baseTopic, p => p.Publish(p.BuildCustomAppUrl(baseTopic, appName), message));
         }
 
         public Task<bool> AppClear(AwtrixAddress awtrixAddress, string appName)
         {
+            if (IsNull(awtrixAddress, nameof(awtrixAddress), nameof(AppClear)))
+            {
+                return Task.FromResult(false);
+            }
+
             var baseTopic = awtrixAddress.BaseTopic;
             return SafePublish(baseTopic, p => p.Publish(p.BuildCustomAppUrl(baseTopic, appName), (AwtrixAppMessage?)null));
         }
 
         public Task<bool> Notify(AwtrixAddress awtrixAddress, AwtrixAppMessage message)
         {
+            if (IsNull(awtrixAddress, nameof(awtrixAddress), nameof(Notify)) || IsNull(message, nameof(message), nameof(Notify)))
+            {
+                return Task.FromResult(false);
+            }
+
             if (String.IsNullOrWhiteSpace(message.Text))
             {
                 return Dismiss(awtrixAddress);
@@ -77,7 +102,6 @@ namespace AwtrixSharpWeb.Services
 
             if (n == 0) blink = 4;            // nothing lit
             else if (n == 32) blink = 99;     // drop to 31 LEDs
-            else if (p < 4) blink = 1; // one bin lower
             else
             {
                 int lowerBound = (n == 1) ? 4 : (int)Math.Ceiling(4 + 96.0 * (n - 1) / 31.0);
@@ -90,8 +114,27 @@ namespace AwtrixSharpWeb.Services
         /// <remarks>https://blueforcer.github.io/awtrix3/#/api?id=dismiss-notification</remarks>
         public Task<bool> Dismiss(AwtrixAddress awtrixAddress)
         {
+            if (IsNull(awtrixAddress, nameof(awtrixAddress), nameof(Dismiss)))
+            {
+                return Task.FromResult(false);
+            }
+
             var baseTopic = awtrixAddress.BaseTopic;
             return SafePublish(baseTopic, p => p.Publish(baseTopic + "/notify/dismiss", (AwtrixAppMessage?)null));
+        }
+
+        /// <summary>
+        /// WS1 deferred: a null argument is a caller bug, but publishing must never throw. Logs and reports "not delivered".
+        /// </summary>
+        private bool IsNull(object? argument, string argumentName, string operation)
+        {
+            if (argument != null)
+            {
+                return false;
+            }
+
+            _logger.LogWarning("{Operation} called with a null {Argument}; nothing published", operation, argumentName);
+            return true;
         }
 
         /// <summary>

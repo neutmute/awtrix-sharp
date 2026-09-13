@@ -13,6 +13,8 @@ namespace Test.Services
         [InlineData(0, 0, 4)]
         [InlineData(3, 3, 4)]
         [InlineData(4, 4, 3)]
+        [InlineData(5, 5, 3)]
+        [InlineData(50, 50, 47)]
         [InlineData(12, 12, 10)]
         [InlineData(99, 99, 96)]
         [InlineData(100, 100, 99)]

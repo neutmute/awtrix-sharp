@@ -79,7 +79,23 @@ namespace Test.TripPlanner
             Assert.Contains("06:49 Circular Quay", text);
         }
 
-        [Fact(Skip = "Known bug: TripSummary.Factory(time, place) ignores the 'place' parameter entirely - Origin.Place is always empty and Destination is always a default TimePlace rather than being derived from the supplied time/place.")]
+        [Theory]
+        [InlineData(37, "(37 mins)")]
+        [InlineData(75, "(75 mins)")]
+        [InlineData(120, "(120 mins)")]
+        public void ToString_ShowsTotalMinutes_ForTripsOfAnHourOrMore(int minutes, string expectedSuffix)
+        {
+            var origin = DateTimeOffset.Parse("2025-08-19T06:00:00+10:00");
+            var sut = new TripSummary
+            {
+                Origin = TimePlace.Factory(origin, "Central"),
+                Destination = TimePlace.Factory(origin.AddMinutes(minutes), "Newcastle Interchange")
+            };
+
+            Assert.EndsWith(expectedSuffix, sut.ToString());
+        }
+
+        [Fact]
         public void Factory_SetsOriginPlace_FromSuppliedPlaceArgument()
         {
             // Arrange
@@ -88,26 +104,18 @@ namespace Test.TripPlanner
             // Act
             var summary = TripSummary.Factory(time, "Central");
 
-            // Assert (intended behaviour - currently Origin.Place is always string.Empty)
+            // Assert
             Assert.Equal("Central", summary.Origin.Place);
             Assert.Equal(time, summary.Origin.Time);
         }
 
         [Fact]
-        public void Factory_CurrentBehaviour_SetsOriginTimeOnly_DestinationIsDefault()
+        public void Factory_LeavesDestinationAsDefaultTimePlace()
         {
-            // This documents the actual (buggy) current behaviour of TripSummary.Factory,
-            // as distinct from the intended behaviour captured (and skipped) above.
-            // Arrange
-            var time = DateTimeOffset.Parse("2025-09-01T06:41:00+10:00");
+            var summary = TripSummary.Factory(DateTimeOffset.Parse("2025-09-01T06:41:00+10:00"), "Central");
 
-            // Act
-            var summary = TripSummary.Factory(time, "Central");
-
-            // Assert
-            Assert.Equal(time, summary.Origin.Time);
-            Assert.Equal(string.Empty, summary.Origin.Place);
             Assert.Equal(new TimePlace().Time, summary.Destination.Time);
+            Assert.Equal(string.Empty, summary.Destination.Place);
         }
     }
 }

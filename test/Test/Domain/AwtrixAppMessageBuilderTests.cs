@@ -324,6 +324,17 @@ namespace Test.Domain
         }
 
         [Fact]
+        public void ToString_ListsTextFirst()
+        {
+            var message = new AwtrixAppMessage()
+                .SetIcon("1")
+                .SetColor("#FF0000")
+                .SetText("Hello");
+
+            Assert.StartsWith("text=Hello; ", message.ToString());
+        }
+
+        [Fact]
         public void ToJson_EmptyMessage_ReturnsEmptyObject()
         {
             var message = new AwtrixAppMessage();

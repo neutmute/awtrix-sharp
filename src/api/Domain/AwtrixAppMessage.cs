@@ -252,7 +252,7 @@ namespace AwtrixSharpWeb.Domain
         {
             return string.Join(
                 "; ",
-                this.OrderBy(kvp => kvp.Key == "Text" ? "" : kvp.Key)       // always name first
+                this.OrderBy(kvp => kvp.Key == TextKey ? "" : kvp.Key, StringComparer.Ordinal)       // always text first
                     .Select(kvp => $"{kvp.Key}={kvp.Value}")
             );
         }
