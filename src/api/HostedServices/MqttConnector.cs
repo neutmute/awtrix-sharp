@@ -12,21 +12,27 @@ namespace AwtrixSharpWeb.HostedServices
     /// <list type="bullet">
     /// <item>The client is created once and reconnected in place; it is never replaced.</item>
     /// <item>Message handlers and topic subscriptions are held here, so they survive reconnects.</item>
+    /// <item>A lost connection is retried in the background with exponential backoff.</item>
     /// <item>No public member throws for broker/network faults.</item>
     /// </list>
     /// </summary>
     public class MqttConnector : IHostedService, IMqttConnector, IDisposable
     {
         internal static readonly TimeSpan ConnectTimeout = TimeSpan.FromSeconds(10);
+        internal static readonly TimeSpan MaxReconnectDelay = TimeSpan.FromSeconds(60);
 
         private readonly IMqttClient _client;
         private readonly MqttClientOptions _clientOptions;
         private readonly ILogger<MqttConnector> _log;
         private readonly MqttSettings _settings;
+        private readonly Func<TimeSpan, CancellationToken, Task> _delay;
         private readonly SemaphoreSlim _connectLock = new(1, 1);
         private readonly object _registryLock = new();
         private readonly HashSet<string> _topics = new(StringComparer.Ordinal);
+        private readonly CancellationTokenSource _stopping = new();
         private Func<MqttApplicationMessageReceivedEventArgs, Task>? _messageHandlers;
+        private Task _reconnectTask = Task.CompletedTask;
+        private int _reconnectLoopRunning;
         private int _disposed;
 
         public event Func<MqttApplicationMessageReceivedEventArgs, Task> MessageReceived
@@ -41,17 +47,26 @@ namespace AwtrixSharpWeb.HostedServices
         }
 
         /// <summary>
-        /// Test seam: inject the client so connector behaviour runs without a broker.
+        /// Test seam: inject the client and the backoff delay so reconnect behaviour runs without a broker or real time.
         /// </summary>
-        internal MqttConnector(ILogger<MqttConnector> logger, IOptions<MqttSettings> settings, IMqttClient client)
+        internal MqttConnector(
+            ILogger<MqttConnector> logger,
+            IOptions<MqttSettings> settings,
+            IMqttClient client,
+            Func<TimeSpan, CancellationToken, Task>? delay = null)
         {
             _log = logger;
             _settings = settings.Value;
             _client = client;
+            _delay = delay ?? ((duration, token) => Task.Delay(duration, token));
             _clientOptions = BuildClientOptions(_settings);
 
             _client.ApplicationMessageReceivedAsync += OnApplicationMessageReceivedAsync;
+            _client.DisconnectedAsync += OnDisconnectedAsync;
         }
+
+        /// <summary>The current background reconnect loop (completed when none is running). For tests and shutdown.</summary>
+        internal Task ReconnectTask => Volatile.Read(ref _reconnectTask);
 
         private bool IsDisposed => Volatile.Read(ref _disposed) != 0;
 
@@ -67,6 +82,13 @@ namespace AwtrixSharpWeb.HostedServices
             }
 
             return builder.Build();
+        }
+
+        /// <summary>1 s, 2 s, 4 s ... doubling per attempt, capped at <see cref="MaxReconnectDelay"/>.</summary>
+        internal static TimeSpan GetReconnectDelay(int attempt)
+        {
+            var seconds = Math.Pow(2, Math.Clamp(attempt, 0, 6));
+            return TimeSpan.FromSeconds(Math.Min(seconds, MaxReconnectDelay.TotalSeconds));
         }
 
         /// <summary>
@@ -189,7 +211,7 @@ namespace AwtrixSharpWeb.HostedServices
             }
             catch (Exception ex)
             {
-                // No reconnect here: reconnecting is owned by the DisconnectedAsync handler (Task 2).
+                // No reconnect here: a dropped connection raises DisconnectedAsync, which owns reconnecting.
                 _log.LogWarning("MQTT publish to {Topic} failed: {Error}", topic, ex.Message);
                 return false;
             }
@@ -199,7 +221,8 @@ namespace AwtrixSharpWeb.HostedServices
         {
             if (!await ConnectAsync(cancellationToken))
             {
-                _log.LogWarning("MQTT broker at {Host} unavailable at startup", _settings.Host);
+                _log.LogWarning("MQTT broker at {Host} unavailable at startup; retrying in the background", _settings.Host);
+                EnsureReconnectLoop();
             }
         }
 
@@ -208,6 +231,17 @@ namespace AwtrixSharpWeb.HostedServices
             if (IsDisposed)
             {
                 return;
+            }
+
+            _stopping.Cancel();
+
+            try
+            {
+                await ReconnectTask.WaitAsync(cancellationToken);
+            }
+            catch (Exception ex) when (ex is OperationCanceledException or TimeoutException)
+            {
+                _log.LogDebug("Stopped waiting for the MQTT reconnect loop");
             }
 
             if (_client.IsConnected)
@@ -232,7 +266,9 @@ namespace AwtrixSharpWeb.HostedServices
                 return;
             }
 
+            _stopping.Cancel();
             _client.ApplicationMessageReceivedAsync -= OnApplicationMessageReceivedAsync;
+            _client.DisconnectedAsync -= OnDisconnectedAsync;
             _client.Dispose();
         }
 
@@ -260,6 +296,81 @@ namespace AwtrixSharpWeb.HostedServices
                     _log.LogError(ex, "MQTT message handler {Handler} failed for topic {Topic}",
                         $"{handler.Method.DeclaringType?.Name}.{handler.Method.Name}", args.ApplicationMessage?.Topic);
                 }
+            }
+        }
+
+        private Task OnDisconnectedAsync(MqttClientDisconnectedEventArgs args)
+        {
+            if (_stopping.IsCancellationRequested)
+            {
+                return Task.CompletedTask;
+            }
+
+            if (args.ClientWasConnected)
+            {
+                _log.LogWarning("Disconnected from MQTT broker at {Host} ({Reason}); reconnecting in the background",
+                    _settings.Host, args.Reason);
+            }
+
+            // Never await reconnect work inside MQTTnet's event pipeline.
+            EnsureReconnectLoop();
+            return Task.CompletedTask;
+        }
+
+        private void EnsureReconnectLoop()
+        {
+            if (_stopping.IsCancellationRequested)
+            {
+                return;
+            }
+
+            if (Interlocked.CompareExchange(ref _reconnectLoopRunning, 1, 0) != 0)
+            {
+                return;
+            }
+
+            Volatile.Write(ref _reconnectTask, Task.Run(RunReconnectLoopAsync));
+        }
+
+        private async Task RunReconnectLoopAsync()
+        {
+            var token = _stopping.Token;
+            var faulted = false;
+
+            try
+            {
+                for (var attempt = 0; !token.IsCancellationRequested && !_client.IsConnected; attempt++)
+                {
+                    await _delay(GetReconnectDelay(attempt), token);
+
+                    if (await ConnectAsync(token))
+                    {
+                        _log.LogInformation("Reconnected to MQTT broker at {Host} after {Attempts} attempt(s)", _settings.Host, attempt + 1);
+                        break;
+                    }
+
+                    _log.LogWarning("MQTT reconnect attempt {Attempt} to {Host} failed; next attempt in {Delay}",
+                        attempt + 1, _settings.Host, GetReconnectDelay(attempt + 1));
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                // Shutdown.
+            }
+            catch (Exception ex)
+            {
+                faulted = true;
+                _log.LogError(ex, "MQTT reconnect loop stopped unexpectedly");
+            }
+            finally
+            {
+                Interlocked.Exchange(ref _reconnectLoopRunning, 0);
+            }
+
+            // A disconnect that raced the end of the loop must not be lost.
+            if (!faulted && !token.IsCancellationRequested && !IsDisposed && !_client.IsConnected)
+            {
+                EnsureReconnectLoop();
             }
         }
 
