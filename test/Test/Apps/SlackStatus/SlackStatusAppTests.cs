@@ -48,7 +48,7 @@ namespace Test.Apps.SlackStatus
             var service = CreateRealAwtrixService();
 
             var sut = new SlackStatusApp(logger, config, address, service, connector);
-            sut.Init();
+            sut.InitAsync().GetAwaiter().GetResult();
 
             return (sut, connector);
         }

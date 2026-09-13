@@ -70,22 +70,22 @@ namespace Test.Apps
         }
 
         [Fact]
-        public void Init_WithNamedConfig_ClearsAppAndCallsInitialize()
+        public async Task InitAsync_WithNamedConfig_ClearsAppAndCallsInitialize()
         {
             var sut = CreateSut("MyApp");
 
-            sut.Init();
+            await sut.InitAsync();
 
             _mockAwtrixService.Verify(x => x.AppClear(_address, "MyApp"), Times.Once);
             Assert.Equal(1, sut.InitializeCallCount);
         }
 
         [Fact]
-        public void Init_WithNullName_SkipsAppClear_ButStillInitializes()
+        public async Task InitAsync_WithNullName_SkipsAppClear_ButStillInitializes()
         {
             var sut = CreateSut(type: null);
 
-            sut.Init();
+            await sut.InitAsync();
 
             _mockAwtrixService.Verify(x => x.AppClear(It.IsAny<AwtrixAddress>(), It.IsAny<string>()), Times.Never);
             Assert.Equal(1, sut.InitializeCallCount);

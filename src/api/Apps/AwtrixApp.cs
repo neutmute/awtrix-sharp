@@ -28,9 +28,9 @@ namespace AwtrixSharpWeb.Apps
             Logger = logger;
         }
 
-        public void Init()
+        public async Task InitAsync()
         {
-            _ = AppClear().Result;
+            await AppClear();
 
             Logger.LogInformation("Initializing {Config} for {AwtrixAddress}", Config.Type, AwtrixAddress);
 

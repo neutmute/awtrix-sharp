@@ -65,7 +65,7 @@ namespace AwtrixSharpWeb.HostedServices
             _apps = new List<IAwtrixApp>();
         }
 
-        public Task StartAsync(CancellationToken cancellationToken)
+        public async Task StartAsync(CancellationToken cancellationToken)
         {
             foreach (var device in _awtrixConfig.Devices)
             {
@@ -117,11 +117,9 @@ namespace AwtrixSharpWeb.HostedServices
 
                 foreach (var app in _apps)
                 {
-                    app.Init();
+                    await app.InitAsync();
                 }
             }
-
-            return Task.CompletedTask;
         }
 
         private void LogAppConfigDetails(AppConfig appConfig)
@@ -222,7 +220,7 @@ namespace AwtrixSharpWeb.HostedServices
                 }
 
                 var app = AppFactory(device, config);
-                app.Init();
+                app.InitAsync().GetAwaiter().GetResult();
                 app.ExecuteNow();
                 _logger.LogInformation("Successfully executed app '{AppName}' on device '{BaseTopic}'", appName, baseTopic);
             }

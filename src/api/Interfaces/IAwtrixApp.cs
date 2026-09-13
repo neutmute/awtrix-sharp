@@ -10,7 +10,11 @@ namespace AwtrixSharpWeb.Interfaces
 
         public IAppConfig GetConfig();
 
-        void Init();
+        /// <summary>
+        /// Clears the app's slot and wires its subscriptions/schedule. Must not block on the network
+        /// beyond the publisher timeouts.
+        /// </summary>
+        Task InitAsync();
 
         void ExecuteNow();
     }

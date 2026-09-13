@@ -1,4 +1,4 @@
-﻿using AwtrixSharpWeb.Apps.Configs;
+using AwtrixSharpWeb.Apps.Configs;
 using AwtrixSharpWeb.Apps.MqttRender;
 using AwtrixSharpWeb.Domain;
 using AwtrixSharpWeb.Interfaces;
@@ -11,10 +11,10 @@ namespace Test.Apps.Buttons
 {
     public class ButtonAppTests
     {
-        private Mock<ILogger> _mockLogger;
-        private Mock<IAwtrixService> _mockAwtrixService;
-        private Mock<IMqttConnector> _mockMqttConnector;
-        private AwtrixAddress _address;
+        private Mock<ILogger> _mockLogger = null!;
+        private Mock<IAwtrixService> _mockAwtrixService = null!;
+        private Mock<IMqttConnector> _mockMqttConnector = null!;
+        private AwtrixAddress _address = null!;
 
         private ButtonApp CreateSut()
         {
@@ -31,11 +31,11 @@ namespace Test.Apps.Buttons
         }
 
         [Fact]
-        public void Init_SubscribesToAllThreeButtonTopics()
+        public async Task InitAsync_SubscribesToAllThreeButtonTopics()
         {
             var sut = CreateSut();
 
-            sut.Init();
+            await sut.InitAsync();
 
             _mockMqttConnector.Verify(x => x.Subscribe("test/base/topic/stats/buttonLeft"), Times.Once);
             _mockMqttConnector.Verify(x => x.Subscribe("test/base/topic/stats/buttonRight"), Times.Once);
@@ -43,25 +43,44 @@ namespace Test.Apps.Buttons
         }
 
         [Fact]
-        public void MessageReceived_ButtonPressed_RaisesClick()
+        public async Task InitAsync_WhenSubscribeNeverCompletes_DoesNotBlock_AndStillRaisesClick()
+        {
+            // CR-05: a hung SUBSCRIBE (half-open broker connection) must not stall host startup
+            var sut = CreateSut();
+            _mockMqttConnector.Setup(x => x.Subscribe(It.IsAny<string>())).Returns(new TaskCompletionSource().Task);
+
+            await Task.Run(() => sut.InitAsync()).WaitAsync(TimeSpan.FromSeconds(5));
+
+            ButtonEventArgs? received = null;
+            sut.Click += (s, e) => received = e;
+            _mockMqttConnector.Raise(x => x.MessageReceived += null,
+                new object[] { MqttTestHelpers.CreateReceivedArgs("test/base/topic/stats/buttonRight", "1") });
+
+            Assert.NotNull(received);
+            Assert.Equal(Button.Right, received!.Button);
+            _mockMqttConnector.Verify(x => x.Subscribe("test/base/topic/stats/buttonRight"), Times.Once);
+        }
+
+        [Fact]
+        public async Task MessageReceived_ButtonPressed_RaisesClick()
         {
             var sut = CreateSut();
-            sut.Init();
-            ButtonEventArgs received = null;
+            await sut.InitAsync();
+            ButtonEventArgs? received = null;
             sut.Click += (s, e) => received = e;
 
             var args = MqttTestHelpers.CreateReceivedArgs("test/base/topic/stats/buttonLeft", "1");
             _mockMqttConnector.Raise(x => x.MessageReceived += null, new object[] { args });
 
             Assert.NotNull(received);
-            Assert.Equal(Button.Left, received.Button);
+            Assert.Equal(Button.Left, received!.Button);
         }
 
         [Fact]
-        public void MessageReceived_UnrelatedTopic_DoesNotRaiseClick()
+        public async Task MessageReceived_UnrelatedTopic_DoesNotRaiseClick()
         {
             var sut = CreateSut();
-            sut.Init();
+            await sut.InitAsync();
             var clickCount = 0;
             sut.Click += (s, e) => clickCount++;
 
@@ -72,10 +91,10 @@ namespace Test.Apps.Buttons
         }
 
         [Fact]
-        public void MessageReceived_PressReleasePressQuickly_RaisesDoubleClick()
+        public async Task MessageReceived_PressReleasePressQuickly_RaisesDoubleClick()
         {
             var sut = CreateSut();
-            sut.Init();
+            await sut.InitAsync();
             var clickCount = 0;
             var doubleClickCount = 0;
             sut.Click += (s, e) => clickCount++;

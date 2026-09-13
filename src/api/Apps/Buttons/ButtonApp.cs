@@ -52,7 +52,9 @@ namespace AwtrixSharpWeb.Apps.MqttRender
         {
             foreach (var buttonState in _buttonTopics.Values)
             {
-                _mqttConnector.Subscribe(buttonState.Topic).Wait();
+                // Subscribe records the topic and never throws (MqttConnector); don't block startup waiting for SUBACK
+                var topic = buttonState.Topic;
+                _ = FireAndLog(() => _mqttConnector.Subscribe(topic), $"Subscribe {topic}");
                 buttonState.Click += (s, e) => Click?.Invoke(this, e);
                 buttonState.DoubleClick += (s, e) => DoubleClick?.Invoke(this, e);
             }

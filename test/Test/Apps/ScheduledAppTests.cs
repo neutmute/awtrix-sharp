@@ -109,7 +109,7 @@ namespace Test.Apps
         {
             var sut = CreateSut();
 
-            var ex = Record.Exception(() => sut.Init());
+            var ex = Record.Exception(() => sut.InitAsync().GetAwaiter().GetResult());
 
             Assert.Null(ex);
             sut.Dispose();
@@ -120,7 +120,7 @@ namespace Test.Apps
         {
             var sut = CreateSut(cronSchedule: "not a cron expression");
 
-            Assert.ThrowsAny<Exception>(() => sut.Init());
+            Assert.ThrowsAny<Exception>(() => sut.InitAsync().GetAwaiter().GetResult());
         }
 
         [Fact]

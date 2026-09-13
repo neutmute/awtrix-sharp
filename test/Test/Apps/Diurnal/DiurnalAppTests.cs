@@ -61,7 +61,7 @@ namespace Test.Apps.Diurnal
             var config = new AppConfig();
             var sut = CreateSut(config);
 
-            var ex = Record.Exception(() => sut.Init());
+            var ex = Record.Exception(() => sut.InitAsync().GetAwaiter().GetResult());
 
             Assert.Null(ex);
         }
@@ -73,7 +73,7 @@ namespace Test.Apps.Diurnal
             config.Config.Add("not-a-time", "Brightness=5");
             var sut = CreateSut(config);
 
-            var ex = Record.Exception(() => sut.Init());
+            var ex = Record.Exception(() => sut.InitAsync().GetAwaiter().GetResult());
 
             Assert.Null(ex);
         }
@@ -85,7 +85,7 @@ namespace Test.Apps.Diurnal
             config.Config.Add("2359", "SomeUnknownSetting=123");
             var sut = CreateSut(config);
 
-            var ex = Record.Exception(() => sut.Init());
+            var ex = Record.Exception(() => sut.InitAsync().GetAwaiter().GetResult());
 
             Assert.Null(ex);
         }
@@ -98,7 +98,7 @@ namespace Test.Apps.Diurnal
             var config = new AppConfig();
             config.Config.Add("0600", "SomeUnknownSetting=123");
             var sut = CreateSut(config);
-            sut.Init();
+            sut.InitAsync().GetAwaiter().GetResult();
 
             var tickTime = DateTime.Today.AddHours(6);
             var ex = Record.Exception(() => _timer.Raise(m => m.MinuteChanged += null, this, new ClockTickEventArgs(tickTime)));
@@ -113,7 +113,7 @@ namespace Test.Apps.Diurnal
             var config = new AppConfig();
             config.Config.Add("0600", "Brightness=8");
             var sut = CreateSut(config);
-            sut.Init();
+            sut.InitAsync().GetAwaiter().GetResult();
             _awtrix.Invocations.Clear();
 
             var tickTime = DateTime.Today.AddHours(6);
@@ -128,7 +128,7 @@ namespace Test.Apps.Diurnal
             var config = new AppConfig();
             config.Config.Add("2200", "GlobalTextColor=#112233");
             var sut = CreateSut(config);
-            sut.Init();
+            sut.InitAsync().GetAwaiter().GetResult();
             _awtrix.Invocations.Clear();
 
             var tickTime = DateTime.Today.AddHours(22);
@@ -143,7 +143,7 @@ namespace Test.Apps.Diurnal
             var config = new AppConfig();
             config.Config.Add("0700", "Brightness=5;GlobalTextColor=#FFFFFF");
             var sut = CreateSut(config);
-            sut.Init();
+            sut.InitAsync().GetAwaiter().GetResult();
             _awtrix.Invocations.Clear();
 
             var tickTime = DateTime.Today.AddHours(7);
@@ -158,7 +158,7 @@ namespace Test.Apps.Diurnal
             var config = new AppConfig();
             config.Config.Add("0600", "Brightness=8");
             var sut = CreateSut(config);
-            sut.Init();
+            sut.InitAsync().GetAwaiter().GetResult();
             _awtrix.Invocations.Clear();
 
             var tickTime = DateTime.Today.AddHours(9);
@@ -171,7 +171,7 @@ namespace Test.Apps.Diurnal
         public void MinuteTick_MatchingEntry_AppliesSettings()
         {
             var app = CreateApp(At(0, 30), ("0600", "Brightness=8"));
-            app.Init();
+            app.InitAsync().GetAwaiter().GetResult();
 
             RaiseMinute(6, 0);
 
@@ -182,7 +182,7 @@ namespace Test.Apps.Diurnal
         public void MinuteTick_WithNonZeroSeconds_StillMatchesEntry()
         {
             var app = CreateApp(At(0, 30), ("0600", "Brightness=8"));
-            app.Init();
+            app.InitAsync().GetAwaiter().GetResult();
 
             RaiseMinute(6, 0, second: 7);
 
@@ -195,7 +195,7 @@ namespace Test.Apps.Diurnal
             _awtrix.Setup(a => a.Set(It.IsAny<AwtrixAddress>(), It.IsAny<AwtrixSettings>()))
                 .ThrowsAsync(new HttpRequestException("device offline"));
             var app = CreateApp(At(0, 30), ("0600", "Brightness=8"));
-            app.Init();
+            app.InitAsync().GetAwaiter().GetResult();
 
             var exception = Record.Exception(() => RaiseMinute(6, 0));
 
@@ -206,7 +206,7 @@ namespace Test.Apps.Diurnal
         public void MinuteTick_OutOfRangeBrightness_DoesNotThrowAndDoesNotPublish()
         {
             var app = CreateApp(At(0, 30), ("2100", "Brightness=300"));
-            app.Init();
+            app.InitAsync().GetAwaiter().GetResult();
 
             var exception = Record.Exception(() => RaiseMinute(21, 0));
 
@@ -218,7 +218,7 @@ namespace Test.Apps.Diurnal
         public void MinuteTick_UnknownKeyOnly_SkipsSetWithoutThrowing()
         {
             var app = CreateApp(At(0, 30), ("0600", "Brightnes=8"));
-            app.Init();
+            app.InitAsync().GetAwaiter().GetResult();
 
             var exception = Record.Exception(() => RaiseMinute(6, 0));
 
@@ -231,7 +231,7 @@ namespace Test.Apps.Diurnal
         {
             var app = CreateApp(At(7, 0), ("0600", "Brightnes=8"));
 
-            var exception = Record.Exception(() => app.Init());
+            var exception = Record.Exception(() => app.InitAsync().GetAwaiter().GetResult());
 
             Assert.Null(exception);
             _awtrix.Verify(a => a.Set(It.IsAny<AwtrixAddress>(), It.IsAny<AwtrixSettings>()), Times.Never);
@@ -242,7 +242,7 @@ namespace Test.Apps.Diurnal
         {
             var app = CreateApp(At(7, 0), ("0600", "Brightness=8"), ("2100", "Brightness=1"));
 
-            app.Init();
+            app.InitAsync().GetAwaiter().GetResult();
 
             _awtrix.Verify(a => a.Set(_address, It.Is<AwtrixSettings>(s => HasBrightness(s, "8"))), Times.Once);
             _awtrix.Verify(a => a.Set(_address, It.Is<AwtrixSettings>(s => HasBrightness(s, "1"))), Times.Never);
@@ -267,7 +267,7 @@ namespace Test.Apps.Diurnal
                 });
 
             var app = CreateApp(At(22, 0), ("0600", "Brightness=80"), ("2100", "Brightness=1"));
-            app.Init();
+            app.InitAsync().GetAwaiter().GetResult();
 
             // Complete the most recently issued publish first, repeatedly, until nothing is in flight.
             for (var guard = 0; guard < 10 && pending.Count > 0; guard++)
