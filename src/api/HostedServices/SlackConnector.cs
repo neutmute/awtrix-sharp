@@ -1,34 +1,30 @@
-﻿using AwtrixSharpWeb.Domain;
+using AwtrixSharpWeb.Domain;
 using AwtrixSharpWeb.Interfaces;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Newtonsoft.Json.Linq;
 using SlackNet;
 using SlackNet.Events;
 using SlackNet.SocketMode;
 using System;
-using System.Net.Http;
-using System.Net.Http.Headers;
 using System.Net.WebSockets;
-using System.Text;
-using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace AwtrixSharpWeb.HostedServices
 {
-
+    /// <summary>
+    /// Slack Socket Mode listener that raises <see cref="UserStatusChanged"/> for user_change events.
+    /// Do-not-disturb (DND) changes are not supported: no DND event is subscribed to or raised.
+    /// After the first successful connect, reconnection is left to SlackNet's socket-mode client.
+    /// </summary>
     public class SlackConnector : IHostedService, IEventHandler<UserChange>, ISlackConnector
     {
         private readonly ILogger<SlackConnector> _logger;
         private Task? _executingTask;
         private CancellationTokenSource? _stoppingCts;
-        private static ISlackApiClient _slackApiClient;
-        private static ISlackSocketModeClient _slackSocketClient;
+        private ISlackSocketModeClient? _slackSocketClient;
 
         public event EventHandler<SlackUserStatusChangedEventArgs>? UserStatusChanged;
-
-        public event EventHandler<SlackDndChangedEventArgs>? UserDnChanged;
 
         private readonly IOptions<SlackSettings>? _slackSettings;
 
@@ -73,15 +69,11 @@ namespace AwtrixSharpWeb.HostedServices
 
                 _logger.LogInformation("Connecting to Slack");
 
-                _slackSocketClient = new SlackServiceBuilder()
+                var socketClient = new SlackServiceBuilder()
                                     .UseAppLevelToken(appToken)
                                     .RegisterEventHandler(this)
                                     .GetSocketModeClient();
-
-                //_slackApiClient = new SlackServiceBuilder()
-                //    .UseApiToken(appToken) // xoxp for user scopes, or xoxb with proper scopes
-                //    .GetApiClient();
-
+                _slackSocketClient = socketClient;
 
                 while (!stoppingToken.IsCancellationRequested)
                 {
@@ -92,7 +84,7 @@ namespace AwtrixSharpWeb.HostedServices
                             DebugReconnects = false
                         };
 
-                        await _slackSocketClient.Connect(socketModeOptions, stoppingToken);
+                        await socketClient.Connect(socketModeOptions, stoppingToken);
 
 
                         await Task.Delay(Timeout.Infinite, stoppingToken);
@@ -176,8 +168,8 @@ namespace AwtrixSharpWeb.HostedServices
 
                 _logger.LogInformation("User status change -> {statusChangedEvent}", statusChangedEvent);
 
-                UserStatusChanged?.Invoke(this, statusChangedEvent); 
-                
+                UserStatusChanged?.Invoke(this, statusChangedEvent);
+
             }
             catch (Exception ex)
             {
