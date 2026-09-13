@@ -46,6 +46,27 @@ namespace AwtrixSharpWeb.Apps
             Dispose(true);
         }
 
+        /// <summary>
+        /// Cancels any active run (its finally block deactivates) and awaits the final clears so they
+        /// are published before the MQTT connector stops.
+        /// </summary>
+        public override async ValueTask DisposeAsync()
+        {
+            Logger.LogInformation("Disposing app {App}", Config.Name);
+
+            CancellationTokenSource? current;
+            lock (_ctsLock)
+            {
+                _disposed = true;
+                current = _cts;
+                _cts = null!;
+            }
+            CancelAndDispose(current);
+
+            await Dismiss();
+            await AppClear();
+        }
+
         protected void Dispose(bool disposing)
         {
             if (disposing)

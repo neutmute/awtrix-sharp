@@ -129,7 +129,13 @@ namespace AwtrixSharpWeb.HostedServices
             {
                 // Signal cancellation to the executing method
                 _stoppingCts?.Cancel();
-                _slackSocketClient.Disconnect();
+
+                // Null when Slack is not configured (no app token): nothing to disconnect
+                _slackSocketClient?.Disconnect();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error while disconnecting from Slack");
             }
             finally
             {

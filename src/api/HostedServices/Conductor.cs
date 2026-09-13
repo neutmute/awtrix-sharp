@@ -49,6 +49,11 @@ namespace AwtrixSharpWeb.HostedServices
         private int _started;
 
         /// <summary>
+        /// Per-app disposal budget: two sequential 5 s HTTP publishes (Dismiss + AppClear) to an offline device.
+        /// </summary>
+        internal static readonly TimeSpan AppDisposeTimeout = TimeSpan.FromSeconds(10);
+
+        /// <summary>
         /// An app keyed by the device it drives and its configured Type.
         /// </summary>
         private sealed record RegisteredApp(AwtrixAddress? Device, string Type, IAwtrixApp App)
@@ -390,25 +395,32 @@ namespace AwtrixSharpWeb.HostedServices
                 _registry.Clear();
             }
 
-            foreach (var entry in apps)
-            {
-                await DisposeOneAsync(entry, cancellationToken);
-            }
+            await Task.WhenAll(apps.Select(entry => DisposeOneAsync(entry, cancellationToken)));
+
+            _logger.LogInformation("Conductor stopped; disposed {Count} app(s)", apps.Count);
         }
 
-        private Task DisposeOneAsync(RegisteredApp entry, CancellationToken cancellationToken)
+        /// <summary>
+        /// Awaits the app's DisposeAsync, bounded by <see cref="AppDisposeTimeout"/> and the shutdown token. Never throws.
+        /// </summary>
+        private async Task DisposeOneAsync(RegisteredApp entry, CancellationToken cancellationToken)
         {
-            // Interim synchronous disposal; Task 4 awaits IAsyncDisposable with a timeout.
             try
             {
-                entry.App.Dispose();
+                await entry.App.DisposeAsync().AsTask().WaitAsync(AppDisposeTimeout, cancellationToken);
+            }
+            catch (TimeoutException)
+            {
+                _logger.LogWarning("Disposing {AppType} on {Device} did not finish within {Timeout}; continuing shutdown", entry.Type, entry.BaseTopic, AppDisposeTimeout);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                _logger.LogWarning("Shutdown timeout reached while disposing {AppType} on {Device}", entry.Type, entry.BaseTopic);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error disposing {AppType} on {Device}", entry.Type, entry.BaseTopic);
             }
-
-            return Task.CompletedTask;
         }
     }
 }

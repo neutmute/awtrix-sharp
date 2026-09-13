@@ -29,6 +29,11 @@ namespace Test.Apps
         {
         }
 
+        /// <summary>
+        /// Completes when an activation that waited for cancellation has ended.
+        /// </summary>
+        public TaskCompletionSource ActivationEnded { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
         protected override async Task ActivateScheduledWork(CancellationTokenSource cts)
         {
             var activation = ActivateCallCount++;
@@ -39,6 +44,7 @@ namespace Test.Apps
                 {
                     await Teardown(activation);
                 }
+                ActivationEnded.TrySetResult();
             }
         }
 
@@ -149,6 +155,20 @@ namespace Test.Apps
             sut.Dispose();
 
             _mockAwtrixService.Verify(x => x.Dismiss(_address), Times.AtLeastOnce);
+        }
+
+        [Fact]
+        public async Task DisposeAsync_EndsActiveRunAndAwaitsDismissAndClear()
+        {
+            var sut = CreateSut(type: "MyApp");
+            sut.WaitForCancellationOnActivate = true;
+            sut.ExecuteNow();
+
+            await sut.DisposeAsync();
+
+            await sut.ActivationEnded.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            _mockAwtrixService.Verify(x => x.Dismiss(_address), Times.Once);
+            _mockAwtrixService.Verify(x => x.AppClear(_address, "MyApp"), Times.AtLeast(2)); // WakeUp's clear + dispose's clear
         }
 
         private static CancellationTokenSource? CurrentCts(TestScheduledApp app) =>

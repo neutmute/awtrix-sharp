@@ -1,10 +1,18 @@
-﻿using AwtrixSharpWeb.Apps.MqttRender;
 using AwtrixSharpWeb.Domain;
-using System.Runtime.CompilerServices;
 
 namespace AwtrixSharpWeb.Interfaces
 {
-    public interface IAwtrixApp : IDisposable
+    /// <summary>
+    /// An app driving one Awtrix device. Lifecycle, owned by Conductor:
+    /// <list type="number">
+    /// <item>Construct: no publishing, subscribing or timers.</item>
+    /// <item><see cref="InitAsync"/>: at most once, after every app for every device is constructed; may run concurrently with other apps.</item>
+    /// <item><see cref="ExecuteNow"/>: zero or more times, from controller threads or the MQTT receive thread.</item>
+    /// <item><see cref="IAsyncDisposable.DisposeAsync"/>: exactly once (also after a failed init), before the MQTT connector
+    /// stops, abandoned after Conductor.AppDisposeTimeout. Conductor never calls the synchronous Dispose.</item>
+    /// </list>
+    /// </summary>
+    public interface IAwtrixApp : IDisposable, IAsyncDisposable
     {
         public AwtrixAddress AwtrixAddress { get; }
 

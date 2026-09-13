@@ -115,5 +115,14 @@ namespace AwtrixSharpWeb.Apps
         {
             AppClear().Wait();
         }
+
+        /// <summary>
+        /// Shutdown path used by Conductor: clears this app's custom slot without blocking.
+        /// WS4 replaces this with one virtual dispose pattern across AwtrixApp/ScheduledApp/TripTimerApp.
+        /// </summary>
+        public virtual async ValueTask DisposeAsync()
+        {
+            await AppClear();
+        }
     }
 }

@@ -201,6 +201,21 @@ namespace Test.Apps
         }
 
         [Fact]
+        public async Task DisposeAsync_AwaitsAppClearWithoutBlocking()
+        {
+            var sut = CreateSut("MyApp");
+            var gate = new TaskCompletionSource<bool>();
+            _mockAwtrixService.Setup(x => x.AppClear(_address, "MyApp")).Returns(gate.Task);
+
+            var dispose = sut.DisposeAsync();
+
+            Assert.False(dispose.IsCompleted);
+            gate.SetResult(true);
+            await dispose;
+            _mockAwtrixService.Verify(x => x.AppClear(_address, "MyApp"), Times.Once);
+        }
+
+        [Fact]
         public void ExecuteNow_DefaultImplementation_DoesNotThrow()
         {
             var sut = CreateSut("MyApp");
