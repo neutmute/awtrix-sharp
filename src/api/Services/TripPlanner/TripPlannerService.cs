@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Text.Json;
 using AwtrixSharpWeb.Interfaces;
 using Microsoft.Extensions.Options;
@@ -102,7 +101,7 @@ namespace AwtrixSharpWeb.Services.TripPlanner
             }
 
             var trips = await GetTrips(originStopId, destinationStopId, fromWhen, cancellationToken);
-            return MapDepartures(trips);
+            return DepartureMapper.Map(trips, _logger);
         }
 
         private void ApplyBaseUrl(Action<string> apply)
@@ -114,29 +113,6 @@ namespace AwtrixSharpWeb.Services.TripPlanner
                 apply(baseUrl);
             }
         }
-
-        // Replaced by DepartureMapper in Task 3
-        private static List<TripSummary> MapDepartures(TripRequestResponse trips)
-        {
-            var output = new List<TripSummary>();
-
-            foreach (var journey in trips.Journeys)
-            {
-                var origin = journey.Legs.First().Origin;
-                var destination = journey.Legs.Last().Destination;
-
-                output.Add(new TripSummary
-                {
-                    Origin = TimePlace.Factory(ParseApiTime(origin.DepartureTimeEstimated), origin.DisassembledName),
-                    Destination = TimePlace.Factory(ParseApiTime(destination.ArrivalTimeEstimated), destination.DisassembledName)
-                });
-            }
-
-            return output;
-        }
-
-        private static DateTimeOffset ParseApiTime(string value) =>
-            TransportTime.ToTransportZone(DateTimeOffset.Parse(value, CultureInfo.InvariantCulture));
 
         // Replaced by TripFileCache in Task 4
         private async Task<List<TripSummary>> TryLocalCache(string originStopId, string destinationStopId, DateTimeOffset fromWhen)

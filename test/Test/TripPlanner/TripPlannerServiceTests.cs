@@ -174,7 +174,7 @@ namespace Test.TripPlanner
             Assert.Equal(expected.Offset, summary.Origin.Time.Offset);
         }
 
-        [Fact(Skip = "Known bug (fixed in WS6 Task 3): no fallback from a null estimated time to the planned time.")]
+        [Fact]
         public async Task GetNextDepartures_NullEstimatedTime_FallsBackToPlannedTime()
         {
             const string planned = "2024-06-01T00:05:00Z";
