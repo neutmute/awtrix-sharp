@@ -26,7 +26,7 @@ namespace Test.Apps.TripTimer
     {
         private static TripTimerApp CreateTripTimerApp(TimeSpan timeToOrigin, TimeSpan timeToPrepare)
         {
-            var clock = new MockClock(DateTimeOffset.Now);
+            var clock = new MockClock(DateTimeOffset.Parse("2025-08-19T05:30:00+10:00")); // pinned (CR-39)
             var mockLog = new Mock<ILogger>();
             var mockAwtrixService = new Mock<IAwtrixService>();
             var mockAddress = new AwtrixAddress { BaseTopic = "test/base/topic" };

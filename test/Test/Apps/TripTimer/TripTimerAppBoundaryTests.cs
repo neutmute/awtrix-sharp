@@ -64,32 +64,27 @@ namespace Test.Apps.TripTimer
                 _mockTripPlannerService.Object);
 
             // TimeToOrigin/TimeToPrepare are zero above, so the alarm time equals the departure time.
-            sut.NextDepartures.Clear();
-            sut.NextDepartures.Add(TripSummaryTests.Create(departureTime));
+            sut.SetDepartures(new[] { TripSummaryTests.Create(departureTime) });
 
             return sut;
         }
 
         private static AwtrixAppMessage InvokeBuildMessage(TripTimerApp sut, DateTime tickTime)
         {
-            var method = typeof(TripTimerApp).GetMethod("BuildMessage", BindingFlags.NonPublic | BindingFlags.Instance);
-            var args = new object[] { new ClockTickEventArgs(tickTime) };
-            return (AwtrixAppMessage)method.Invoke(sut, args);
+            var message = sut.BuildMessage(tickTime);
+            Assert.NotNull(message);
+            return message!;
         }
 
         [Fact]
-        public void BuildMessage_NoFutureDepartures_ReturnsEmptyMessage()
+        public void BuildMessage_NoFutureDepartures_ReturnsNull()
         {
-            // Arrange - departure (and therefore alarm) is in the past relative to "now"
+            // CR-19: null means "nothing to show"; the tick handler completes the activation instead of publishing {}
             var departureTime = DateTimeOffset.Parse("2025-08-19T06:41:00+10:00");
             var now = departureTime.AddMinutes(5);
             var sut = GetSystemUnderTest(now, departureTime);
 
-            // Act
-            var message = InvokeBuildMessage(sut, now.DateTime);
-
-            // Assert
-            Assert.Empty(message);
+            Assert.Null(sut.BuildMessage(now.DateTime));
         }
 
         [Fact]

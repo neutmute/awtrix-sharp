@@ -5,102 +5,191 @@ using AwtrixSharpWeb.HostedServices;
 using AwtrixSharpWeb.Interfaces;
 using AwtrixSharpWeb.Services;
 using AwtrixSharpWeb.Services.TripPlanner;
-using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Test.Domain;
 
 namespace Test.Apps.TripTimer
 {
     /// <summary>
-    /// ClockTickSecond runs on the timer loop; it must never let an exception escape or wait on teardown I/O.
+    /// TripTimerApp activation lifecycle on a pinned FakeTimeProvider: countdown ticks, the no-departures completion
+    /// path (CR-19), and ticks that arrive after the window ended or was superseded (WS1 deferred a/b).
     /// </summary>
     public class TripTimerAppTickTests
     {
-        private static readonly DateTimeOffset Departure = DateTimeOffset.Parse("2025-08-19T06:41:00+10:00");
+        private static readonly TimeSpan Guard = TimeSpan.FromSeconds(5);
 
-        private static (TripTimerApp app, Mock<IAwtrixService> awtrix) Create(DateTimeOffset now)
+        // FakeTimeProvider's local zone is UTC, so every instant here is UTC
+        private static readonly DateTimeOffset Now = new(2025, 8, 19, 6, 30, 0, TimeSpan.Zero);
+        private static readonly DateTimeOffset Departure = new(2025, 8, 19, 6, 41, 0, TimeSpan.Zero);
+
+        private readonly FakeTimeProvider _time = new(Now);
+        private readonly Mock<ILogger> _logger = new();
+        private readonly Mock<IAwtrixService> _awtrix = new();
+        private readonly Mock<ITimerService> _timer = new();
+        private readonly Mock<ITripPlannerService> _planner = new();
+        private readonly TaskCompletionSource<bool> _slowClear = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private volatile bool _clearIsSlow;
+
+        public TripTimerAppTickTests()
         {
-            var awtrix = new Mock<IAwtrixService>();
-            awtrix.Setup(a => a.Notify(It.IsAny<AwtrixAddress>(), It.IsAny<AwtrixAppMessage>())).ReturnsAsync(true);
-            awtrix.Setup(a => a.AppUpdate(It.IsAny<AwtrixAddress>(), It.IsAny<string>(), It.IsAny<AwtrixAppMessage>())).ReturnsAsync(true);
-            awtrix.Setup(a => a.AppClear(It.IsAny<AwtrixAddress>(), It.IsAny<string>())).ReturnsAsync(true);
-            var planner = new Mock<ITripPlannerService>();
-            planner.Setup(p => p.GetNextDepartures(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<DateTime>()))
+            _awtrix.Setup(a => a.Notify(It.IsAny<AwtrixAddress>(), It.IsAny<AwtrixAppMessage>())).ReturnsAsync(true);
+            _awtrix.Setup(a => a.AppUpdate(It.IsAny<AwtrixAddress>(), It.IsAny<string>(), It.IsAny<AwtrixAppMessage>())).ReturnsAsync(true);
+            _awtrix.Setup(a => a.AppClear(It.IsAny<AwtrixAddress>(), It.IsAny<string>()))
+                .Returns(() => _clearIsSlow ? _slowClear.Task : Task.FromResult(true));
+            _planner.Setup(p => p.GetNextDepartures(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<DateTime>()))
                 .ReturnsAsync(new List<TripSummary> { TripSummaryTests.Create(Departure) });
+        }
+
+        private TripTimerApp CreateApp()
+        {
             var config = new TripTimerAppConfig
             {
-                CronSchedule = "* * * * *",
+                CronSchedule = "10 6 * * 1-5",
                 ActiveTime = TimeSpan.FromMinutes(30),
                 TimeToOrigin = TimeSpan.Zero,
                 TimeToPrepare = TimeSpan.Zero,
             };
             config.Type = AppNames.TripTimerApp;
 
-            var app = new TripTimerApp(
-                NullLogger.Instance,
-                new MockClock(now),
-                new AwtrixAddress { BaseTopic = "awtrix/clock1" },
-                awtrix.Object,
-                new Mock<ITimerService>().Object,
-                config,
-                planner.Object);
-
-            app.NextDepartures.Add(TripSummaryTests.Create(Departure));
-            return (app, awtrix);
+            return new TripTimerApp(_logger.Object, new Clock(_time), new AwtrixAddress { BaseTopic = "awtrix/clock1" },
+                _awtrix.Object, _timer.Object, config, _planner.Object);
         }
 
-        private static void InvokeClockTickSecond(TripTimerApp app, DateTime time)
+        private void RaiseSecond() =>
+            _timer.Raise(t => t.SecondChanged += null, this, new ClockTickEventArgs(_time.GetLocalNow().DateTime));
+
+        private void InvokeClockTickSecond(TripTimerApp app)
         {
-            var method = typeof(TripTimerApp).GetMethod("ClockTickSecond", BindingFlags.NonPublic | BindingFlags.Instance);
-            method!.Invoke(app, new object?[] { null, new ClockTickEventArgs(time) });
+            var method = typeof(TripTimerApp).GetMethod("ClockTickSecond", BindingFlags.NonPublic | BindingFlags.Instance)!;
+            method.Invoke(app, new object?[] { null, new ClockTickEventArgs(_time.GetLocalNow().DateTime) });
+        }
+
+        private int SecondChangedAdds() => _timer.Invocations.Count(i => i.Method.Name == "add_SecondChanged");
+
+        private void VerifyNoErrorsLogged() =>
+            _logger.Verify(x => x.Log(
+                LogLevel.Error,
+                It.IsAny<EventId>(),
+                It.IsAny<It.IsAnyType>(),
+                It.IsAny<Exception?>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()), Times.Never);
+
+        [Fact]
+        public async Task Tick_WhileActive_PublishesCountdownToNextAlarm()
+        {
+            var app = CreateApp();
+            app.ExecuteNow();
+
+            RaiseSecond();
+
+            _awtrix.Verify(a => a.AppUpdate(It.IsAny<AwtrixAddress>(), AppNames.TripTimerApp,
+                It.Is<AwtrixAppMessage>(m => m.Text != null && m.Text.Contains("->41"))), Times.Once);
+            await app.DisposeAsync();
         }
 
         [Fact]
-        public void SecondTick_WhenAppUpdateFaults_DoesNotPropagate()
+        public async Task Tick_WhenAppUpdateFaults_DoesNotPropagate()
         {
-            var now = Departure.AddMinutes(-3);
-            var (app, awtrix) = Create(now);
-            awtrix.Setup(a => a.AppUpdate(It.IsAny<AwtrixAddress>(), It.IsAny<string>(), It.IsAny<AwtrixAppMessage>()))
+            // Migrated from the WS1 tick test: the timer loop never sees a publish failure
+            var app = CreateApp();
+            app.ExecuteNow();
+            _awtrix.Setup(a => a.AppUpdate(It.IsAny<AwtrixAddress>(), It.IsAny<string>(), It.IsAny<AwtrixAppMessage>()))
                 .ThrowsAsync(new HttpRequestException("device offline"));
 
-            var exception = Record.Exception(() => InvokeClockTickSecond(app, now.DateTime));
+            var exception = Record.Exception(RaiseSecond);
 
             Assert.Null(exception);
+            _awtrix.Verify(a => a.AppUpdate(It.IsAny<AwtrixAddress>(), It.IsAny<string>(), It.IsAny<AwtrixAppMessage>()), Times.Once);
+            await app.DisposeAsync();
         }
 
         [Fact]
-        public void SecondTick_NoFutureDeparturesWhileNotActive_DoesNotPropagate()
+        public async Task NoFutureDepartures_CompletesActivation_WithoutPublishingAnEmptyPayload()
         {
-            var now = Departure.AddMinutes(5);
-            var (app, _) = Create(now);
-
-            var exception = Record.Exception(() => InvokeClockTickSecond(app, now.DateTime));
-
-            Assert.Null(exception);
-        }
-
-        [Fact]
-        public async Task SecondTick_NoFutureDeparturesWhileActive_ReturnsPromptlyWhenAppClearIsSlow()
-        {
-            var now = Departure.AddMinutes(5);
-            var (app, awtrix) = Create(now);
-            var clearIsSlow = false;
-            var slowClear = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-            awtrix.Setup(a => a.AppClear(It.IsAny<AwtrixAddress>(), It.IsAny<string>()))
-                .Returns(() => clearIsSlow ? slowClear.Task : Task.FromResult(true));
+            // CR-19: used to publish {} (a blank page, not a delete) and cancel a shared field
+            var app = CreateApp();
             app.ExecuteNow();
-            clearIsSlow = true;
+            _time.Advance(Departure - Now + TimeSpan.FromMinutes(1)); // 06:42: the only alarm has passed; still inside ActiveTime
+
+            RaiseSecond();
+
+            await app.LastRun.WaitAsync(Guard);
+            _awtrix.Verify(a => a.AppUpdate(It.IsAny<AwtrixAddress>(), It.IsAny<string>(), It.IsAny<AwtrixAppMessage>()), Times.Never);
+            _timer.VerifyRemove(t => t.SecondChanged -= It.IsAny<EventHandler<ClockTickEventArgs>>(), Times.Once);
+            _awtrix.Verify(a => a.AppClear(It.IsAny<AwtrixAddress>(), AppNames.TripTimerApp), Times.Exactly(2)); // start + end
+            VerifyNoErrorsLogged();
+        }
+
+        [Fact]
+        public async Task NoFutureDepartures_TickReturnsPromptly_EvenWhenFinalAppClearIsSlow()
+        {
+            var app = CreateApp();
+            app.ExecuteNow();
+            _time.Advance(Departure - Now + TimeSpan.FromMinutes(1));
+            _clearIsSlow = true;
 
             try
             {
-                await Task.Run(() => InvokeClockTickSecond(app, now.DateTime)).WaitAsync(TimeSpan.FromSeconds(5));
+                await Task.Run(RaiseSecond).WaitAsync(Guard);
+                Assert.False(app.LastRun.IsCompleted); // teardown is parked on AppClear, off the tick thread
             }
             finally
             {
-                slowClear.TrySetResult(true);
+                _slowClear.TrySetResult(true);
             }
 
-            await app.LastRun.WaitAsync(TimeSpan.FromSeconds(5));
+            await app.LastRun.WaitAsync(Guard);
+        }
+
+        [Fact]
+        public async Task TickDeliveredAfterDispose_IsIgnored_AndLogsNoError()
+        {
+            // WS1 deferred (a): TimerService snapshots its invocation list, so a tick can arrive after unsubscribe
+            var app = CreateApp();
+            app.ExecuteNow();
+            await app.DisposeAsync();
+            _awtrix.Invocations.Clear();
+
+            InvokeClockTickSecond(app);
+
+            _awtrix.Verify(a => a.AppUpdate(It.IsAny<AwtrixAddress>(), It.IsAny<string>(), It.IsAny<AwtrixAppMessage>()), Times.Never);
+            VerifyNoErrorsLogged();
+        }
+
+        [Fact]
+        public async Task ExecuteNowDuringActiveRun_OldTeardownDoesNotRemoveTheNewTickHandler()
+        {
+            // WS1 deferred (b): the old activation's late "-=" used to remove the new activation's handler
+            var app = CreateApp();
+            app.ExecuteNow();
+            _clearIsSlow = true;
+
+            app.ExecuteNow(); // supersedes #1, which unsubscribes and then parks on its final AppClear
+            Assert.Equal(1, SecondChangedAdds()); // #2 waits for #1's teardown before wiring up
+
+            _clearIsSlow = false;
+            _slowClear.TrySetResult(true);
+            Assert.True(SpinWait.SpinUntil(() => SecondChangedAdds() == 2, Guard));
+
+            _timer.VerifyRemove(t => t.SecondChanged -= It.IsAny<EventHandler<ClockTickEventArgs>>(), Times.Once);
+            _awtrix.Invocations.Clear();
+            RaiseSecond();
+            _awtrix.Verify(a => a.AppUpdate(It.IsAny<AwtrixAddress>(), AppNames.TripTimerApp, It.IsAny<AwtrixAppMessage>()), Times.Once);
+            await app.DisposeAsync();
+        }
+
+        [Fact]
+        public async Task SetDepartures_ReplacesTheList_AndRoundsToTheMinute()
+        {
+            var app = CreateApp();
+
+            app.SetDepartures(new[] { TripSummaryTests.Create(Departure.AddSeconds(20)) });
+
+            var only = Assert.Single(app.NextDepartures);
+            Assert.Equal(0, only.Origin.Time.Second);
+            await app.DisposeAsync();
         }
     }
 }

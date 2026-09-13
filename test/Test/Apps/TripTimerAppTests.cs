@@ -28,7 +28,7 @@ namespace Test.Apps
 
         public TripTimerApp GetSystemUnderTest()
         {
-            _clock = new MockClock(DateTimeOffset.Now);
+            _clock = new MockClock(DateTimeOffset.Parse("2025-08-19T05:30:00+10:00"));
             _mockLog = new Mock<ILogger>();
             _mockAwtrixService = new Mock<IAwtrixService>();   
             _mockAddress = new AwtrixAddress { BaseTopic = "test/base/topic" };

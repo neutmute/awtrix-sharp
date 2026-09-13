@@ -3,7 +3,6 @@ using AwtrixSharpWeb.HostedServices;
 using AwtrixSharpWeb.Interfaces;
 using AwtrixSharpWeb.Services;
 using AwtrixSharpWeb.Services.TripPlanner;
-using System.Xml.Linq;
 
 namespace AwtrixSharpWeb.Apps.TripTimer
 {
@@ -14,11 +13,10 @@ namespace AwtrixSharpWeb.Apps.TripTimer
     {
         private readonly ITripPlannerService _tripPlanner;
         private readonly ITimerService _timerService;
-
-        internal List<TripSummary> NextDepartures { get; set; }
+        private volatile IReadOnlyList<TripSummary> _nextDepartures = Array.Empty<TripSummary>();
 
         /// <summary>
-        /// How long before the alarm actually triggers do we show the visual alert 
+        /// How long before the alarm actually triggers do we show the visual alert
         /// </summary>
         private readonly TimeSpan VisualAlertBuffer;
 
@@ -28,7 +26,6 @@ namespace AwtrixSharpWeb.Apps.TripTimer
             /// When you have to start getting ready to leave
             /// </summary>
             public DateTimeOffset PrepareForDepartTime { get; set; }
-
 
             /// <summary>
             /// When you have to leave for the origin station
@@ -57,60 +54,119 @@ namespace AwtrixSharpWeb.Apps.TripTimer
         {
             _tripPlanner = tripPlanner;
             _timerService = timerService;
-            NextDepartures = new List<TripSummary>();
 
             VisualAlertBuffer = TimeSpan.FromSeconds(20);
         }
 
+        /// <summary>
+        /// The departures the countdown is built from, rounded to the minute. A snapshot; replaced atomically.
+        /// </summary>
+        internal IReadOnlyList<TripSummary> NextDepartures => _nextDepartures;
 
-        private void ClockTickMinute(object? sender, ClockTickEventArgs e)
+        /// <summary>
+        /// Replace the departures the countdown uses. Safe to call from any thread while active
+        /// (WS6's periodic refresh calls this with the activation's token).
+        /// </summary>
+        internal void SetDepartures(IEnumerable<TripSummary> departures)
         {
-            Logger.LogDebug($"Clock ticked minute: {e.Time}");
+            // Round to the minute otherwise we get to alarm time and it isn't aligned to minute boundaries
+            var rounded = departures.Select(d => d.AsRounded()).ToList();
+            _nextDepartures = rounded;
+
+            Logger.LogInformation("{Count} future departures computed (Prep -> Leave -> Departure):", rounded.Count);
+            foreach (var departure in rounded)
+            {
+                Logger.LogInformation("{AlarmStages}", GetAlarmTime(departure));
+            }
+        }
+
+        protected override async Task OnActivateAsync(ScheduledActivation activation)
+        {
+            Logger.LogInformation("Trip timer activated ({Trigger})", activation.Trigger);
+
+            var message = new AwtrixAppMessage()
+                .SetText("Starting trip timer")
+                .SetStack(false);
+
+            await Notify(message);
+
+            // Find the earliest we could get to the train station and query from then
+            var earliestDeparture = Clock.Now.Add(Config.TimeToOrigin).Add(Config.TimeToPrepare);
+
+            var departures = await _tripPlanner
+                .GetNextDepartures(Config.StopIdOrigin, Config.StopIdDestination, earliestDeparture.LocalDateTime)
+                .WaitAsync(activation.Token);
+
+            SetDepartures(departures);
+
+            _timerService.SecondChanged += ClockTickSecond;
+        }
+
+        protected override Task OnDeactivateAsync(ScheduledActivation activation)
+        {
+            _timerService.SecondChanged -= ClockTickSecond;
+            Logger.LogInformation("Trip timer activation #{Number} deactivated", activation.Number);
+            return Task.CompletedTask;
         }
 
         private void ClockTickSecond(object? sender, ClockTickEventArgs e)
         {
-            // BuildMessage runs inside FireAndLog so nothing can escape onto the timer loop
+            var activation = CurrentActivation;
+            if (activation is not { IsEnded: false })
+            {
+                return; // a tick dispatched after the window ended, was superseded, or the app was disposed
+            }
+
+            // Runs inside FireAndLog so nothing can escape onto the timer loop
             _ = FireAndLog(async () =>
             {
-                var message = BuildMessage(e);
-                await AppUpdate(message);
+                var message = BuildMessage(e.Time);
+                if (message == null)
+                {
+                    // CR-19: nothing left to show. End this activation; deactivation (unsubscribe + AppClear)
+                    // runs on the thread pool, never on the tick thread.
+                    Logger.LogInformation("No future departures; ending trip timer activation #{Number}", activation.Number);
+                    activation.Complete();
+                    return;
+                }
+
+                if (!activation.IsEnded)
+                {
+                    await AppUpdate(message);
+                }
             }, nameof(ClockTickSecond));
         }
 
-        private AwtrixAppMessage BuildMessage(ClockTickEventArgs e)
+        /// <summary>
+        /// The countdown frame for <paramref name="tickTime"/>, or null when no alarm is in the future.
+        /// </summary>
+        internal AwtrixAppMessage? BuildMessage(DateTime tickTime)
         {
             var alarmTimes = NextDepartures.Select(GetAlarmTime)
                 .Where(alarmTime => alarmTime.PrepareForDepartTime > Clock.Now)
                 .Select(at => at.PrepareForDepartTime)
-                .Order()                
+                .Order()
                 .ToList();
 
             if (alarmTimes.Count == 0)
             {
-                Logger.LogWarning("No future departures");
-                CurrentActivation?.Complete(); // interim; Task 4 returns null instead
-                return new AwtrixAppMessage();
+                return null;
             }
-            else
+
+            var nextAlarm = alarmTimes.First();
+            var timeToAlarm = nextAlarm - Clock.Now;
+
+            var clockText = TimerService.FormatClockString(tickTime, false);
+
+            var nowColor = "00FF00";
+
+            if (nextAlarm.AddMinutes(-1) <= Clock.Now)
             {
-                var nextAlarm = alarmTimes.First();
-                var timeToAlarm = nextAlarm - Clock.Now;
-                
-                var clockText = TimerService.FormatClockString(e.Time, false);
+                // We are in the last minute before the alarm
+                nowColor = "FFA500";
+            }
 
-                var nowColor = "00FF00";
-
-                if (nextAlarm.AddMinutes(-1) <= Clock.Now)
-                {
-                    // We are in the last minute before the alarm
-                    nowColor = "FFA500";
-                }
-
-                
-                //var text = $"{hour}{spacer}{Clock.Now:mm} {secondsToAlarm}";
-                //var text = $"{hour}{spacer}{Clock.Now:mm}->{nextAlarm.Minute}";
-                var jsonFormat = @"[
+            var jsonFormat = @"[
 	{
 	  ""t"": ""(NOW_TIME)"",
 	  ""c"": ""(NOW_COLOR)""
@@ -121,55 +177,52 @@ namespace AwtrixSharpWeb.Apps.TripTimer
 	}
 ]";
 
-                var text = jsonFormat
-                    .Replace("(NOW_TIME)", clockText)
-                    .Replace("(NOW_COLOR)", nowColor)
-                    .Replace("(ALARM_TIME)", $"{nextAlarm:mm}");
+            var text = jsonFormat
+                .Replace("(NOW_TIME)", clockText)
+                .Replace("(NOW_COLOR)", nowColor)
+                .Replace("(ALARM_TIME)", $"{nextAlarm:mm}");
 
-                var quantisedProgress = GetProgress(Clock, nextAlarm);
-                var useProgress = quantisedProgress.quantized;
-                
-                if (clockText.Contains(":"))    // Is an odd second
-                {
-                    useProgress = quantisedProgress.quantizedBlink;
-                }
+            var quantisedProgress = GetProgress(Clock, nextAlarm);
+            var useProgress = quantisedProgress.quantized;
 
-                var message = new AwtrixAppMessage()
-                    .SetText(text)
-                    .SetStack(false)
-                    .SetDuration(300)
-                    .SetProgress(useProgress);
-
-                if (timeToAlarm < VisualAlertBuffer)
-                {
-                    if (Config.ValueMaps.Any())
-                    {
-                        Config
-                            .ValueMaps[0]
-                            .Decorate(message, Logger);
-                    }
-                    else
-                    {
-                        text = "GO!";
-                        message
-                            .SetText(text)
-                            .SetRainbow()
-                            .SetProgress(100);
-
-                        Logger.LogInformation($"{message.Text}");
-                    }
-                }
-
-                return message;
+            if (clockText.Contains(":"))    // Is an odd second
+            {
+                useProgress = quantisedProgress.quantizedBlink;
             }
 
+            var message = new AwtrixAppMessage()
+                .SetText(text)
+                .SetStack(false)
+                .SetDuration(300)
+                .SetProgress(useProgress);
+
+            if (timeToAlarm < VisualAlertBuffer)
+            {
+                if (Config.ValueMaps.Any())
+                {
+                    Config
+                        .ValueMaps[0]
+                        .Decorate(message, Logger);
+                }
+                else
+                {
+                    message
+                        .SetText("GO!")
+                        .SetRainbow()
+                        .SetProgress(100);
+
+                    Logger.LogInformation("{Text}", message.Text);
+                }
+            }
+
+            return message;
         }
 
         internal (int quantized, int quantizedBlink) GetProgress(IClock clock, DateTimeOffset nextAlarm)
         {
             const int ZeroFromMinutes = 5;
 
-            var countFromSecs = (int) (TimeSpan.FromMinutes(ZeroFromMinutes) - VisualAlertBuffer).TotalSeconds; // enure full progress bar
+            var countFromSecs = (int)(TimeSpan.FromMinutes(ZeroFromMinutes) - VisualAlertBuffer).TotalSeconds; // ensure full progress bar
             var secondsSinceCountFrom = (int)(clock.Now - nextAlarm.AddMinutes(-ZeroFromMinutes)).TotalSeconds;
             var progress = secondsSinceCountFrom * 100 / countFromSecs;
 
@@ -182,48 +235,6 @@ namespace AwtrixSharpWeb.Apps.TripTimer
             var departForOriginTime = originDepartTime.Origin.Time.Add(-Config.TimeToOrigin);
             var prepareForDepartTime = departForOriginTime.Add(-Config.TimeToPrepare);
             return new AlarmStages { OriginDepartTime = originDepartTime.Origin.Time, DepartForOriginTime = departForOriginTime, PrepareForDepartTime = prepareForDepartTime };
-        }
-
-        protected override async Task OnActivateAsync(ScheduledActivation activation)
-        {
-            Logger.LogInformation("Trip timer activated ({Trigger})", activation.Trigger);
-
-            var message = new AwtrixAppMessage()
-                .SetText($"Starting trip timer")
-                .SetStack(false);
-
-            await Notify(message);
-
-            // Find the earliest we could get to the train station and query from then
-            var earliestDeparture = Clock.Now.Add(Config.TimeToOrigin).Add(Config.TimeToPrepare);
-
-            var newDepartures = await _tripPlanner
-                .GetNextDepartures(Config.StopIdOrigin, Config.StopIdDestination, earliestDeparture.LocalDateTime)
-                .WaitAsync(activation.Token);
-            NextDepartures.Clear();
-
-            foreach (var departure in newDepartures)
-            {
-                Logger.LogInformation("Raw Departure: {departure}", departure);
-            }
-
-            // Round to the minute otherwise we get to alarm time and it isn't aligned to minute boundaries
-            NextDepartures.AddRange(newDepartures.Select(d => d.AsRounded()));
-
-            Logger.LogInformation($"{NextDepartures.Count} future departures computed:");
-            Logger.LogInformation($"Prep -> Leave -> Departure");
-            NextDepartures.ForEach(d => Logger.LogInformation(GetAlarmTime(d).ToString()));
-
-            _timerService.SecondChanged += ClockTickSecond;
-            _timerService.MinuteChanged += ClockTickMinute;
-        }
-
-        protected override Task OnDeactivateAsync(ScheduledActivation activation)
-        {
-            Logger.LogInformation($"Schedule deactivating");
-            _timerService.SecondChanged -= ClockTickSecond;
-            _timerService.MinuteChanged -= ClockTickMinute;
-            return Task.CompletedTask;
         }
     }
 }
