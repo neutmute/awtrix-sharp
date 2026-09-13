@@ -4,6 +4,7 @@ using AwtrixSharpWeb.Domain;
 using AwtrixSharpWeb.Interfaces;
 using AwtrixSharpWeb.Services;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Test.Apps.MqttRender;
 
@@ -16,7 +17,7 @@ namespace Test.Apps.Buttons
         private Mock<IMqttConnector> _mockMqttConnector = null!;
         private AwtrixAddress _address = null!;
 
-        private ButtonApp CreateSut()
+        private ButtonApp CreateSut(TimeProvider? timeProvider = null)
         {
             _mockLogger = new Mock<ILogger>();
             _mockAwtrixService = new Mock<IAwtrixService>();
@@ -27,7 +28,7 @@ namespace Test.Apps.Buttons
 
             var config = new AppConfig();
 
-            return new ButtonApp(_mockLogger.Object, config, _address, _mockAwtrixService.Object, _mockMqttConnector.Object);
+            return new ButtonApp(_mockLogger.Object, config, _address, _mockAwtrixService.Object, _mockMqttConnector.Object, timeProvider);
         }
 
         [Fact]
@@ -93,7 +94,31 @@ namespace Test.Apps.Buttons
         [Fact]
         public async Task MessageReceived_PressReleasePressQuickly_RaisesDoubleClick()
         {
-            var sut = CreateSut();
+            // Fake monotonic time: the double-click window no longer depends on real elapsed time
+            var time = new FakeTimeProvider();
+            var sut = CreateSut(time);
+            await sut.InitAsync();
+            var clickCount = 0;
+            var doubleClickCount = 0;
+            sut.Click += (s, e) => clickCount++;
+            sut.DoubleClick += (s, e) => doubleClickCount++;
+
+            var topic = "test/base/topic/stats/buttonSelect";
+            _mockMqttConnector.Raise(x => x.MessageReceived += null, new object[] { MqttTestHelpers.CreateReceivedArgs(topic, "1") });
+            time.Advance(TimeSpan.FromMilliseconds(100));
+            _mockMqttConnector.Raise(x => x.MessageReceived += null, new object[] { MqttTestHelpers.CreateReceivedArgs(topic, "0") });
+            time.Advance(TimeSpan.FromMilliseconds(200));
+            _mockMqttConnector.Raise(x => x.MessageReceived += null, new object[] { MqttTestHelpers.CreateReceivedArgs(topic, "1") });
+
+            Assert.Equal(1, clickCount);
+            Assert.Equal(1, doubleClickCount);
+        }
+
+        [Fact]
+        public async Task MessageReceived_PressReleasePressSlowly_RaisesTwoClicks()
+        {
+            var time = new FakeTimeProvider();
+            var sut = CreateSut(time);
             await sut.InitAsync();
             var clickCount = 0;
             var doubleClickCount = 0;
@@ -103,10 +128,11 @@ namespace Test.Apps.Buttons
             var topic = "test/base/topic/stats/buttonSelect";
             _mockMqttConnector.Raise(x => x.MessageReceived += null, new object[] { MqttTestHelpers.CreateReceivedArgs(topic, "1") });
             _mockMqttConnector.Raise(x => x.MessageReceived += null, new object[] { MqttTestHelpers.CreateReceivedArgs(topic, "0") });
+            time.Advance(TimeSpan.FromMilliseconds(301));
             _mockMqttConnector.Raise(x => x.MessageReceived += null, new object[] { MqttTestHelpers.CreateReceivedArgs(topic, "1") });
 
-            Assert.Equal(1, clickCount);
-            Assert.Equal(1, doubleClickCount);
+            Assert.Equal(2, clickCount);
+            Assert.Equal(0, doubleClickCount);
         }
     }
 }

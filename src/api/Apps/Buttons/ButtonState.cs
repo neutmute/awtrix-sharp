@@ -2,7 +2,7 @@
 {
     public class ButtonState
     {
-        DoubleClickDetector _doubleClickDetector { get; set; } = new DoubleClickDetector();
+        private readonly DoubleClickDetector _doubleClickDetector;
 
         public Button Button { get; private set; } = Button.Unknown;
 
@@ -15,10 +15,11 @@
 
         public event EventHandler<ButtonEventArgs>? DoubleClick;
 
-        public ButtonState(Button button, string topic)
+        public ButtonState(Button button, string topic, TimeProvider? timeProvider = null)
         {
             Button = button;
             Topic = topic;
+            _doubleClickDetector = new DoubleClickDetector(timeProvider: timeProvider);
         }
 
         public void RegisterChange(bool newIsPressed)

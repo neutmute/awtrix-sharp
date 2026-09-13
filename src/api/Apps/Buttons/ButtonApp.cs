@@ -13,6 +13,9 @@ namespace AwtrixSharpWeb.Apps.MqttRender
 
         Dictionary<Button, ButtonState> _buttonTopics;
 
+        /// <summary>Monotonic time for double-click detection; null uses TimeProvider.System (tests inject a fake).</summary>
+        readonly TimeProvider? _timeProvider;
+
 
         public event EventHandler<ButtonEventArgs>? Click;
 
@@ -23,11 +26,13 @@ namespace AwtrixSharpWeb.Apps.MqttRender
             , AppConfig config
             , AwtrixAddress awtrixAddress
             , IAwtrixService awtrixService
-            , IMqttConnector mqttConnector)
+            , IMqttConnector mqttConnector
+            , TimeProvider? timeProvider = null)
             : base(logger, config, awtrixAddress, awtrixService)
         {
 
             _mqttConnector = mqttConnector;
+            _timeProvider = timeProvider;
 
             _buttonTopics = new Dictionary<Button, ButtonState>
             {
@@ -39,7 +44,7 @@ namespace AwtrixSharpWeb.Apps.MqttRender
 
         private ButtonState BuildState(Button button)
         {
-            var buttonState = new ButtonState(button, GetTopic(button));
+            var buttonState = new ButtonState(button, GetTopic(button), _timeProvider);
             return buttonState;
         }
 

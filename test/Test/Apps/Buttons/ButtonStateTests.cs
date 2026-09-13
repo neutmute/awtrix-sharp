@@ -1,4 +1,5 @@
 ﻿using AwtrixSharpWeb.Apps.MqttRender;
+using Microsoft.Extensions.Time.Testing;
 
 namespace Test.Apps.Buttons
 {
@@ -80,6 +81,25 @@ namespace Test.Apps.Buttons
             var sut = new ButtonState(Button.Right, "topic/right");
 
             Assert.Equal("Button=Right, IsPressed=False", sut.ToString());
+        }
+
+        [Fact]
+        public void RegisterChange_PressReleasePressSlowly_FiresTwoClicksAndNoDoubleClick()
+        {
+            var time = new FakeTimeProvider();
+            var sut = new ButtonState(Button.Select, "topic/select", time);
+            var clickCount = 0;
+            var doubleClickCount = 0;
+            sut.Click += (s, e) => clickCount++;
+            sut.DoubleClick += (s, e) => doubleClickCount++;
+
+            sut.RegisterChange(true);
+            sut.RegisterChange(false);
+            time.Advance(TimeSpan.FromMilliseconds(500));
+            sut.RegisterChange(true);
+
+            Assert.Equal(2, clickCount);
+            Assert.Equal(0, doubleClickCount);
         }
     }
 }
