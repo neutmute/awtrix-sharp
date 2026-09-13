@@ -153,6 +153,85 @@ namespace Test.Apps.SlackStatus
 
             Assert.Null(ex);
         }
+
+        // ---------- Publish ordering (WS5 fix round 1, m2) ----------
+
+        [Fact]
+        public async Task UserStatusChanged_ClearWhileUpdateInFlight_ClearRunsAfterUpdateCompletes()
+        {
+            await StartApp("U123");
+            var updateGate = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var cleared = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var order = new List<string>();
+            _awtrix.Setup(a => a.AppUpdate(It.IsAny<AwtrixAddress>(), It.IsAny<string>(), It.IsAny<AwtrixAppMessage>()))
+                .Returns(() => { lock (order) { order.Add("update"); } return updateGate.Task; });
+            _awtrix.Setup(a => a.AppClear(It.IsAny<AwtrixAddress>(), It.IsAny<string>()))
+                .Returns(() => { lock (order) { order.Add("clear"); } cleared.TrySetResult(); return Task.FromResult(true); });
+
+            Raise(new SlackUserStatusChangedEventArgs { UserId = "U123", StatusText = "Busy" });
+            Raise(new SlackUserStatusChangedEventArgs { UserId = "U123", StatusText = "" });
+
+            lock (order)
+            {
+                // The raise returned without blocking, and the clear has not overtaken the in-flight update
+                Assert.Equal(new[] { "update" }, order);
+            }
+
+            updateGate.SetResult(true);
+            await cleared.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+            lock (order)
+            {
+                Assert.Equal(new[] { "update", "clear" }, order);
+            }
+        }
+
+        [Fact]
+        public async Task UserStatusChanged_SupersededQueuedStatus_IsSkippedLatestWins()
+        {
+            await StartApp("U123");
+            var updateGate = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var cleared = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var texts = new List<string?>();
+            _awtrix.Setup(a => a.AppUpdate(It.IsAny<AwtrixAddress>(), It.IsAny<string>(), It.IsAny<AwtrixAppMessage>()))
+                .Returns<AwtrixAddress, string, AwtrixAppMessage>((_, _, message) => { lock (texts) { texts.Add(message.Text); } return updateGate.Task; });
+            _awtrix.Setup(a => a.AppClear(It.IsAny<AwtrixAddress>(), It.IsAny<string>()))
+                .Returns(() => { cleared.TrySetResult(); return Task.FromResult(true); });
+
+            Raise(new SlackUserStatusChangedEventArgs { UserId = "U123", StatusText = "Busy" });
+            Raise(new SlackUserStatusChangedEventArgs { UserId = "U123", StatusText = "Lunch" });
+            Raise(new SlackUserStatusChangedEventArgs { UserId = "U123", StatusText = "" });
+
+            updateGate.SetResult(true);
+            await cleared.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+            lock (texts)
+            {
+                Assert.Equal(new[] { "Busy" }, texts); // "Lunch" was superseded before it ran
+            }
+            _awtrix.Verify(a => a.AppClear(_address, AppName), Times.Once);
+        }
+
+        [Fact]
+        public async Task UserStatusChanged_InFlightUpdateFaults_LaterStatusStillPublished()
+        {
+            await StartApp("U123");
+            var updateGate = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var cleared = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            _awtrix.Setup(a => a.AppUpdate(It.IsAny<AwtrixAddress>(), It.IsAny<string>(), It.IsAny<AwtrixAppMessage>()))
+                .Returns(() => updateGate.Task);
+            _awtrix.Setup(a => a.AppClear(It.IsAny<AwtrixAddress>(), It.IsAny<string>()))
+                .Returns(() => { cleared.TrySetResult(); return Task.FromResult(true); });
+
+            Raise(new SlackUserStatusChangedEventArgs { UserId = "U123", StatusText = "Busy" });
+            Raise(new SlackUserStatusChangedEventArgs { UserId = "U123", StatusText = "" });
+            _awtrix.Verify(a => a.AppClear(It.IsAny<AwtrixAddress>(), It.IsAny<string>()), Times.Never);
+
+            updateGate.SetException(new HttpRequestException("device offline"));
+            await cleared.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+            _awtrix.Verify(a => a.AppClear(_address, AppName), Times.Once);
+        }
     }
 
     /// <summary>

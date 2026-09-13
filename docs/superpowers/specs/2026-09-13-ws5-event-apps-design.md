@@ -90,7 +90,7 @@ Verified by Task 0 of the plan. If any differ, the executor adapts names, not be
 - **Time keys:** parsed with `TimeSpan.TryParseExact(key.Trim(), "hhmm", CultureInfo.InvariantCulture, …)`, which is the same format as today. A key that fails is logged at Warning and skipped.
 - **Values:**
   - Split on `;` (remove empties, trim), then each part on `=`. A part is used only when it yields exactly 2 non-empty pieces, as today.
-  - `brightness` uses `byte.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, …)`, so `dim`, `300`, `-1` and `8.5` are rejected with a Warning.
+  - `brightness` uses `byte.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, …)`, so `dim`, `300`, `-1` and `8.5` are rejected with a Warning. `+8`, `-0` and leading zeros stay valid, as with the pre-WS5 `byte.Parse` (fix round 1, m3).
   - `globaltextcolor` takes the raw string, as today.
   - Any other name logs a Warning and is skipped.
 - **Empty entries:** an entry with no valid setting is dropped with a Warning.

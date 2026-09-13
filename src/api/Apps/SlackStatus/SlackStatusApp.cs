@@ -16,7 +16,9 @@ namespace AwtrixSharpWeb.Apps.SlackStatus
         private const int DefaultDurationSeconds = 50;
 
         private readonly ISlackConnector _slackConnector;
+        private readonly SerialWorkQueue _publishQueue = new();
         private string? _trackingUserId;
+        private long _statusVersion;
 
         public SlackStatusApp(
             ILogger logger
@@ -52,6 +54,7 @@ namespace AwtrixSharpWeb.Apps.SlackStatus
         protected override void ReleaseResources()
         {
             _slackConnector.UserStatusChanged -= UserStatusChanged;
+            Interlocked.Increment(ref _statusVersion); // statuses still queued must not publish after dispose
             base.ReleaseResources();
         }
 
@@ -62,9 +65,13 @@ namespace AwtrixSharpWeb.Apps.SlackStatus
                 return;
             }
 
-            // Never block or throw on SlackNet's dispatch thread
-            _ = FireAndLog(() => ShowStatusAsync(e), nameof(UserStatusChanged));
+            // Never block or throw on SlackNet's dispatch thread. Publishes are serialised so an older update
+            // cannot land after a newer clear; a status superseded while queued is skipped (latest wins).
+            var version = Interlocked.Increment(ref _statusVersion);
+            _ = FireAndLog(() => _publishQueue.Enqueue(() => IsLatest(version) ? ShowStatusAsync(e) : Task.CompletedTask), nameof(UserStatusChanged));
         }
+
+        private bool IsLatest(long version) => Interlocked.Read(ref _statusVersion) == version;
 
         private async Task ShowStatusAsync(SlackUserStatusChangedEventArgs e)
         {

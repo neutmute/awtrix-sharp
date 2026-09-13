@@ -131,24 +131,34 @@ namespace Test.Apps.Diurnal
         [Fact]
         public async Task MinuteTick_UnknownKeyOnly_DoesNotThrowOrPublish()
         {
-            await StartApp(At(5, 59), ("0600", "SomeUnknownSetting=123"));
+            // A valid entry at another time keeps the app subscribed, so the tick path really runs
+            await StartApp(At(5, 59), ("0600", "SomeUnknownSetting=123"), ("0700", "Brightness=5"));
+            _timer.VerifyAdd(t => t.MinuteChanged += It.IsAny<EventHandler<ClockTickEventArgs>>(), Times.Once);
 
             var ex = Record.Exception(() => RaiseMinute(6, 0));
 
             Assert.Null(ex);
             Assert.Empty(_applied);
+
+            RaiseMinute(7, 0);
+            Assert.Equal("5", Assert.Single(Assert.Single(_applied), kv => kv.Key == "BRI").Value);
         }
 
         [Fact]
         public async Task MinuteTick_OutOfRangeBrightness_DoesNotThrowOrPublish()
         {
-            var app = CreateApp(At(20, 59), ("2100", "Brightness=300"));
-            await app.InitAsync();
+            await StartApp(At(20, 59), ("2100", "Brightness=300"), ("2200", "GlobalTextColor=#112233"));
+            _timer.VerifyAdd(t => t.MinuteChanged += It.IsAny<EventHandler<ClockTickEventArgs>>(), Times.Once);
 
             var ex = Record.Exception(() => RaiseMinute(21, 0));
 
             Assert.Null(ex);
             Assert.Empty(_applied);
+
+            RaiseMinute(22, 0);
+            var settings = Assert.Single(_applied);
+            Assert.Equal("#112233", settings["TCOL"]);
+            Assert.False(settings.ContainsKey("BRI"));
         }
 
         // ---------- Startup state (CR-20) ----------
@@ -257,6 +267,89 @@ namespace Test.Apps.Diurnal
 
             Assert.Null(initException);
             Assert.Null(tickException);
+            _awtrix.Verify(a => a.Set(_address, It.IsAny<AwtrixSettings>()), Times.Exactly(2)); // startup + tick
+        }
+
+        // ---------- Publish ordering (WS5 fix round 1, m1) ----------
+
+        /// <summary>
+        /// A tick raised the instant the handler is attached (TimerService fires on its own thread) must be
+        /// published after the startup restore, even while the restore is still in flight on the transport.
+        /// </summary>
+        [Fact]
+        public async Task StartupRestore_TickRacingSubscription_IsPublishedAfterRestore()
+        {
+            var restoreGate = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var secondSet = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var applied = new List<AwtrixSettings>();
+            _awtrix.Setup(a => a.Set(It.IsAny<AwtrixAddress>(), It.IsAny<AwtrixSettings>()))
+                .Returns<AwtrixAddress, AwtrixSettings>((_, settings) =>
+                {
+                    lock (applied)
+                    {
+                        applied.Add(settings);
+                        if (applied.Count == 1)
+                        {
+                            return restoreGate.Task;
+                        }
+                    }
+
+                    secondSet.TrySetResult();
+                    return Task.FromResult(true);
+                });
+
+            var tickTime = Day.Add(new TimeSpan(21, 0, 0));
+            _timer.SetupAdd(t => t.MinuteChanged += It.IsAny<EventHandler<ClockTickEventArgs>>())
+                .Callback<EventHandler<ClockTickEventArgs>>(handler => handler(_timer.Object, new ClockTickEventArgs(tickTime)));
+
+            var app = CreateApp(new DateTimeOffset(2026, 9, 13, 20, 59, 59, Aest), Shipped);
+            await app.InitAsync();
+
+            lock (applied)
+            {
+                // Only the restore has reached the transport; the 21:00 tick waits behind it
+                Assert.Single(applied);
+                Assert.Equal("8", applied[0]["BRI"]);
+            }
+
+            restoreGate.SetResult(true);
+            await secondSet.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+            lock (applied)
+            {
+                Assert.Equal(2, applied.Count);
+                Assert.Equal("1", applied[1]["BRI"]); // night brightness wins
+            }
+        }
+
+        [Fact]
+        public async Task MinuteTick_WhileRestoreInFlightAndRestoreFaults_TickStillPublished()
+        {
+            var restoreGate = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var secondSet = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var calls = 0;
+            _awtrix.Setup(a => a.Set(It.IsAny<AwtrixAddress>(), It.IsAny<AwtrixSettings>()))
+                .Returns<AwtrixAddress, AwtrixSettings>((_, _) =>
+                {
+                    if (Interlocked.Increment(ref calls) == 1)
+                    {
+                        return restoreGate.Task;
+                    }
+
+                    secondSet.TrySetResult();
+                    return Task.FromResult(true);
+                });
+
+            var app = CreateApp(At(20, 59), Shipped);
+            await app.InitAsync();
+
+            RaiseMinute(21, 0);
+            Assert.Equal(1, Volatile.Read(ref calls));
+
+            restoreGate.SetException(new HttpRequestException("device offline"));
+            await secondSet.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+            Assert.Equal(2, Volatile.Read(ref calls));
         }
 
         [Fact]

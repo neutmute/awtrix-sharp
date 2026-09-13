@@ -17,6 +17,7 @@ namespace AwtrixSharpWeb.Apps.Diurnal
         private readonly ITimerService _timerService;
         private readonly IClock _clock;
         private readonly object _gate = new();
+        private readonly SerialWorkQueue _publishQueue = new();
 
         private DiurnalSchedule _schedule = DiurnalSchedule.Empty;
         private DateTime _lastProcessed;
@@ -53,11 +54,15 @@ namespace AwtrixSharpWeb.Apps.Diurnal
                 _lastProcessed = DiurnalSchedule.TruncateToMinute(now);
             }
 
-            _timerService.MinuteChanged += ClockTickMinute;
-
+            // Queue the restore BEFORE subscribing: every tick publish is queued behind it, so a tick raised
+            // at a minute boundary during startup can never be overwritten by the older restored state.
+            // A tick in the startup minute has an empty window; a tick missed before subscribing is caught
+            // by the next (last, now] window.
             var state = _schedule.StateAt(now);
             Logger.LogInformation("{BaseTopic}: restoring Diurnal settings in effect at {Time:HH:mm}: {AwtrixSetting}", AwtrixAddress.BaseTopic, now, state);
-            _ = FireAndLog(() => Set(state), "DiurnalStartupRestore");
+            _ = FireAndLog(() => _publishQueue.Enqueue(() => Set(state)), "DiurnalStartupRestore");
+
+            _timerService.MinuteChanged += ClockTickMinute;
         }
 
         /// <summary>
@@ -73,7 +78,8 @@ namespace AwtrixSharpWeb.Apps.Diurnal
         private void ClockTickMinute(object? sender, ClockTickEventArgs e)
         {
             // e.Time is local wall-clock time (TimerService contract)
-            _ = FireAndLog(() => ApplyDueAsync(e.Time), nameof(ClockTickMinute));
+            // Serialised with the startup restore and earlier ticks (publishes land in order on HTTP too)
+            _ = FireAndLog(() => _publishQueue.Enqueue(() => ApplyDueAsync(e.Time)), nameof(ClockTickMinute));
         }
 
         private async Task ApplyDueAsync(DateTime tickTime)

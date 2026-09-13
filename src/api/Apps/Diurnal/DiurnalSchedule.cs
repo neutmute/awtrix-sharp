@@ -88,7 +88,9 @@ namespace AwtrixSharpWeb.Apps.Diurnal
                 switch (name.ToLowerInvariant())
                 {
                     case BrightnessSetting:
-                        if (byte.TryParse(settingValue, NumberStyles.None, CultureInfo.InvariantCulture, out var brightness))
+                        // NumberStyles.Integer matches the pre-WS5 byte.Parse, so "+8" and "-0" stay valid;
+                        // "-1" and "300" still fail as overflow and "8.5" as a format error
+                        if (byte.TryParse(settingValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out var brightness))
                         {
                             settings.SetBrightness(brightness);
                         }

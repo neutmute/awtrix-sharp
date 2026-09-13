@@ -65,6 +65,32 @@ namespace Test.Apps.Diurnal
             VerifyWarningLogged(logger);
         }
 
+        /// <summary>
+        /// Config compatibility: the pre-WS5 code used byte.Parse (NumberStyles.Integer), which accepted a
+        /// leading sign and leading zeros. Those forms must keep working (invariant culture).
+        /// </summary>
+        [Theory]
+        [InlineData("Brightness=+8", "8")]
+        [InlineData("Brightness=-0", "0")]
+        [InlineData("Brightness=008", "8")]
+        [InlineData("Brightness=+255", "255")]
+        public void Parse_BrightnessFormsAcceptedBeforeWs5_AreStillAccepted(string value, string expected)
+        {
+            var logger = new Mock<ILogger>();
+
+            var sut = DiurnalSchedule.Parse(new Dictionary<string, string> { ["2100"] = value }, logger.Object);
+
+            var entry = Assert.Single(sut.Entries);
+            Assert.Equal(expected, entry.Settings["BRI"]);
+            logger.Verify(l => l.Log(
+                    LogLevel.Warning,
+                    It.IsAny<EventId>(),
+                    It.IsAny<It.IsAnyType>(),
+                    It.IsAny<Exception?>(),
+                    (Func<It.IsAnyType, Exception?, string>)It.IsAny<object>()),
+                Times.Never);
+        }
+
         [Fact]
         public void Parse_MixedValidAndInvalidSettings_KeepsValidPart()
         {
