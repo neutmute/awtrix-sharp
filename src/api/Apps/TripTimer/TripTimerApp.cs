@@ -340,7 +340,7 @@ namespace AwtrixSharpWeb.Apps.TripTimer
             var quantisedProgress = GetProgress(Clock, nextAlarm);
             var useProgress = quantisedProgress.quantized;
 
-            if (clockText.Contains(":"))    // Is an odd second
+            if (clockText.Contains(":"))    // Even second: FormatClockString shows the colon
             {
                 useProgress = quantisedProgress.quantizedBlink;
             }

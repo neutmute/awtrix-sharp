@@ -105,7 +105,7 @@ namespace AwtrixSharpWeb.Apps
         {
             if (Config.Name == null)
             {
-                // Diurnal sending empty custom payload causes errors
+                // No Type means no custom app slot to clear (publishing would target ".../custom/")
                 return false;
             }
             return await AwtrixService.AppClear(AwtrixAddress, Config.Name);

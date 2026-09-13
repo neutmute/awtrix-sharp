@@ -65,7 +65,10 @@ namespace AwtrixSharpWeb.Apps.SlackStatus
         protected override void ReleaseResources()
         {
             _slackConnector.UserStatusChanged -= UserStatusChanged;
-            Interlocked.Increment(ref _statusVersion); // statuses still queued must not publish after dispose
+            // Statuses queued but not yet started are skipped after this point. Not a full guarantee: a ShowStatusAsync
+            // already running, or a user_change SlackNet was dispatching concurrently with the unsubscribe (whose
+            // increment lands after this one), can still publish once after dispose.
+            Interlocked.Increment(ref _statusVersion);
             base.ReleaseResources();
         }
 

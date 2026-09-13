@@ -1,10 +1,11 @@
-﻿using AwtrixSharpWeb.Apps.Configs;
+using AwtrixSharpWeb.Apps.Configs;
 
 namespace AwtrixSharpWeb.Apps.SlackStatus
 {
-    public class SlackStatusAppConfig : AppConfig 
+    /// <summary>
+    /// SlackStatusApp configuration. The tracked user id is read from the "SlackUserId" key of <see cref="AppConfig.Config"/>.
+    /// </summary>
+    public class SlackStatusAppConfig : AppConfig
     {
-        public string SlackUserId { get; set; } = string.Empty;
-
     }
 }

@@ -71,12 +71,6 @@ namespace AwtrixSharpWeb.Apps.MqttRender
                 Logger.LogDebug("Found matching value map for status: {StatusText}", textPayload);
 
                 valueMap.Decorate(message, Logger);
-
-                // If no text is set in the mapping, use the original status text
-                if (message.Text == null)
-                {
-                    message.SetText(textPayload);
-                }
             }
 
             return AppUpdate(message);
