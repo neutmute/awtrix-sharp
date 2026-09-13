@@ -1,4 +1,3 @@
-﻿using AwtrixSharpWeb.Apps;
 using AwtrixSharpWeb.HostedServices;
 using Microsoft.AspNetCore.Mvc;
 using Swashbuckle.AspNetCore.Annotations;
@@ -30,15 +29,17 @@ namespace AwtrixSharpWeb.Controllers
             OperationId = "StartApp"
         )]
         [SwaggerResponse(200, "App started successfully")]
+        [SwaggerResponse(404, "The app is not running on that device")]
+        [SwaggerResponse(500, "The app failed to start")]
         public IActionResult StartNow(
-            [FromQuery, SwaggerParameter("The Awtrix device address/topic")] 
-            string deviceAddress = "awtrix/clock1", 
-            
-            [FromQuery, SwaggerParameter("The name of the app to execute")] 
+            [FromQuery, SwaggerParameter("The Awtrix device address/topic")]
+            string deviceAddress = "awtrix/clock1",
+
+            [FromQuery, SwaggerParameter("The name of the app to execute")]
             string appName = AppNames.MqttRenderApp)
         {
-            _conductor.ExecuteNow(deviceAddress, appName);
-            return Ok(new { message = $"App '{appName}' started on device '{deviceAddress}'" });
+            var result = _conductor.ExecuteNow(deviceAddress, appName);
+            return this.ToActionResult(result, appName, deviceAddress);
         }
     }
 }

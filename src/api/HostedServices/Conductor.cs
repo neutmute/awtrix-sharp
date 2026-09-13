@@ -306,38 +306,46 @@ namespace AwtrixSharpWeb.HostedServices
             return app;
         }
 
-        public void ExecuteNow(string baseTopic, string appName)
+        /// <summary>
+        /// Runs the registered instance(s) of <paramref name="appType"/> on the device <paramref name="baseTopic"/> now.
+        /// Never creates, initialises or disposes an app, and never throws.
+        /// </summary>
+        public AppExecutionResult ExecuteNow(string baseTopic, string appType)
         {
-            // Interim: still builds a transient instance (CR-07). Task 3 replaces this with a registry lookup.
-            try
+            if (string.IsNullOrWhiteSpace(baseTopic) || string.IsNullOrWhiteSpace(appType))
             {
-                var device = _awtrixConfig.Devices.FirstOrDefault(d => d.BaseTopic == baseTopic);
-                if (device == null)
-                {
-                    _logger.LogWarning("Device with base topic '{BaseTopic}' not found", baseTopic);
-                    return;
-                }
-
-                var config = device.Apps.FirstOrDefault(a => a.Type == appName);
-                if (config == null)
-                {
-                    _logger.LogWarning("App '{AppName}' not found for device '{BaseTopic}'", appName, baseTopic);
-                    return;
-                }
-
-                var app = AppFactory(device, config);
-                if (app == null)
-                {
-                    return;
-                }
-                app.InitAsync().GetAwaiter().GetResult();
-                app.ExecuteNow();
-                _logger.LogInformation("Successfully executed app '{AppName}' on device '{BaseTopic}'", appName, baseTopic);
+                _logger.LogWarning("ExecuteNow requires a base topic and an app type (got '{BaseTopic}', '{AppType}')", baseTopic, appType);
+                return AppExecutionResult.NotFound;
             }
-            catch (Exception ex)
+
+            List<RegisteredApp> matches;
+            lock (_registryLock)
             {
-                _logger.LogError(ex, "Error executing app '{AppName}' on device '{BaseTopic}'", appName, baseTopic);
+                matches = _registry.Where(r => Matches(r, appType, baseTopic)).ToList();
             }
+
+            if (matches.Count == 0)
+            {
+                _logger.LogWarning("ExecuteNow: no running app '{AppType}' on device '{BaseTopic}'", appType, baseTopic);
+                return AppExecutionResult.NotFound;
+            }
+
+            var result = AppExecutionResult.Started;
+            foreach (var entry in matches)
+            {
+                try
+                {
+                    entry.App.ExecuteNow();
+                    _logger.LogInformation("Executed app '{AppType}' on device '{BaseTopic}'", entry.Type, entry.BaseTopic);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error executing app '{AppType}' on device '{BaseTopic}'", entry.Type, entry.BaseTopic);
+                    result = AppExecutionResult.Error;
+                }
+            }
+
+            return result;
         }
 
         /// <summary>

@@ -1,9 +1,8 @@
-﻿using AwtrixSharpWeb.Apps.TripTimer;
+using AwtrixSharpWeb.Apps.TripTimer;
 using AwtrixSharpWeb.HostedServices;
 using AwtrixSharpWeb.Services.TripPlanner;
 using Microsoft.AspNetCore.Mvc;
 using Swashbuckle.AspNetCore.Annotations;
-using System.ComponentModel;
 
 
 namespace AwtrixSharpWeb.Controllers
@@ -13,7 +12,7 @@ namespace AwtrixSharpWeb.Controllers
     [ApiController]
     public class TripTimerController : ControllerBase
     {
-        Conductor _conductor;
+        private readonly Conductor _conductor;
 
         public TripTimerController(Conductor conductor)
         {
@@ -24,9 +23,13 @@ namespace AwtrixSharpWeb.Controllers
         /// Start now
         /// </summary>
         [HttpPost("start")]
-        public void StartNow([FromQuery] string baseTopic = "awtrix/clock1", [FromQuery] string appName = AppNames.TripTimerApp)
+        [SwaggerResponse(200, "App started successfully")]
+        [SwaggerResponse(404, "The app is not running on that device")]
+        [SwaggerResponse(500, "The app failed to start")]
+        public IActionResult StartNow([FromQuery] string baseTopic = "awtrix/clock1", [FromQuery] string appName = AppNames.TripTimerApp)
         {
-            _conductor.ExecuteNow(baseTopic, appName);
+            var result = _conductor.ExecuteNow(baseTopic, appName);
+            return this.ToActionResult(result, appName, baseTopic);
         }
 
 
@@ -35,12 +38,16 @@ namespace AwtrixSharpWeb.Controllers
         {
             var dateTime = DateTimeOffset.Parse(departureTime);
 
-            var app = _conductor
+            var tripTimer = _conductor
                             .FindApps(AppNames.TripTimerApp)
-                            .First();
+                            .OfType<TripTimerApp>()
+                            .FirstOrDefault();
 
+            if (tripTimer == null)
+            {
+                return NotFound(new { message = "No TripTimerApp is running" });
+            }
 
-            var tripTimer = (TripTimerApp)app;
             var alarmSegments = tripTimer.GetAlarmTime(TripSummary.Factory(dateTime));
 
             return Ok(alarmSegments);

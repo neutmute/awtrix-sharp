@@ -112,15 +112,53 @@ namespace Test.Apps.TripTimer
         }
 
         [Fact]
-        public void TestTimingConfig_NoTripTimerAppRegistered_Throws()
+        public void TestTimingConfig_NoTripTimerAppRegistered_Returns404()
         {
-            // Arrange - Conductor.FindApps(...).First() throws when nothing matches; TripTimerController
-            // does not catch this, so the current (unguarded) behaviour is an unhandled exception.
             var conductor = CreateConductorWithApps(Array.Empty<IAwtrixApp>());
             var sut = new TripTimerController(conductor);
 
-            // Act & Assert
-            Assert.Throws<InvalidOperationException>(() => sut.TestTimingConfig("2025-09-01 06:41"));
+            var result = sut.TestTimingConfig("2025-09-01 06:41");
+
+            Assert.IsType<NotFoundObjectResult>(result);
+        }
+
+        [Fact]
+        public void StartNow_RunningApp_Returns200AndExecutesIt()
+        {
+            var app = ConductorTestHelper.MockApp("awtrix/clock1", AppNames.TripTimerApp);
+            var conductor = CreateConductorWithApps(new[] { app.Object });
+            var sut = new TripTimerController(conductor);
+
+            var result = sut.StartNow("awtrix/clock1", AppNames.TripTimerApp);
+
+            Assert.IsType<OkObjectResult>(result);
+            app.Verify(a => a.ExecuteNow(), Times.Once);
+        }
+
+        [Fact]
+        public void StartNow_UnknownDevice_Returns404()
+        {
+            var app = ConductorTestHelper.MockApp("awtrix/clock1", AppNames.TripTimerApp);
+            var conductor = CreateConductorWithApps(new[] { app.Object });
+            var sut = new TripTimerController(conductor);
+
+            var result = sut.StartNow("awtrix/clock9", AppNames.TripTimerApp);
+
+            Assert.IsType<NotFoundObjectResult>(result);
+            app.Verify(a => a.ExecuteNow(), Times.Never);
+        }
+
+        [Fact]
+        public void StartNow_AppThrows_Returns500()
+        {
+            var app = ConductorTestHelper.MockApp("awtrix/clock1", AppNames.TripTimerApp);
+            app.Setup(a => a.ExecuteNow()).Throws(new InvalidOperationException("boom"));
+            var conductor = CreateConductorWithApps(new[] { app.Object });
+            var sut = new TripTimerController(conductor);
+
+            var result = sut.StartNow("awtrix/clock1", AppNames.TripTimerApp);
+
+            Assert.Equal(500, Assert.IsType<ObjectResult>(result).StatusCode);
         }
     }
 }

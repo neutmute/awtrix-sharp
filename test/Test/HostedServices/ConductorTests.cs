@@ -113,27 +113,6 @@ namespace Test.HostedServices
         }
 
         [Fact]
-        public void ExecuteNow_UnknownDevice_DoesNotThrow()
-        {
-            var conductor = ConductorTestHelper.Create(new AwtrixConfig { Devices = new[] { CreateDevice() } });
-
-            var exception = Record.Exception(() => conductor.ExecuteNow("awtrix/does-not-exist", AppNames.DiurnalApp));
-
-            Assert.Null(exception);
-        }
-
-        [Fact]
-        public void ExecuteNow_UnknownAppOnKnownDevice_DoesNotThrow()
-        {
-            var device = CreateDevice();
-            var conductor = ConductorTestHelper.Create(new AwtrixConfig { Devices = new[] { device } });
-
-            var exception = Record.Exception(() => conductor.ExecuteNow(device.BaseTopic, "NoSuchApp"));
-
-            Assert.Null(exception);
-        }
-
-        [Fact]
         public void FindApps_WhenNoAppsRegistered_ReturnsEmptyList()
         {
             var conductor = ConductorTestHelper.Create();
