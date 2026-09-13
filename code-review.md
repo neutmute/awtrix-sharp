@@ -935,3 +935,82 @@ These items are not assigned to a workstream because they break config or change
 - The `ExecuteNow` transient app is a permanent cron-armed leak (CR-07).
 - The `ScheduledApp._cts` race produces duplicate waiters and orphaned CTS (CR-08).
 - The ButtonApp `.Wait()` crashes startup when the broker is down (CR-05).
+
+---
+
+## Remediation status (2026-09-14, branch feature/redo)
+
+All eight workstreams (WS1-WS8) plus the standalone CR-17 CI fix were each spec'd, planned, implemented with TDD (per-task commits), and independently reviewed (whole-plan review with a fix round where issues were found) before moving to the next workstream. The `test/Test` suite grew from 33 tests at the start of this remediation to 690 passing (0 skipped); `test/transportOpenData.Tests` grew to 22. The branch was also upgraded to net10.0, and CI now runs `dotnet test` before the Docker build/push job. Full detail for each workstream is in `.superpowers/sdd/2026-09-13-ws*-*/progress.md`, its `ws*-report.md`, and `.superpowers/sdd/overnight-ledger.md`; user-facing effects are in `docs/RELEASE-NOTES-feature-redo.md`.
+
+| ID | Sev | Status | WS | Commits | Note |
+|---|---|---|---|---|---|
+| CR-01 | Critical | Fixed | WS1 | 09a43e7, bfad5cc, 2ee7587 | Non-overlapping tick loop; async-safe `FireAndLog` handlers; `AwtrixSettings.ToString` made safe. |
+| CR-02 | Critical | Fixed | WS1 | 65bcce4 | Publishers never throw; `IHttpClientFactory`, short timeout, disposed responses. |
+| CR-03 | High | Fixed | WS2 | e36ff16 | Single long-lived `IMqttClient`, background reconnect with backoff, topic registry replayed on reconnect. |
+| CR-04 | High | Fixed | WS2 | c9cbd2a | `/Mqtt/publish` no longer calls `ConnectAsync`. |
+| CR-05 | High | Fixed | WS3 | 216cb53, bb8a07b | `InitAsync`; per-app try/catch; ButtonApp subscribe no longer blocks with `.Wait()`. |
+| CR-06 | High | Fixed | WS3 | bb8a07b | All apps created first, each initialised exactly once. |
+| CR-07 | High | Fixed | WS3 | 0d8adf4 | `ExecuteNow` targets the existing instance by device+type; start endpoints return 404/200/500. |
+| CR-08 | High | Fixed | WS4 | 7af1106 | Race-free per-activation CTS engine in `ScheduledApp`. |
+| CR-09 | High | Fixed | WS4 | 5b81a21 | MqttClockRenderApp unsubscribes `SecondChanged` on deactivation. |
+| CR-10 | High | Fixed | WS6 | 664703f | Tolerates error bodies, null/empty journeys and legs; falls back Estimated→Planned. |
+| CR-11 | Medium | Fixed | WS1 | 09a43e7 | `PeriodicTimer`-based non-overlapping loop; truncated `DateTime` comparison. |
+| CR-12 | Medium | Fixed | WS1 | cd66fc1 | HTTP publisher maps `custom/{name}` to `custom?name={name}`. |
+| CR-13 | Medium | Fixed | WS7 | f97bd74 | `appsettings.json` loaded once; standard precedence restored. |
+| CR-14 | Medium | Fixed | WS7 | 0d0ad06 | Slack/TfNSW/data-dir settings read through `IConfiguration`, env vars kept as fallback. |
+| CR-15 | Medium | Fixed | WS7 | 672b9c9, eafb6db | `DeveloperExceptionPage` gated on `IsDevelopment()`; 400 on bad query params; optional `Swagger:Enabled`/`Api:Key`. |
+| CR-16 | Medium | Fixed | WS3 | 5554991 | `SlackConnector.StopAsync` null-safe when Slack unconfigured. |
+| CR-17 | Medium | Fixed | pre-WS1 | 2a681ef | CI runs `dotnet test` before the Docker build job. |
+| CR-18 | Medium | Fixed | WS4 | 7af1106 | `CancelAfter(ActiveTime)` applied to manual `ExecuteNow` runs too. |
+| CR-19 | Medium | Fixed | WS4 | cbe9823 | No-departures case ends the activation via its own token instead of publishing `{}`. |
+| CR-20 | Medium | Fixed | WS5 | c4d807f, 808d32a | Startup replay includes yesterday's remaining entries; runtime applies every entry in (last, now]. |
+| CR-21 | Medium | Fixed | WS5 | c4d807f | `DiurnalSchedule` validates and parses values eagerly with invariant culture. |
+| CR-22 | Medium | Fixed | WS7 | b17054a | `AppConfigKeys`/`ValueMap` use case-insensitive dictionaries. |
+| CR-23 | Medium | Fixed | WS7 | 267bf62 | Typed app config validated at startup (invariant culture), invalid apps logged and skipped. |
+| CR-24 | Medium | Fixed | WS5 | eee8160 | Null-safe user id/status comparisons; async non-throwing handler. |
+| CR-25 | Medium | Fixed | WS6 | c36699d | Departures refreshed periodically during the active window; last-good list kept on failure. |
+| CR-26 | Medium | Fixed | WS6 | e0dfc97 | Trip query and departure times use an explicit Sydney offset regardless of host TZ; cron/Diurnal remain host-local by design. |
+| CR-27 | Medium | Fixed differently — see note | WS6 | 664703f, 0bf1e6a | Original premise ("skip the leading walking leg, board the first transit leg") was corrected by a review ruling: a walk-first journey is a distinct journey, not a duplicate — it counts down from the walk's start time, not a transit boarding time. De-duplication now applies only between journeys that board the *same* transit service, keeping the one with the latest (least-wait) first-leg departure. See spec `docs/superpowers/specs/2026-09-13-ws6-trip-planner-design.md` §D4 "Revision 2026-09-14: C1 ruling". |
+| CR-28 | Medium | Fixed | WS6 | 9da5617, 664703f | `RealtimeStatus` modelled on the generated leg type; journeys with a cancelled transit leg skipped. Detection is a heuristic (status contains "CANCEL") — TfNSW's exact value is unconfirmed against real data. |
+| CR-29 | Medium | Fixed | WS6 | e0dfc97 | `TripPlannerService` is a singleton over `IHttpClientFactory`; 15 s timeout plus a linked-CTS body-read guard; caller token threaded through. |
+| CR-30 | Low | Fixed | WS3 | bb8a07b | Unknown app `Type` logged and skipped per-app instead of crashing the host. |
+| CR-31 | Low | Fixed | WS4 | 6f053d1 | Single virtual (async) dispose pattern across app base classes; apps unsubscribe on dispose. |
+| CR-32 | Low | Fixed | WS5 | 844cbbb | `DoubleClickDetector` uses monotonic `TimeProvider` timestamps, not `DateTime.Now`. |
+| CR-33 | Low | Fixed | WS2 | 6fefd7c | MqttRenderApp attaches its handler before subscribing. |
+| CR-34 | Low | Fixed | WS5 | 5af9eb9, 45df636 | Static setter table covers all message setters; arrays emitted as JSON arrays; invariant-culture numbers; one-time warnings for bad keys/values/regex. |
+| CR-35 | Low | Fixed | WS1 | 17980c2 | Interface seams (`IMqttConnector`, `ITimerService`, `IAwtrixService`, `TimeProvider`) added for testability. |
+| CR-36 | Low | Fixed | WS6 | e0dfc97 | `TransportOpenData:BaseUrl` now applied to the generated client, with a working default. |
+| CR-37 | Low | Fixed | WS6 | ff07a3a | Trip file cache: fallback to the API on a bad/missing file, midnight rollover, ID sanitisation. Feature kept (not removed), per Deferred table. |
+| CR-38 | Low | Fixed | WS6 | 9da5617 | Lenient enum handling on the generated trip-planner model. |
+| CR-39 | Low | Fixed | WS4 | 9bdf019 | ValueMap tests restored; ScheduledApp lifecycle, MqttClockRenderApp and no-departures tests added. |
+| CR-40 | Low | Fixed | WS6 | (WS6 Task 1, part of 664703f/9da5617 range) | Fixture tests now run through a real `TripClient` over a stub `HttpMessageHandler`; `TripPlannerServiceTests` rewritten with dedicated cases for CR-10/CR-27/CR-26. |
+| CR-41 | Low | Fixed | WS8 | fb7fbcb | SlackConnector fields made instance fields; dead `_slackApiClient`/`UserDnChanged` removed. |
+| CR-42 | Low | Fixed | WS8 | 88a6f20 | ButtonApp logger category, `"Text"`→`"text"` ordering key, unreachable branch. |
+| CR-43 | Low | Fixed | WS8 | edb4cb2, 88a6f20 | Dead code and unused usings removed; log calls converted to structured `LogError(ex, template, args)`. |
+| CR-44 | Low | Fixed | WS8 | 88a6f20 | `TripSummary.ToString` uses total minutes; `Factory` keeps `place`. |
+| CR-45 | Low | Fixed | WS8 | bfb35d9 | Dockerfile restores both csproj files before a single `--no-restore` publish; `EXPOSE 8081`, HTTPS redirection and SlackUserHarvester removed. |
+
+**Counts:** Fixed 43 · Fixed differently 1 (CR-27) · Not fixed (deferred) 0 · Unverified 0. (All 45 findings were assigned to a workstream and traced to at least one commit message or ledger/report line; the Deferred table items below were never assigned to a workstream by design, so they are tracked separately, not as "Not fixed" findings.)
+
+### Owner decisions still open
+
+From the Deferred table (unchanged; these were intentionally excluded from every workstream to preserve config compatibility):
+- Mandatory API authentication on all mutating endpoints (`/Mqtt/publish`, `/api/app/*/start`, Diagnostics) — WS7 added an *optional* `Api:Key`; making it required, or binding to localhost, is an owner call.
+- Removing `/Mqtt/publish`, or restricting it to Development — it remains an open MQTT relay when `Api:Key` is unset; CR-04 only fixed the client-destruction bug.
+- Swagger UI off by default in Production — WS7 added the `Swagger:Enabled` toggle, defaulting to today's always-on behaviour.
+- Distinct app `Name` (two apps of the same `Type` on one clock) — still share one `custom/{Type}` slot; an optional `Name` is compatible but is a feature, not a fix, and would need an explicit default to avoid reordering existing Awtrix apps.
+- Click and DoubleClick made mutually exclusive — still independent; would change existing Click-consumer latency.
+- Removing the trip file cache feature — hardened instead (CR-37); removal would drop support for `AWTRIXSHARP_SETTINGS__DATA_DIRECTORY`.
+- A configurable timezone for cron/Diurnal defaulting to something other than host-local — only the trip query was hard-coded to Sydney (CR-26); changing cron/Diurnal defaults would shift every existing schedule on a host without `TZ` set.
+
+From the workstream ledgers, additional minor items were explicitly left for the owner rather than fixed:
+- Cancelled-service detection heuristic (`realtimeStatus` containing "CANCEL") is unconfirmed against real TfNSW data; could miss real cancellations in another form, or in principle skip a valid journey. (WS6)
+- WS2 reconnect race and real-broker event ordering were not exercised against a live broker (smoke test skipped by ruling); only a fake `IMqttClient` was tested. (WS2)
+- WS1 timer start/stop/dispose edge cases (e.g. an extra minute tick at startup, no StopAsync-promptness test) were left untested. (WS1)
+- WS3 failed app init can add up to ~10 s to startup (the per-app dispose/init timeout is not further tuned). (WS3)
+- MqttConnector/HttpPublisher warnings still log `ex.Message` only in a few remaining spots rather than the full exception. (WS8 ledger)
+- Swagger's "Authorize" API-key UI hint is fixed at process startup; rotating `Api:Key` live updates enforcement but not the UI hint until restart. (WS7)
+
+### See also
+- Release notes for the person running this service: `docs/RELEASE-NOTES-feature-redo.md`
+- Per-workstream specs and plans: `docs/superpowers/specs/2026-09-13-ws1-runtime-resilience.md` through `...-ws8-build-cleanup.md` (and matching `-design.md` files), `docs/superpowers/plans/` (implementation plans referenced from each `ws*-report.md`)

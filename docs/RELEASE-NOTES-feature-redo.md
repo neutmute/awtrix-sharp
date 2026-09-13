@@ -1,0 +1,62 @@
+# Release notes — `feature/redo` remediation
+
+Audience: people running AwtrixSharp (Docker or `dotnet run`) with an existing `appsettings.json` / environment-variable configuration. This covers the WS1-WS8 remediation of `code-review.md` (45 findings). See `code-review.md` → "Remediation status" for the full CR-by-CR trace.
+
+## Breaking or behaviour changes
+
+These act differently with the **same** configuration as before.
+
+- **Configuration precedence corrected.** `appsettings.json` was loaded a second time, after user secrets, `appsettings.{Environment}.json`, plain (unprefixed) environment variables and command-line arguments, so it silently won. It is now loaded once, in the standard .NET order: `appsettings.json` → `appsettings.{Environment}.json` → user secrets (Development) → environment variables → command line → `AWTRIXSHARP_*` environment variables. `AWTRIXSHARP_*` and `TRANSPORTOPENDATA__APIKEY` behave exactly as before. If you also set the same key in user secrets, an unprefixed env var, `appsettings.Production.json`, or a `--Key=value` argument, that value now wins over `appsettings.json` where it previously lost. (WS7, CR-13)
+- **Invalid app configuration is now rejected at startup, not hours later.** A scheduled app (TripTimer, MqttRender, MqttClockRender) is logged and skipped — naming the device, app and key — instead of starting and failing at its first scheduled run, if it has: a missing/invalid `CronSchedule`; a missing, invalid or non-positive `ActiveTime` (`00:00:00` is now rejected); an MqttRender/MqttClockRender app without `ReadTopic`; or a TripTimer app without `StopIdOrigin`/`StopIdDestination`. Other apps on the same device still start. `TimeToOrigin`/`TimeToPrepare` may still be omitted (default `00:00:00`); a negative or unparseable value is now rejected. Config values are parsed with the invariant culture (`3.14`, not `3,14`) — a config that relied on a non-invariant-culture number format must be changed. (WS7, CR-23; CR-05/06/30 skip unknown app types and duplicate init the same way)
+- **Manual "start" runs are now bounded by `ActiveTime`.** Previously a manual `POST /api/app/.../start` ran forever and could block the app's own cron schedule from ever firing again. It now ends after `ActiveTime`, the same as a scheduled activation. (WS4, CR-18)
+- **Start endpoints return 404 when the app is not running**, instead of a misleading 200 or an unhandled exception. `POST /api/app/TripTimer/start` on a not-found app now returns a JSON body `{ "message": "..." }` instead of a bare 200/500. Routes and verbs are unchanged. (WS3, CR-07)
+- **Shutdown no longer dismisses notifications.** Stopping the service used to clear/dismiss the device's active notification as part of app teardown; it now leaves the display as-is on shutdown. (WS4, CR-31)
+- **Diurnal now restores the setting that should be in effect, including yesterday evening's, when the service (re)starts**, and applies every entry it missed rather than only an exact-minute match. Previously a restart mid-day (e.g. after 06:00 but before the next scheduled change) could leave the clock on a stale brightness/colour until the next entry, and a missed minute (a stall, DST gap, or dropped tick) silently skipped that setting for the rest of the day. An empty or invalid Diurnal config now logs and does not subscribe, instead of crashing the process. (WS5, CR-20, CR-21)
+- **Previously-ignored ValueMap keys now take effect.** `BlinkText`, `FadeText` (numeric) and `Gradient` (array) matchers were silently no-ops; they now apply. `line`, `bar`, `progressC`, `progressBC` and `gradient` are now sent to the device as JSON arrays (they were previously serialised as a comma-joined string, which Awtrix does not accept as an array). An invalid regex or unknown key in a ValueMap now logs a one-time warning at load instead of failing silently. `BlinkText`/`FadeText` values of NaN or Infinity are rejected and logged, not sent. (WS5/WS8, CR-34)
+- **A null Slack status now clears the display field** instead of publishing the literal text `null`. (WS5, CR-24)
+- **Trip timer: walk-first departures and cancelled services are handled differently.** A journey that starts with a walking leg is no longer mistaken for the train departure baked into the first transit leg; it now counts down from the start of the walk, and is only treated as a duplicate of another journey when both board the *same* transit service (the one with the least waiting is kept). Journeys with a cancelled service are skipped (cancellation detection is a heuristic — see Known limitations). (WS6, CR-27, CR-28)
+- **Trip queries use Sydney time regardless of the host's timezone.** Previously, on a host running UTC (the Docker default with no `TZ` set), the TfNSW query was built from host-local time, which could silently return the previous evening's (already-past) trips and make the trip timer appear to find "no departures" with no error. Departures are now computed in, and displayed with, an explicit Sydney (`+10`/`+11`) offset. Cron schedules and Diurnal timing are unaffected and remain host-local — set `TZ=Australia/Sydney` on the container if you want those to follow Sydney time too. (WS6, CR-26)
+- **Departures are now refreshed periodically during the active window** instead of being fetched once at activation and held stale for the rest of the window (30+ minutes); a delay reported after activation is now picked up. (WS6, CR-25)
+- **Docker image:** `EXPOSE 8081` and HTTPS-redirection middleware are removed (the service was always HTTP-only on 8080; the middleware only logged a warning and did nothing). The local-only Slack user-harvester debug tool is also removed. No ports, env vars or the entrypoint changed. (WS8, CR-45, CR-41)
+
+## New optional settings
+
+All default to today's behaviour; none are required.
+
+- `Swagger:Enabled` (env: `AWTRIXSHARP_SWAGGER__ENABLED`), default `true`. Set `false` to hide `/swagger` (returns 404). An unparseable value keeps Swagger on and logs a warning. (WS7, CR-15)
+- `Api:Key` (env: `AWTRIXSHARP_API__KEY`), default unset (no check, current behaviour). When set, every API call must send header `X-Api-Key: <key>` or gets a 401 ProblemDetails response; rejections are logged (method, path, IP) without the key. The Swagger UI/JSON stay reachable and the UI gets an "Authorize" box. Setting this key will break existing unauthenticated callers (scripts, openHAB rules) by design — see Known limitations. (WS7, CR-15)
+- `TransportOpenData:ApiKey`, `Slack:AppToken`, `Slack:UserId`, `Settings:DATA_DIRECTORY` can now be set via `appsettings.json`/user secrets, not only via the literal environment variables (`TRANSPORTOPENDATA__APIKEY`, `AWTRIXSHARP_SLACK__APPTOKEN`, `AWTRIXSHARP_SLACK__USERID`, `AWTRIXSHARP_SETTINGS__DATA_DIRECTORY`), which still work and still take precedence as the final fallback. An explicit app-level `SlackUserId` still wins over `Slack:UserId`. Startup now logs a warning (not an error) if a TripTimerApp has no TfNSW key configured, or a SlackStatusApp has no Slack token. (WS7, CR-14)
+
+## Fixes (user-visible reliability)
+
+- The service no longer crashes on: an unknown Diurnal setting name, an out-of-range Diurnal value, a device that is offline/unreachable at startup, or one misconfigured app — the offending app is now logged and skipped rather than taking down the whole host. (WS1/WS3/WS5, CR-01, CR-02, CR-05, CR-21, CR-30)
+- MQTT: a broker restart/reconnect no longer silently drops button, MQTT-render and MQTT-clock-render subscriptions; the client reconnects in the background with exponential backoff and re-subscribes automatically. `POST /Mqtt/publish` no longer tears down and re-creates the live MQTT client on every call. (WS2, CR-03, CR-04, CR-33)
+- Running with multiple clocks (`Awtrix:Devices`) no longer re-initialises earlier devices' apps once per additional device, which previously duplicated button handlers, Diurnal replays and Slack subscriptions per extra device. (WS3, CR-06)
+- Repeated manual "start" calls (`POST /api/app/.../start`) no longer leak an orphaned, cron-armed duplicate app instance per call; they now target the already-running instance. (WS3, CR-07)
+- The scheduler (`ScheduledApp`) no longer produces duplicate/orphaned timers when a manual run overlaps a scheduled one, or when the app is disposed mid-run. (WS4, CR-08)
+- MqttClockRenderApp no longer leaks a per-second event subscription (and keeps publishing) after its display window ends. (WS4, CR-09)
+- Trip timer: a single malformed departure/journey, or an error response from TfNSW, no longer blanks the entire active window with no retry — bad journeys are skipped and logged instead. The "no departures" case now clears the display properly instead of publishing an empty `{}` payload. (WS4/WS6, CR-10, CR-19)
+- HTTP-transport devices (`BaseTopic` pointing at the device's local IP) now build the correct URL for custom apps (`custom?name=`); previously custom-app updates 404'd silently on HTTP devices. (WS1, CR-12)
+- `SlackConnector` no longer throws on shutdown when Slack is not configured (no more non-zero exit / "Hosting failed to stop" on every container stop without Slack set up). (WS3, CR-16)
+- SlackStatusApp no longer throws on every workspace status change when no Slack user ID is configured. (WS5, CR-24)
+- Button double-click detection now uses a monotonic clock, so it no longer misfires around a daylight-saving transition. (WS5, CR-32)
+- CI now runs the full test suite before building/pushing the Docker image (previously a broken PR could still publish). (WS8, CR-17)
+
+## Upgrade notes
+
+- **.NET 10.** All projects and the Docker image were upgraded from net9.0 to net10.0 (this predates the WS1-WS8 work but ships on this branch). Ensure your runtime/host matches (.NET 10 SDK/runtime).
+- **CI now gates on tests.** `.github/workflows/docker-publish.yml` runs `dotnet test` before the Docker build/push job; a failing test now blocks the image. (WS8, CR-17)
+- **Test-only dependency.** `Microsoft.AspNetCore.TestHost` 10.0.0 was added to `test/Test` only; no production package changes. (WS7)
+- The test suite grew from 33 tests (pre-remediation baseline) to 690 (`test/Test`) + 22 (`test/transportOpenData.Tests`), all TDD, each workstream independently reviewed.
+
+## Known limitations / follow-ups
+
+Carried forward as owner decisions — see `code-review.md` → "Owner decisions still open" for the full list and rationale.
+
+- Cancelled-service detection uses a heuristic (`realtimeStatus` containing `"CANCEL"`) because TfNSW's exact value is not confirmed against real data; a genuinely cancelled service in a different form may still display, or (less likely) a valid service could be skipped. (WS6)
+- `Api:Key`, when set, applies to all endpoints uniformly; there is no scoping to only mutating endpoints, and `/Mqtt/publish` remains an open relay unless you set the key. Mandatory auth, or removing/restricting `/Mqtt/publish`, is left to you. (WS7, Deferred)
+- Swagger's "Authorize" API-key box is fixed at process startup (a key rotated live requires a restart to update the UI hint, not the enforcement). (WS7, minor)
+- Two apps of the same `Type` on one clock still publish to the same `custom/{Type}` slot; distinct app names remain a future feature, not implemented here to avoid changing existing Awtrix app-ordering slot names. (Deferred)
+- Click and DoubleClick button events remain independent (a double-click still also fires a Click); making them mutually exclusive would change existing Click-consumer latency and was left as an owner decision. (Deferred)
+- Cron and Diurnal scheduling remain host-timezone-based (only trip queries were fixed to hard-code Sydney time); set `TZ=Australia/Sydney` on the container if you need schedules to follow Sydney time on a UTC host. (Deferred)
+- The opt-in trip file cache (`AWTRIXSHARP_SETTINGS__DATA_DIRECTORY`) was hardened (falls back to the API on a bad/missing file, midnight rollover, ID sanitisation) rather than removed. (WS6, CR-37)
