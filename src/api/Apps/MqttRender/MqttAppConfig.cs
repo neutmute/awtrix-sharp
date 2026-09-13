@@ -1,4 +1,4 @@
-﻿using AwtrixSharpWeb.Apps.Configs;
+using AwtrixSharpWeb.Apps.Configs;
 
 namespace AwtrixSharpWeb.Apps.MqttRender
 {
@@ -8,6 +8,13 @@ namespace AwtrixSharpWeb.Apps.MqttRender
         {
             get => GetConfig<string>("ReadTopic");
             set => SetConfig("ReadTopic", value);
+        }
+
+        public override IReadOnlyList<string> Validate()
+        {
+            var errors = new List<string>(base.Validate());
+            ValidateRequired(errors, "ReadTopic");
+            return errors;
         }
     }
 }

@@ -1,4 +1,5 @@
-﻿using AwtrixSharpWeb.Apps.Configs;
+﻿using System.Globalization;
+using AwtrixSharpWeb.Apps.Configs;
 using AwtrixSharpWeb.Apps.MqttRender;
 
 namespace Test.Configs
@@ -151,13 +152,60 @@ namespace Test.Configs
         }
 
         [Fact]
-        public void GetConfig_MissingKey_NonNullableValueType_ThrowsNullReferenceException()
+        public void GetConfig_MissingKey_NonNullableValueType_ReturnsDefault()
         {
-            // Documents current behaviour: ConvertValue returns null for a missing key, and
-            // casting null to a non-nullable value type (e.g. TimeSpan/int) throws at the cast.
+            // CR-23: a missing optional value-type key used to throw NullReferenceException at the (T)null cast.
             var sut = new AppConfig();
 
-            Assert.Throws<NullReferenceException>(() => sut.GetConfig<TimeSpan>("Missing"));
+            Assert.Equal(TimeSpan.Zero, sut.GetConfig<TimeSpan>("Missing"));
+            Assert.Equal(0, sut.GetConfig<int>("Missing"));
+        }
+
+        [Fact]
+        public void GetConfig_WhitespaceValue_NonStringType_ReturnsDefault()
+        {
+            var sut = new AppConfig();
+            sut.SetConfig("Key", "   ");
+
+            Assert.Equal(TimeSpan.Zero, sut.GetConfig<TimeSpan>("Key"));
+            Assert.Equal("   ", sut.GetConfig<string>("Key"));
+        }
+
+        [Fact]
+        public void GetConfig_Double_UsesInvariantCulture_OnCommaDecimalHost()
+        {
+            var previous = CultureInfo.CurrentCulture;
+            CultureInfo.CurrentCulture = new CultureInfo("de-DE");
+            try
+            {
+                var sut = new AppConfig();
+                sut.SetConfig("Key", "3.14");
+
+                Assert.Equal(3.14, sut.GetConfig<double>("Key"));
+            }
+            finally
+            {
+                CultureInfo.CurrentCulture = previous;
+            }
+        }
+
+        [Fact]
+        public void SetConfig_Double_WritesInvariantCulture_OnCommaDecimalHost()
+        {
+            var previous = CultureInfo.CurrentCulture;
+            CultureInfo.CurrentCulture = new CultureInfo("de-DE");
+            try
+            {
+                var sut = new AppConfig();
+                sut.SetConfig("Key", 3.5);
+
+                Assert.Equal("3.5", sut.Config.Get("Key"));
+                Assert.Equal(3.5, sut.GetConfig<double>("Key"));
+            }
+            finally
+            {
+                CultureInfo.CurrentCulture = previous;
+            }
         }
 
         [Fact]

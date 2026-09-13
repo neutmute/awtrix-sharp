@@ -1,9 +1,9 @@
-﻿using AwtrixSharpWeb.Apps.Configs;
+using AwtrixSharpWeb.Apps.Configs;
 
 namespace AwtrixSharpWeb.Apps.TripTimer
 {
 
-    public class TripTimerAppConfig : ScheduledAppConfig 
+    public class TripTimerAppConfig : ScheduledAppConfig
     {
 
         public string StopIdOrigin
@@ -20,10 +20,9 @@ namespace AwtrixSharpWeb.Apps.TripTimer
 
 
         /// <summary>
-        /// Travel time to get to origin
+        /// Travel time to get to origin (optional, default 00:00:00)
         /// </summary>
         public TimeSpan TimeToOrigin
-
         {
             get => GetConfig<TimeSpan>("TimeToOrigin");
             set => SetConfig("TimeToOrigin", value);
@@ -31,7 +30,7 @@ namespace AwtrixSharpWeb.Apps.TripTimer
 
 
         /// <summary>
-        /// How much time to get ready before leaving
+        /// How much time to get ready before leaving (optional, default 00:00:00)
         /// </summary>
         public TimeSpan TimeToPrepare
         {
@@ -39,5 +38,14 @@ namespace AwtrixSharpWeb.Apps.TripTimer
             set => SetConfig("TimeToPrepare", value);
         }
 
+        public override IReadOnlyList<string> Validate()
+        {
+            var errors = new List<string>(base.Validate());
+            ValidateRequired(errors, "StopIdOrigin");
+            ValidateRequired(errors, "StopIdDestination");
+            ValidateTimeSpan(errors, "TimeToOrigin", required: false, mustBePositive: false);
+            ValidateTimeSpan(errors, "TimeToPrepare", required: false, mustBePositive: false);
+            return errors;
+        }
     }
 }

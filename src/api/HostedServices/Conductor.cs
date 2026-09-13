@@ -264,6 +264,7 @@ namespace AwtrixSharpWeb.HostedServices
                     {
                         var appLogger = _loggerFactory.CreateLogger<TripTimerApp>();
                         var tripTimerConfig = appConfig.As<TripTimerAppConfig>();
+                        tripTimerConfig.EnsureValid(device.BaseTopic); // CR-23: rejected inside the per-app creation guard
                         app = new TripTimerApp(appLogger, _clock, device, _awtrixService, _timerService, tripTimerConfig, _tripPlanner);
                     }
                     break;
@@ -280,6 +281,7 @@ namespace AwtrixSharpWeb.HostedServices
                     {
                         var appLogger = _loggerFactory.CreateLogger<MqttRenderApp>();
                         var mqttConfig = appConfig.As<MqttAppConfig>();
+                        mqttConfig.EnsureValid(device.BaseTopic); // CR-23
                         app = new MqttRenderApp(appLogger, _clock, mqttConfig, device, _awtrixService, _mqttConnector);
                     }
                     break;
@@ -288,6 +290,7 @@ namespace AwtrixSharpWeb.HostedServices
                     {
                         var appLogger = _loggerFactory.CreateLogger<MqttClockRenderApp>();
                         var mqttConfig = appConfig.As<MqttAppConfig>();
+                        mqttConfig.EnsureValid(device.BaseTopic); // CR-23
                         app = new MqttClockRenderApp(appLogger, _clock, mqttConfig, device, _awtrixService, _mqttConnector, _timerService);
                     }
                     break;

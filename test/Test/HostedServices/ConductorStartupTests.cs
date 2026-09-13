@@ -166,9 +166,10 @@ namespace Test.HostedServices
         }
 
         [Fact]
-        public async Task StartAsync_ScheduledAppWithoutCronSchedule_IsSkippedAndDisposed()
+        public async Task StartAsync_ScheduledAppWithoutCronSchedule_IsRejectedAtCreation_AndNeverDisposed()
         {
             // CR-30: CrontabSchedule.Parse(null) used to fail host start
+            // WS7 CR-23: config validation now rejects the app before construction, so there is nothing to dispose.
             var device = Device(HttpDevice, App(AppNames.MqttRenderApp), App(AppNames.DiurnalApp));
             var awtrix = new Mock<IAwtrixService>();
             var conductor = ConductorTestHelper.Create(
@@ -181,8 +182,8 @@ namespace Test.HostedServices
             Assert.Null(exception);
             Assert.Empty(conductor.FindApps(AppNames.MqttRenderApp));
             Assert.Single(conductor.FindApps(AppNames.DiurnalApp));
-            // Disposed: InitAsync's clear + the dispose clear. Dispose no longer dismisses other apps' notifications (CR-31).
-            awtrix.Verify(a => a.AppClear(device, AppNames.MqttRenderApp), Times.Exactly(2));
+            // Never constructed: no InitAsync clear and no dispose clear.
+            awtrix.Verify(a => a.AppClear(device, AppNames.MqttRenderApp), Times.Never);
             awtrix.Verify(a => a.Dismiss(It.IsAny<AwtrixAddress>()), Times.Never);
         }
 

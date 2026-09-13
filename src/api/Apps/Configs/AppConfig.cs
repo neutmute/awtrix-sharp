@@ -1,4 +1,5 @@
-﻿using System.Text.Json;
+﻿using System.Globalization;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using AwtrixSharpWeb.Interfaces;
 
@@ -54,21 +55,74 @@ namespace AwtrixSharpWeb.Apps.Configs
             return this;
         }
 
-        
+        /// <summary>
+        /// Parses the value with the invariant culture. A missing (or, for non-string types, whitespace) value
+        /// returns default(T) rather than throwing (CR-23). A malformed value still throws; Validate() catches
+        /// that at startup for the keys an app requires.
+        /// </summary>
         public T GetConfig<T>(string key)
         {
-            return (T)ConvertValue(Config.Get(key), typeof(T));
+            var converted = ConvertValue(Config.Get(key), typeof(T));
+            return converted is null ? default! : (T)converted;
         }
 
         public void SetConfig<T>(string key, T value)
         {
-            if (Config.ContainsKey(key))
+            Config[key] = value is IFormattable formattable
+                ? formattable.ToString(null, CultureInfo.InvariantCulture)
+                : value?.ToString();
+        }
+
+        /// <summary>
+        /// One entry per problem, each formatted "{Key}: {reason}". Empty when the config is valid.
+        /// </summary>
+        public virtual IReadOnlyList<string> Validate() => Array.Empty<string>();
+
+        /// <summary>
+        /// Throws <see cref="AppConfigValidationException"/> naming app type, device and keys when <see cref="Validate"/> reports problems.
+        /// </summary>
+        public void EnsureValid(string? device)
+        {
+            var errors = Validate();
+            if (errors.Count > 0)
             {
-                Config[key] = value?.ToString();
+                throw new AppConfigValidationException(Type, device, errors);
             }
-            else
+        }
+
+        protected void ValidateRequired(List<string> errors, string key)
+        {
+            if (string.IsNullOrWhiteSpace(Config.Get(key)))
             {
-                Config.Add(key, value?.ToString());
+                errors.Add($"{key}: required value is missing");
+            }
+        }
+
+        protected void ValidateTimeSpan(List<string> errors, string key, bool required, bool mustBePositive)
+        {
+            var raw = Config.Get(key);
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                if (required)
+                {
+                    errors.Add($"{key}: required value is missing (expected hh:mm:ss)");
+                }
+                return;
+            }
+
+            if (!TimeSpan.TryParse(raw, CultureInfo.InvariantCulture, out var value))
+            {
+                errors.Add($"{key}: '{raw}' is not a valid time span (expected hh:mm:ss)");
+                return;
+            }
+
+            if (mustBePositive && value <= TimeSpan.Zero)
+            {
+                errors.Add($"{key}: '{raw}' must be greater than 00:00:00");
+            }
+            else if (!mustBePositive && value < TimeSpan.Zero)
+            {
+                errors.Add($"{key}: '{raw}' must not be negative");
             }
         }
 
@@ -142,36 +196,41 @@ namespace AwtrixSharpWeb.Apps.Configs
         }
 
         /// <summary>
-        /// Converts a string value to the specified type.
+        /// Converts a string value to the specified type using the invariant culture (CR-23).
         /// </summary>
         private static object ConvertValue(string value, Type targetType)
         {
-            if (string.IsNullOrEmpty(value))
+            if (value is null)
                 return null;
 
             if (targetType == typeof(string))
                 return value;
 
+            if (string.IsNullOrWhiteSpace(value))
+                return null;
+
+            var invariant = CultureInfo.InvariantCulture;
+
             if (targetType == typeof(int) || targetType == typeof(int?))
-                return int.Parse(value);
+                return int.Parse(value, invariant);
 
             if (targetType == typeof(long) || targetType == typeof(long?))
-                return long.Parse(value);
+                return long.Parse(value, invariant);
 
             if (targetType == typeof(double) || targetType == typeof(double?))
-                return double.Parse(value);
+                return double.Parse(value, invariant);
 
             if (targetType == typeof(decimal) || targetType == typeof(decimal?))
-                return decimal.Parse(value);
+                return decimal.Parse(value, invariant);
 
             if (targetType == typeof(bool) || targetType == typeof(bool?))
                 return bool.Parse(value);
 
             if (targetType == typeof(DateTime) || targetType == typeof(DateTime?))
-                return DateTime.Parse(value);
+                return DateTime.Parse(value, invariant);
 
             if (targetType == typeof(TimeSpan) || targetType == typeof(TimeSpan?))
-                return TimeSpan.Parse(value);
+                return TimeSpan.Parse(value, invariant);
 
             if (targetType == typeof(Guid) || targetType == typeof(Guid?))
                 return Guid.Parse(value);

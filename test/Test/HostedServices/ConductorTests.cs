@@ -37,6 +37,20 @@ namespace Test.HostedServices
 
         private static DeviceConfig CreateDevice() => new DeviceConfig { BaseTopic = "awtrix/clock1" };
 
+        /// <summary>
+        /// WS7 CR-23: scheduled app types are validated at creation, so the factory needs a valid config.
+        /// </summary>
+        private static AppConfig ValidScheduledConfig(string type)
+        {
+            var config = AppConfig.Empty().WithName(type);
+            config.Config["CronSchedule"] = "0 8 * * *";
+            config.Config["ActiveTime"] = "00:30:00";
+            config.Config["ReadTopic"] = "openhab/temperature/room-j";
+            config.Config["StopIdOrigin"] = "200060";
+            config.Config["StopIdDestination"] = "200070";
+            return config;
+        }
+
         private static readonly DateTimeOffset HalfPastMidnight = new DateTimeOffset(2026, 9, 13, 0, 30, 0, TimeSpan.FromHours(10));
 
         [Fact]
@@ -58,7 +72,7 @@ namespace Test.HostedServices
         [Fact]
         public void AppFactory_MqttRenderApp_CreatesMqttRenderApp()
         {
-            var app = InvokeAppFactory(ConductorTestHelper.Create(), CreateDevice(), AppConfig.Empty().WithName(AppNames.MqttRenderApp));
+            var app = InvokeAppFactory(ConductorTestHelper.Create(), CreateDevice(), ValidScheduledConfig(AppNames.MqttRenderApp));
 
             Assert.IsType<MqttRenderApp>(app);
         }
@@ -66,7 +80,7 @@ namespace Test.HostedServices
         [Fact]
         public void AppFactory_MqttClockRenderApp_CreatesMqttClockRenderApp()
         {
-            var app = InvokeAppFactory(ConductorTestHelper.Create(), CreateDevice(), AppConfig.Empty().WithName(AppNames.MqttClockRenderApp));
+            var app = InvokeAppFactory(ConductorTestHelper.Create(), CreateDevice(), ValidScheduledConfig(AppNames.MqttClockRenderApp));
 
             Assert.IsType<MqttClockRenderApp>(app);
         }
@@ -74,7 +88,7 @@ namespace Test.HostedServices
         [Fact]
         public void AppFactory_TripTimerApp_CreatesTripTimerApp()
         {
-            var app = InvokeAppFactory(ConductorTestHelper.Create(), CreateDevice(), AppConfig.Empty().WithName(AppNames.TripTimerApp));
+            var app = InvokeAppFactory(ConductorTestHelper.Create(), CreateDevice(), ValidScheduledConfig(AppNames.TripTimerApp));
 
             Assert.IsType<TripTimerApp>(app);
         }

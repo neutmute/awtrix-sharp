@@ -445,8 +445,10 @@ namespace Test.Apps
         }
 
         [Fact]
-        public async Task ExecuteNow_WithMissingActiveTime_LogsErrorAndDoesNotActivate_ButKeepsScheduling()
+        public async Task ExecuteNow_WithMissingActiveTime_WarnsAndDoesNotActivate_ButKeepsScheduling()
         {
+            // WS7 CR-23: a missing ActiveTime now reads as TimeSpan.Zero (no exception), so it is the zero-ActiveTime
+            // warning rather than an error. Conductor rejects such configs at startup; this covers hand-built apps.
             var sut = CreateSut(setActiveTime: false);
             await sut.InitAsync();
 
@@ -455,7 +457,13 @@ namespace Test.Apps
             Assert.Empty(sut.Events);
             Assert.True(sut.LastRun.IsCompleted);
             Assert.Equal(Eight, sut.NextWakeUp);
-            VerifyErrorsLogged(Times.Once());
+            VerifyErrorsLogged(Times.Never());
+            _logger.Verify(x => x.Log(
+                LogLevel.Warning,
+                It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((state, _) => state.ToString()!.Contains("ActiveTime")),
+                It.IsAny<Exception?>(),
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()), Times.Once);
             await sut.DisposeAsync();
         }
 
