@@ -4,9 +4,11 @@ namespace AwtrixSharpWeb.Apps.Configs
 {
     public class AppConfigKeys : Dictionary<string, string>, IAppKeys
     {
-        public AppConfigKeys()
+        /// <summary>
+        /// Keys ignore case, matching IConfiguration (CR-22). Clone() uses this constructor, so clones do too.
+        /// </summary>
+        public AppConfigKeys() : base(StringComparer.OrdinalIgnoreCase)
         {
-                
         }
 
         public string Get(string key)

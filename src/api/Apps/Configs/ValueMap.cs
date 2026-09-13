@@ -8,6 +8,13 @@ namespace AwtrixSharpWeb.Apps.Configs
     {
         public const string MatcherKey = "ValueMatcher";
 
+        /// <summary>
+        /// Keys ignore case, matching IConfiguration (CR-22). Clone() uses this constructor, so clones do too.
+        /// </summary>
+        public ValueMap() : base(StringComparer.OrdinalIgnoreCase)
+        {
+        }
+
         public string ValueMatcher
         {
             get => this.TryGetValue(MatcherKey, out var value) ? value : string.Empty;
