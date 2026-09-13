@@ -1,4 +1,4 @@
-﻿using AwtrixSharpWeb.Domain;
+using AwtrixSharpWeb.Domain;
 using Microsoft.Extensions.Logging;
 using System.Text.RegularExpressions;
 
@@ -6,10 +6,12 @@ namespace AwtrixSharpWeb.Apps.Configs
 {
     public class ValueMap : Dictionary<string, string>
     {
+        public const string MatcherKey = "ValueMatcher";
+
         public string ValueMatcher
         {
-            get => this.TryGetValue("ValueMatcher", out var value) ? value : string.Empty;
-            set => this["ValueMatcher"] = value;
+            get => this.TryGetValue(MatcherKey, out var value) ? value : string.Empty;
+            set => this[MatcherKey] = value;
         }
 
         public ValueMap Clone()
@@ -19,7 +21,6 @@ namespace AwtrixSharpWeb.Apps.Configs
             {
                 clone.Add(key, this[key]);
             }
-            ;
             return clone;
         }
 
@@ -34,78 +35,70 @@ namespace AwtrixSharpWeb.Apps.Configs
             }
             catch
             {
-                // Fallback to string comparison if regex is invalid
+                // Fallback to string comparison if regex is invalid (reported once at load by GetConfigurationProblems)
                 return input.Contains(ValueMatcher, StringComparison.OrdinalIgnoreCase);
             }
         }
 
-
-        private bool TryParseColorArray(string value, out int[] colorArray)
-        {
-            try
-            {
-                var parts = value.Split(',');
-                if (parts.Length >= 3)
-                {
-                    colorArray = parts.Select(int.Parse).ToArray();
-                    return true;
-                }
-            }
-            catch
-            {
-                // Parse error, fallback to default
-            }
-
-            colorArray = new int[] { 255, 255, 255 };
-            return false;
-        }
-
+        /// <summary>
+        /// Apply every mapped key to <paramref name="message"/> via the static setter table.
+        /// Unknown keys and invalid values are skipped; they were already reported at Warning when the app
+        /// was constructed, so only Debug is logged here (Decorate can run every second).
+        /// </summary>
         public void Decorate(AwtrixAppMessage message, ILogger logger)
         {
-            try
+            foreach (var (key, value) in this)
             {
-                // Apply mapped values from the ValueMap
-                foreach (var kvp in this)
+                if (IsMatcherKey(key))
                 {
-                    if (kvp.Key == "ValueMatcher")
-                        continue; // Skip the matcher itself
+                    continue;
+                }
 
-                    // Process property names case-insensitively
-                    var propertyName = kvp.Key;
-                    
-                    // Set properties based on the value map
-                    switch (propertyName.ToLowerInvariant())
-                    {
-                        case "text":
-                            message.SetText(kvp.Value);
-                            break;
-                        case "icon":
-                            message.SetIcon(kvp.Value);
-                            break;
-                        case "color":
-                            message.SetColor(kvp.Value);
-                            break;
-                        case "duration":
-                            // Handle Duration specifically to avoid ambiguity
-                            if (int.TryParse(kvp.Value, out int durationSeconds))
-                                message.SetDuration(durationSeconds);
-                            break;
-                        case "center":
-                            if (bool.TryParse(kvp.Value, out bool centerValue))
-                                message.SetCenter(centerValue);
-                            break;
-                        // Add more property mappings as needed
-                        default:
-                            // For any other property, try to apply it via reflection
-                            ApplyDynamicProperty(message, propertyName, kvp.Value, logger);
-                            break;
-                    }
+                if (!ValueMapSetters.TryApply(message, key, value))
+                {
+                    logger?.LogDebug("ValueMap key '{Key}' with value '{Value}' not applied (unknown key or invalid value)", key, value);
                 }
             }
-            catch (Exception ex)
+        }
+
+        /// <summary>
+        /// Human-readable configuration problems: invalid non-empty regex, unknown keys, invalid values.
+        /// An empty ValueMatcher is valid (it never matches, but maps may be used positionally).
+        /// </summary>
+        public IReadOnlyList<string> GetConfigurationProblems()
+        {
+            var problems = new List<string>();
+
+            if (!string.IsNullOrEmpty(ValueMatcher))
             {
-                logger.LogWarning("Error in Decorate: {Error}", ex.Message);
+                try
+                {
+                    _ = new Regex(ValueMatcher);
+                }
+                catch (ArgumentException ex)
+                {
+                    problems.Add($"ValueMatcher '{ValueMatcher}' is not a valid regular expression ({ex.Message}); falling back to a case-insensitive substring match");
+                }
             }
+
+            foreach (var (key, value) in this)
+            {
+                if (IsMatcherKey(key))
+                {
+                    continue;
+                }
+
+                if (!ValueMapSetters.IsKnown(key))
+                {
+                    problems.Add($"Unknown key '{key}' is ignored");
+                }
+                else if (!ValueMapSetters.IsValidValue(key, value))
+                {
+                    problems.Add($"Value '{value}' for key '{key}' is invalid and is ignored");
+                }
+            }
+
+            return problems;
         }
 
         public override string ToString()
@@ -113,64 +106,6 @@ namespace AwtrixSharpWeb.Apps.Configs
             return $"ValueMatcher={ValueMatcher}";
         }
 
-        private void ApplyDynamicProperty(AwtrixAppMessage message, string propertyName, string value, ILogger logger)
-        {
-            try
-            {
-                // Try to find a matching "Set" method on AwtrixAppMessage
-                var methodName = "Set" + propertyName;
-                
-                // Look for method with exact parameter type match to avoid ambiguity
-                var methods = typeof(AwtrixAppMessage).GetMethods()
-                    .Where(m => m.Name.Equals(methodName, StringComparison.OrdinalIgnoreCase) && 
-                           m.GetParameters().Length == 1)
-                    .ToList();
-                
-                if (methods.Count == 0)
-                    return;
-                
-                // Try to find the best matching method
-                foreach (var method in methods)
-                {
-                    var paramType = method.GetParameters()[0].ParameterType;
-                    object convertedValue = null;
-
-                    try
-                    {
-                        if (paramType == typeof(string))
-                        {
-                            convertedValue = value;
-                        }
-                        else if (paramType == typeof(bool))
-                        {
-                            convertedValue = bool.Parse(value);
-                        }
-                        else if (paramType == typeof(int))
-                        {
-                            convertedValue = int.Parse(value);
-                        }
-                        else if (paramType == typeof(int[]))
-                        {
-                            if (TryParseColorArray(value, out int[] array))
-                                convertedValue = array;
-                        }
-                        
-                        if (convertedValue != null)
-                        {
-                            method.Invoke(message, new[] { convertedValue });
-                            return; // Successfully applied
-                        }
-                    }
-                    catch
-                    {
-                        // Try the next method if conversion fails
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                logger.LogWarning("Failed to apply property {PropertyName}: {ErrorMessage}", propertyName, ex.Message);
-            }
-        }
+        private static bool IsMatcherKey(string key) => string.Equals(key, MatcherKey, StringComparison.OrdinalIgnoreCase);
     }
 }

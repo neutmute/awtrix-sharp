@@ -28,6 +28,9 @@ namespace AwtrixSharpWeb.Apps
             AwtrixService = awtrixService;
             Config = config;
             Logger = logger;
+
+            // CR-34: report bad ValueMap keys, values and regexes once, when the app is created
+            config?.LogValueMapProblems(logger, awtrixAddress?.BaseTopic);
         }
 
         /// <summary>

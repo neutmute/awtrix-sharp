@@ -83,6 +83,31 @@ namespace AwtrixSharpWeb.Apps.Configs
         }
 
         /// <summary>
+        /// Log every ValueMap configuration problem once, at Warning, naming the app type, device and map index.
+        /// </summary>
+        public void LogValueMapProblems(ILogger? logger, string? device)
+        {
+            if (logger == null || _valueMaps == null)
+            {
+                return;
+            }
+
+            for (var index = 0; index < _valueMaps.Count; index++)
+            {
+                var map = _valueMaps[index];
+                if (map == null)
+                {
+                    continue;
+                }
+
+                foreach (var problem in map.GetConfigurationProblems())
+                {
+                    logger.LogWarning("{AppType} on {Device}: ValueMaps[{Index}]: {Problem}", Type, device, index, problem);
+                }
+            }
+        }
+
+        /// <summary>
         /// Creates a new instance of the specified type and populates its properties from this AppConfig.
         /// </summary>
         /// <typeparam name="T">The type to convert to, must be a subclass of AppConfig</typeparam>
