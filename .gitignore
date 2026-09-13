@@ -483,3 +483,6 @@ $RECYCLE.BIN/
 # Vim temporary swap files
 *.swp
 .claude/settings.local.json
+
+# Superpowers SDD scratch
+.superpowers/
