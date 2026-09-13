@@ -93,7 +93,8 @@ namespace AwtrixSharpWeb.Apps.Configs
         private static Func<AwtrixAppMessage, string, bool> Dbl(Action<AwtrixAppMessage, double> set) =>
             (message, value) =>
             {
-                if (!double.TryParse(value?.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed))
+                // NaN and ±Infinity (including overflow such as 1e999) parse, but are not valid display values
+                if (!double.TryParse(value?.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed) || !double.IsFinite(parsed))
                 {
                     return false;
                 }

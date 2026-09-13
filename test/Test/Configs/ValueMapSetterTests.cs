@@ -147,6 +147,21 @@ namespace Test.Configs
             Assert.Contains(problems, p => p.Contains("Duration") && p.Contains("a minute"));
         }
 
+        [Theory]
+        [InlineData("BlinkText", "NaN")]
+        [InlineData("BlinkText", "Infinity")]
+        [InlineData("FadeText", "-Infinity")]
+        [InlineData("FadeText", "1e999")]
+        public void NonFiniteNumber_IsReportedOnce_AndNotApplied(string key, string value)
+        {
+            var map = new ValueMap { { "ValueMatcher", "busy" }, { key, value } };
+            var message = new AwtrixAppMessage();
+
+            Assert.Contains(map.GetConfigurationProblems(), p => p.Contains(key) && p.Contains(value));
+            map.Decorate(message, _logger.Object);
+            Assert.Empty(message);
+        }
+
         [Fact]
         public void GetConfigurationProblems_InvalidRegex_IsReported_AndIsMatchStillFallsBackToSubstring()
         {
