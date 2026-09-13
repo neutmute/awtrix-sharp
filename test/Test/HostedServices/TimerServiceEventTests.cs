@@ -1,114 +1,165 @@
-using System.Reflection;
 using AwtrixSharpWeb.HostedServices;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Time.Testing;
 
 namespace Test.HostedServices
 {
     /// <summary>
-    /// Exercises TimerService's second/minute change detection deterministically by
-    /// invoking the private CheckTimeChange callback directly (via reflection) with a
-    /// controlled "_lastTime" seed, rather than waiting on the real 100ms polling timer.
-    /// TimerService has no injectable clock, so DateTime.Now is still used for "now" -
-    /// tests seed "_lastTime" far enough away (by 30 seconds/minutes) that the
-    /// comparison result is deterministic regardless of the exact instant "now" resolves to.
+    /// Drives TimerService deterministically through an injected FakeTimeProvider.
+    /// Most tests call the internal Tick() directly; one test exercises the real
+    /// PeriodicTimer loop via StartAsync.
     /// </summary>
     public class TimerServiceEventTests
     {
-        private static TimerService CreateService()
-        {
-            return new TimerService(NullLogger<TimerService>.Instance);
-        }
+        // 06:59:58.000 UTC - two seconds before a minute boundary
+        private static readonly DateTimeOffset Start = new DateTimeOffset(2026, 9, 13, 6, 59, 58, TimeSpan.Zero);
 
-        private static void SetLastTime(TimerService service, DateTime value)
+        private static (TimerService service, FakeTimeProvider time) CreateService(TimeZoneInfo? localZone = null)
         {
-            var field = typeof(TimerService).GetField("_lastTime", BindingFlags.NonPublic | BindingFlags.Instance);
-            Assert.NotNull(field);
-            field!.SetValue(service, value);
-        }
-
-        private static void InvokeCheckTimeChange(TimerService service)
-        {
-            var method = typeof(TimerService).GetMethod("CheckTimeChange", BindingFlags.NonPublic | BindingFlags.Instance);
-            Assert.NotNull(method);
-            method!.Invoke(service, new object?[] { null });
+            var time = new FakeTimeProvider(Start);
+            time.SetLocalTimeZone(localZone ?? TimeZoneInfo.Utc);
+            var service = new TimerService(NullLogger<TimerService>.Instance, time);
+            return (service, time);
         }
 
         [Fact]
-        public void CheckTimeChange_WhenSecondDiffers_RaisesSecondChanged()
+        public void Tick_WithinSameSecond_RaisesNothing()
         {
-            var service = CreateService();
-            var now = DateTime.Now;
-            // Seed a "last" time whose second (and minute, to isolate the assertion)
-            // is guaranteed to differ from "now" by picking values 30 apart (mod 60).
-            var last = new DateTime(now.Year, now.Month, now.Day, now.Hour, now.Minute, (now.Second + 30) % 60, now.Kind);
-            SetLastTime(service, last);
+            var (service, time) = CreateService();
+            var seconds = 0;
+            var minutes = 0;
+            service.SecondChanged += (_, _) => seconds++;
+            service.MinuteChanged += (_, _) => minutes++;
 
+            time.Advance(TimeSpan.FromMilliseconds(500));
+            service.Tick();
+
+            Assert.Equal(0, seconds);
+            Assert.Equal(0, minutes);
+        }
+
+        [Fact]
+        public void Tick_NextSecond_RaisesSecondChangedWithTruncatedLocalTime_AndNoMinute()
+        {
+            var (service, time) = CreateService();
             ClockTickEventArgs? raised = null;
-            service.SecondChanged += (s, e) => raised = e;
+            var minutes = 0;
+            service.SecondChanged += (_, e) => raised = e;
+            service.MinuteChanged += (_, _) => minutes++;
 
-            InvokeCheckTimeChange(service);
+            time.Advance(TimeSpan.FromMilliseconds(1300));
+            service.Tick();
 
             Assert.NotNull(raised);
+            Assert.Equal(new DateTime(2026, 9, 13, 6, 59, 59), raised!.Time);
+            Assert.Equal(DateTimeKind.Local, raised.Time.Kind);
+            Assert.Equal(0, minutes);
         }
 
         [Fact]
-        public void CheckTimeChange_WhenSecondAndMinuteDiffer_RaisesBothEvents()
+        public void Tick_CrossingMinuteBoundary_RaisesBothEvents()
         {
-            var service = CreateService();
-            var now = DateTime.Now;
-            var last = new DateTime(now.Year, now.Month, now.Day, now.Hour, (now.Minute + 30) % 60, (now.Second + 30) % 60, now.Kind);
-            SetLastTime(service, last);
+            var (service, time) = CreateService();
+            DateTime? secondTime = null;
+            DateTime? minuteTime = null;
+            service.SecondChanged += (_, e) => secondTime = e.Time;
+            service.MinuteChanged += (_, e) => minuteTime = e.Time;
 
-            bool secondRaised = false;
-            bool minuteRaised = false;
-            service.SecondChanged += (s, e) => secondRaised = true;
-            service.MinuteChanged += (s, e) => minuteRaised = true;
+            time.Advance(TimeSpan.FromSeconds(2));
+            service.Tick();
 
-            InvokeCheckTimeChange(service);
-
-            Assert.True(secondRaised);
-            Assert.True(minuteRaised);
+            Assert.Equal(new DateTime(2026, 9, 13, 7, 0, 0), secondTime);
+            Assert.Equal(new DateTime(2026, 9, 13, 7, 0, 0), minuteTime);
         }
 
         [Fact]
-        public void CheckTimeChange_WhenSameSecond_DoesNotRaiseEvents()
+        public void Tick_CalledTwiceInSameSecond_RaisesSecondChangedOnce()
         {
-            var service = CreateService();
-            var now = DateTime.Now;
-            // Seed _lastTime to exactly the current trimmed second - no change should be detected.
-            SetLastTime(service, new DateTime(now.Year, now.Month, now.Day, now.Hour, now.Minute, now.Second, now.Kind));
+            var (service, time) = CreateService();
+            var seconds = 0;
+            service.SecondChanged += (_, _) => seconds++;
 
-            bool secondRaised = false;
-            bool minuteRaised = false;
-            service.SecondChanged += (s, e) => secondRaised = true;
-            service.MinuteChanged += (s, e) => minuteRaised = true;
+            time.Advance(TimeSpan.FromSeconds(1));
+            service.Tick();
+            time.Advance(TimeSpan.FromMilliseconds(100));
+            service.Tick();
 
-            InvokeCheckTimeChange(service);
-
-            Assert.False(secondRaised);
-            Assert.False(minuteRaised);
+            Assert.Equal(1, seconds);
         }
 
         [Fact]
-        public void CheckTimeChange_UpdatesLastTime_AfterSecondChange()
+        public void Tick_AfterStallOfExactlyWholeMinutes_StillRaisesBothEvents()
         {
-            var service = CreateService();
-            var now = DateTime.Now;
-            var last = new DateTime(now.Year, now.Month, now.Day, now.Hour, now.Minute, (now.Second + 30) % 60, now.Kind);
-            SetLastTime(service, last);
+            // Old implementation compared only .Second/.Minute fields and missed this case.
+            var (service, time) = CreateService();
+            var seconds = 0;
+            var minutes = 0;
+            service.SecondChanged += (_, _) => seconds++;
+            service.MinuteChanged += (_, _) => minutes++;
 
-            InvokeCheckTimeChange(service);
+            time.Advance(TimeSpan.FromMinutes(60));
+            service.Tick();
 
-            var field = typeof(TimerService).GetField("_lastTime", BindingFlags.NonPublic | BindingFlags.Instance);
-            var updated = (DateTime)field!.GetValue(service)!;
+            Assert.Equal(1, seconds);
+            Assert.Equal(1, minutes);
+        }
 
-            Assert.NotEqual(last, updated);
+        [Fact]
+        public void Tick_WhenASubscriberThrows_OtherSubscribersAndMinuteEventStillRun()
+        {
+            var (service, time) = CreateService();
+            var laterSecondSubscriberCalled = false;
+            var minuteSubscriberCalled = false;
+            service.SecondChanged += (_, _) => throw new InvalidOperationException("boom");
+            service.SecondChanged += (_, _) => laterSecondSubscriberCalled = true;
+            service.MinuteChanged += (_, _) => throw new OverflowException("boom");
+            service.MinuteChanged += (_, _) => minuteSubscriberCalled = true;
+
+            time.Advance(TimeSpan.FromSeconds(2));
+            var exception = Record.Exception(() => service.Tick());
+
+            Assert.Null(exception);
+            Assert.True(laterSecondSubscriberCalled);
+            Assert.True(minuteSubscriberCalled);
+        }
+
+        [Fact]
+        public void Tick_UsesTimeProviderLocalTimeZone()
+        {
+            var aest = TimeZoneInfo.CreateCustomTimeZone("Test+10", TimeSpan.FromHours(10), "Test+10", "Test+10");
+            var (service, time) = CreateService(aest);
+            DateTime? raised = null;
+            service.SecondChanged += (_, e) => raised = e.Time;
+
+            time.Advance(TimeSpan.FromSeconds(1));
+            service.Tick();
+
+            Assert.Equal(new DateTime(2026, 9, 13, 16, 59, 59), raised);
+        }
+
+        [Fact]
+        public async Task StartAsync_DrivesTicksFromInjectedTimeProvider()
+        {
+            var (service, time) = CreateService();
+            var raised = new TaskCompletionSource<DateTime>(TaskCreationOptions.RunContinuationsAsynchronously);
+            service.SecondChanged += (_, e) => raised.TrySetResult(e.Time);
+
+            await service.StartAsync(CancellationToken.None);
+            for (var i = 0; i < 200 && !raised.Task.IsCompleted; i++)
+            {
+                time.Advance(TimeSpan.FromMilliseconds(200));
+                await Task.Delay(10);
+            }
+            await service.StopAsync(CancellationToken.None);
+            service.Dispose();
+
+            Assert.True(raised.Task.IsCompleted, "SecondChanged was never raised by the PeriodicTimer loop");
         }
 
         [Fact]
         public void Dispose_DoesNotThrow_WhenTimerNeverStarted()
         {
-            var service = CreateService();
+            var service = new TimerService(NullLogger<TimerService>.Instance);
 
             var exception = Record.Exception(() => service.Dispose());
 
@@ -118,7 +169,7 @@ namespace Test.HostedServices
         [Fact]
         public async Task StartAsync_ThenStopAsync_CompletesWithoutHanging()
         {
-            var service = CreateService();
+            var service = new TimerService(NullLogger<TimerService>.Instance);
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
 
             await service.StartAsync(cts.Token);

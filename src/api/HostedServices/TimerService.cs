@@ -1,4 +1,3 @@
-﻿using AwtrixSharpWeb.Domain;
 using AwtrixSharpWeb.Interfaces;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -8,7 +7,7 @@ namespace AwtrixSharpWeb.HostedServices
     public class ClockTickEventArgs : EventArgs
     {
         /// <summary>
-        /// Current DateTime when the minute changed
+        /// Local wall-clock time of the tick, truncated to the whole second (Kind = Local).
         /// </summary>
         public DateTime Time { get; }
 
@@ -18,11 +17,19 @@ namespace AwtrixSharpWeb.HostedServices
         }
     }
 
+    /// <summary>
+    /// Raises SecondChanged / MinuteChanged from a single sequential PeriodicTimer loop.
+    /// Subscribers are invoked one at a time, each isolated in its own try/catch, so a
+    /// throwing subscriber can neither crash the process nor starve other subscribers.
+    /// Subscribers must return quickly; offload I/O (see AwtrixApp.FireAndLog).
+    /// </summary>
     public class TimerService : IHostedService, IDisposable, ITimerService
     {
+        internal static readonly TimeSpan TickInterval = TimeSpan.FromMilliseconds(100);
+
         private readonly ILogger<TimerService> _logger;
-        private Timer? _timer;
-        private DateTime _lastTime;
+        private readonly TimeProvider _timeProvider;
+        private DateTime _lastSecond;
         private Task? _executingTask;
         private CancellationTokenSource? _stoppingCts;
 
@@ -36,48 +43,38 @@ namespace AwtrixSharpWeb.HostedServices
         /// </summary>
         public event EventHandler<ClockTickEventArgs>? MinuteChanged;
 
-        public TimerService(ILogger<TimerService> logger)
+        public TimerService(ILogger<TimerService> logger, TimeProvider? timeProvider = null)
         {
             _logger = logger;
-            _lastTime = DateTime.Now;
+            _timeProvider = timeProvider ?? TimeProvider.System;
+            _lastSecond = CurrentLocalSecond();
         }
 
         public Task StartAsync(CancellationToken cancellationToken)
         {
-            // Create a linked token source so we can cancel when the app is stopping
             _stoppingCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-
-            // Start the timer in the background
             _executingTask = ExecuteAsync(_stoppingCts.Token);
-
-            // If the task is completed then return it, otherwise return a completed task
             return _executingTask.IsCompleted ? _executingTask : Task.CompletedTask;
         }
 
         private async Task ExecuteAsync(CancellationToken stoppingToken)
         {
+            _logger.LogDebug("Timer service executing");
+            using var timer = new PeriodicTimer(TickInterval, _timeProvider);
             try
             {
-                _logger.LogDebug("Timer service executing");
-
-                // Create a timer that fires every 100ms to check for second changes
-                // This gives us good granularity to detect second changes without missing any
-                _timer = new Timer(CheckTimeChange, null, TimeSpan.Zero, TimeSpan.FromMilliseconds(100));
-
-                // Keep the service running until cancellation is requested
-                while (!stoppingToken.IsCancellationRequested)
+                while (await timer.WaitForNextTickAsync(stoppingToken))
                 {
-                    await Task.Delay(1000, stoppingToken);
+                    Tick();
                 }
             }
             catch (OperationCanceledException)
             {
-                // Normal during shutdown, just log and exit
                 _logger.LogInformation("Timer service stopping due to cancellation");
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Unhandled exception in timer service");
+                _logger.LogCritical(ex, "Timer loop terminated unexpectedly");
             }
             finally
             {
@@ -85,39 +82,71 @@ namespace AwtrixSharpWeb.HostedServices
             }
         }
 
-        private void CheckTimeChange(object? state)
+        /// <summary>
+        /// One timer iteration. Never throws.
+        /// </summary>
+        internal void Tick()
         {
-            var now = DateTime.Now;
-
-            // remove all ms/small precision
-            var trimmedCurrent = new DateTime(now.Year, now.Month, now.Day, now.Hour, now.Minute, now.Second, now.Kind);
-
-            // Check if second has changed
-            if (trimmedCurrent.Second != _lastTime.Second)
+            try
             {
-                _logger.LogDebug("Second changed: {Second}", trimmedCurrent.ToString("HH:mm:ss"));
-                OnSecondChanged(trimmedCurrent);
-
-                // Check if minute has changed as well
-                if (trimmedCurrent.Minute != _lastTime.Minute)
+                var current = CurrentLocalSecond();
+                if (current == _lastSecond)
                 {
-                    _logger.LogDebug("Minute changed: {Minute}", trimmedCurrent.ToString("HH:mm:ss"));
-                    OnMinuteChanged(trimmedCurrent);
+                    return;
                 }
 
-                // Update last time
-                _lastTime = trimmedCurrent;
+                var previous = _lastSecond;
+                // Update before invoking handlers so a slow/throwing handler can't cause a duplicate
+                _lastSecond = current;
+
+                _logger.LogDebug("Second changed: {Second}", current.ToString("HH:mm:ss"));
+                Raise(SecondChanged, current, nameof(SecondChanged));
+
+                if (TruncateToMinute(current) != TruncateToMinute(previous))
+                {
+                    _logger.LogDebug("Minute changed: {Minute}", current.ToString("HH:mm:ss"));
+                    Raise(MinuteChanged, current, nameof(MinuteChanged));
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Timer tick failed");
             }
         }
 
-        private void OnSecondChanged(DateTime currentTime)
+        private void Raise(EventHandler<ClockTickEventArgs>? handlers, DateTime time, string eventName)
         {
-            SecondChanged?.Invoke(this, new ClockTickEventArgs(currentTime));
+            if (handlers == null)
+            {
+                return;
+            }
+
+            var args = new ClockTickEventArgs(time);
+            foreach (EventHandler<ClockTickEventArgs> handler in handlers.GetInvocationList())
+            {
+                try
+                {
+                    handler(this, args);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex,
+                        "{Event} subscriber {Subscriber} threw; continuing with remaining subscribers",
+                        eventName,
+                        $"{handler.Method.DeclaringType?.Name}.{handler.Method.Name}");
+                }
+            }
         }
 
-        private void OnMinuteChanged(DateTime currentTime)
+        private DateTime CurrentLocalSecond()
         {
-            MinuteChanged?.Invoke(this, new ClockTickEventArgs(currentTime));
+            var local = _timeProvider.GetLocalNow().DateTime;
+            return new DateTime(local.Ticks - (local.Ticks % TimeSpan.TicksPerSecond), DateTimeKind.Local);
+        }
+
+        private static DateTime TruncateToMinute(DateTime time)
+        {
+            return new DateTime(time.Ticks - (time.Ticks % TimeSpan.TicksPerMinute), time.Kind);
         }
 
         public async Task StopAsync(CancellationToken cancellationToken)
@@ -131,33 +160,23 @@ namespace AwtrixSharpWeb.HostedServices
 
             try
             {
-                // Signal cancellation to the executing method
                 _stoppingCts?.Cancel();
             }
             finally
             {
-                // Stop the timer
-                _timer?.Change(Timeout.Infinite, 0);
-
-                // Wait until the task completes or the stop token triggers
-                // Use a timeout to avoid hanging indefinitely
-                var completedTask = await Task.WhenAny(_executingTask, Task.Delay(5000, cancellationToken));
+                var completedTask = await Task.WhenAny(_executingTask, Task.Delay(TimeSpan.FromSeconds(5), cancellationToken));
 
                 if (completedTask != _executingTask)
                 {
                     _logger.LogWarning("Timer service shutdown timed out");
                 }
             }
-
-            _logger.LogInformation("Timer service stopped");
         }
 
         public void Dispose()
         {
-            _timer?.Dispose();
             _stoppingCts?.Dispose();
         }
-
 
         public static string FormatClockString(DateTime time, bool format24h)
         {
