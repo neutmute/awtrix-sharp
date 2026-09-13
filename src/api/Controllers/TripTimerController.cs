@@ -3,6 +3,7 @@ using AwtrixSharpWeb.HostedServices;
 using AwtrixSharpWeb.Services.TripPlanner;
 using Microsoft.AspNetCore.Mvc;
 using Swashbuckle.AspNetCore.Annotations;
+using System.Globalization;
 
 
 namespace AwtrixSharpWeb.Controllers
@@ -36,7 +37,11 @@ namespace AwtrixSharpWeb.Controllers
         [HttpPost("test/alarm-timings")]
         public IActionResult TestTimingConfig([FromQuery] string departureTime = "2025-09-01 06:41")
         {
-            var dateTime = DateTimeOffset.Parse(departureTime);
+            // CR-15: invariant culture, 400 instead of an unhandled FormatException
+            if (!DateTimeOffset.TryParse(departureTime, CultureInfo.InvariantCulture, DateTimeStyles.AssumeLocal, out var dateTime))
+            {
+                return BadRequest(new { message = $"departureTime '{departureTime}' is not a valid date/time; use yyyy-MM-dd HH:mm" });
+            }
 
             var tripTimer = _conductor
                             .FindApps(AppNames.TripTimerApp)

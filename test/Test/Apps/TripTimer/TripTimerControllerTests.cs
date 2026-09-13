@@ -160,5 +160,16 @@ namespace Test.Apps.TripTimer
 
             Assert.Equal(500, Assert.IsType<ObjectResult>(result).StatusCode);
         }
+
+        [Fact]
+        public void TestTimingConfig_InvalidDepartureTime_ReturnsBadRequest()
+        {
+            // CR-15: parsing happens before the app lookup, so an empty Conductor is enough
+            var sut = new TripTimerController(ConductorTestHelper.Create());
+
+            var result = sut.TestTimingConfig("not-a-date");
+
+            Assert.IsType<BadRequestObjectResult>(result);
+        }
     }
 }

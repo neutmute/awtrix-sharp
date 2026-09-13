@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using AwtrixSharpWeb.Controllers;
 using AwtrixSharpWeb.Services.TripPlanner;
@@ -69,13 +70,15 @@ namespace Test.TripPlanner
         }
 
         [Fact]
-        public async Task GetDepartures_InvalidDateTime_Returns500()
+        public async Task GetDepartures_InvalidDateTime_Returns400()
         {
-            var sut = Create(StubHttpMessageHandler.Json("{}"));
+            var handler = StubHttpMessageHandler.Json("{}");
+            var sut = Create(handler);
 
             var result = await sut.GetDepartures("200080", "200060", "not-a-date");
 
-            Assert.Equal(500, Assert.IsType<ObjectResult>(result).StatusCode);
+            Assert.IsType<BadRequestObjectResult>(result);
+            Assert.Empty(handler.RequestUris);
         }
 
         [Fact]
@@ -100,13 +103,39 @@ namespace Test.TripPlanner
         }
 
         [Fact]
-        public async Task GetTrip_InvalidDateTime_Returns500()
+        public async Task GetTrip_InvalidDateTime_Returns400()
         {
-            var sut = Create(StubHttpMessageHandler.Json("{}"));
+            var handler = StubHttpMessageHandler.Json("{}");
+            var sut = Create(handler);
 
             var result = await sut.GetTrip("200080", "200060", "not-a-date");
 
-            Assert.Equal(500, Assert.IsType<ObjectResult>(result).StatusCode);
+            Assert.IsType<BadRequestObjectResult>(result);
+            Assert.Empty(handler.RequestUris);
+        }
+
+        [Fact]
+        public async Task GetTrip_ParsesFromDateTimeWithInvariantCulture_RegardlessOfHostCulture()
+        {
+            // en-AU would read 01/02/2025 as 1 February; invariant reads it as 2 January (offset-less → Sydney wall clock)
+            var previous = CultureInfo.CurrentCulture;
+            CultureInfo.CurrentCulture = new CultureInfo("en-AU");
+            try
+            {
+                var handler = StubHttpMessageHandler.Json("{\"journeys\":[]}");
+                var sut = Create(handler);
+
+                var result = await sut.GetTrip("200080", "200060", "01/02/2025 06:00");
+
+                Assert.IsType<OkObjectResult>(result);
+                var uri = Assert.Single(handler.RequestUris).ToString();
+                Assert.Contains("itdDate=20250102", uri);
+                Assert.Contains("itdTime=0600", uri);
+            }
+            finally
+            {
+                CultureInfo.CurrentCulture = previous;
+            }
         }
     }
 }

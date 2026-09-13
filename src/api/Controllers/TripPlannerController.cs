@@ -47,14 +47,14 @@ namespace AwtrixSharpWeb.Controllers
         [SwaggerOperation(Summary = "Get upcoming departures between stops")]
         public async Task<IActionResult> GetDepartures([FromQuery] string originId, [FromQuery] string destinationId, [FromQuery] string fromDateTime, CancellationToken cancellationToken = default)
         {
+            // An offset-less value is Sydney wall clock, whatever the host TZ (CR-26); invariant culture, 400 when unparseable (CR-15)
+            if (!TransportTime.TryParseQuery(fromDateTime, out var fromTimestamp))
+            {
+                return BadRequest(new { message = $"fromDateTime '{fromDateTime}' is not a valid date/time; use yyyy-MM-ddTHH:mm" });
+            }
+
             try
             {
-                // An offset-less value is Sydney wall clock, whatever the host TZ (CR-26)
-                if (!TransportTime.TryParseQuery(fromDateTime, out var fromTimestamp))
-                {
-                    throw new FormatException($"'{fromDateTime}' is not a recognised date/time"); // 500 as before; WS7 makes this a 400
-                }
-
                 var result = await _tripPlannerService.GetNextDepartures(originId, destinationId, fromTimestamp, cancellationToken);
 
                 //For populating unit tests with real data
@@ -79,13 +79,14 @@ namespace AwtrixSharpWeb.Controllers
         [SwaggerOperation(Summary = "Get detailed trip information")]
         public async Task<IActionResult> GetTrip([FromQuery] string originId, [FromQuery] string destinationId, [FromQuery] string fromDateTime, CancellationToken cancellationToken = default)
         {
+            // An offset-less value is Sydney wall clock, whatever the host TZ (CR-26); invariant culture, 400 when unparseable (CR-15)
+            if (!TransportTime.TryParseQuery(fromDateTime, out var fromTimestamp))
+            {
+                return BadRequest(new { message = $"fromDateTime '{fromDateTime}' is not a valid date/time; use yyyy-MM-ddTHH:mm" });
+            }
+
             try
             {
-                if (!TransportTime.TryParseQuery(fromDateTime, out var fromTimestamp))
-                {
-                    throw new FormatException($"'{fromDateTime}' is not a recognised date/time"); // 500 as before; WS7 makes this a 400
-                }
-
                 var result = await _tripPlannerService.GetTrips(originId, destinationId, fromTimestamp, cancellationToken);
 
                 return Ok(result);
