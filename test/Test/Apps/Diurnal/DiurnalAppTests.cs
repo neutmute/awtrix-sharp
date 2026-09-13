@@ -247,5 +247,40 @@ namespace Test.Apps.Diurnal
             _awtrix.Verify(a => a.Set(_address, It.Is<AwtrixSettings>(s => HasBrightness(s, "8"))), Times.Once);
             _awtrix.Verify(a => a.Set(_address, It.Is<AwtrixSettings>(s => HasBrightness(s, "1"))), Times.Never);
         }
+
+        [Fact]
+        public void Init_ReplayWithPublishesCompletingOutOfOrder_FinalAppliedValueIsLatestEntry()
+        {
+            // HTTP device restarting at 22:00: the 21:00 night brightness must win even if the
+            // device acknowledges requests in reverse order.
+            var pending = new List<(TaskCompletionSource<bool> Tcs, AwtrixSettings Settings)>();
+            var applied = new List<AwtrixSettings>();
+            _awtrix.Setup(a => a.AppClear(It.IsAny<AwtrixAddress>(), It.IsAny<string>())).ReturnsAsync(true);
+            _awtrix.Setup(a => a.Set(It.IsAny<AwtrixAddress>(), It.IsAny<AwtrixSettings>()))
+                .Returns((AwtrixAddress _, AwtrixSettings s) =>
+                {
+                    var tcs = new TaskCompletionSource<bool>();
+                    var snapshot = new AwtrixSettings();
+                    foreach (var kv in s) snapshot[kv.Key] = kv.Value;
+                    pending.Add((tcs, snapshot));
+                    return tcs.Task;
+                });
+
+            var app = CreateApp(At(22, 0), ("0600", "Brightness=80"), ("2100", "Brightness=1"));
+            app.Init();
+
+            // Complete the most recently issued publish first, repeatedly, until nothing is in flight.
+            for (var guard = 0; guard < 10 && pending.Count > 0; guard++)
+            {
+                var last = pending[^1];
+                pending.RemoveAt(pending.Count - 1);
+                applied.Add(last.Settings);
+                last.Tcs.SetResult(true);
+            }
+
+            Assert.Empty(pending);
+            Assert.NotEmpty(applied);
+            Assert.True(HasBrightness(applied[^1], "1"), $"final applied settings were {applied[^1]}");
+        }
     }
 }

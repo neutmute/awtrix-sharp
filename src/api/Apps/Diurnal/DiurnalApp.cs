@@ -100,11 +100,33 @@ namespace AwtrixSharpWeb.Apps.Diurnal
 
             Logger.LogInformation("Replaying {Count} previous time entry settings", previousSettings.Count);
 
-            foreach (var setting in previousSettings)
+            if (previousSettings.Count > 0)
             {
-                var triggerTime = DateTime.SpecifyKind(now.DateTime.Date.Add(setting), DateTimeKind.Local);
-                ClockTickMinute(this, new ClockTickEventArgs(triggerTime));
+                // Merge in chronological order (later entries override earlier keys) and send a single Set,
+                // so the device ends in the current period's state regardless of publish completion order.
+                _ = FireAndLog(() => ReplaySettingsAsync(previousSettings), "ReplaySettings");
             }
+        }
+
+        private async Task ReplaySettingsAsync(IReadOnlyList<TimeSpan> orderedEntries)
+        {
+            var merged = new AwtrixSettings();
+            foreach (var entry in orderedEntries)
+            {
+                try
+                {
+                    foreach (var kv in BuildSettings(entry))
+                    {
+                        merged[kv.Key] = kv.Value;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogError(ex, "{BaseTopic} @ {Time}: failed to build settings during replay; skipping entry", AwtrixAddress.BaseTopic, entry);
+                }
+            }
+
+            await PublishSettingsAsync(merged, orderedEntries[^1]);
         }
 
         private void ClockTickMinute(object? sender, ClockTickEventArgs e)
@@ -117,17 +139,29 @@ namespace AwtrixSharpWeb.Apps.Diurnal
 
         private async Task ApplySettingsAsync(TimeSpan minute)
         {
-            if (!_timeActionMap.TryGetValue(minute, out var actions))
+            if (!_timeActionMap.ContainsKey(minute))
             {
                 return;
             }
 
-            var awtrixSetting = new AwtrixSettings();
-            foreach (var action in actions)
-            {
-                action(awtrixSetting);
-            }
+            await PublishSettingsAsync(BuildSettings(minute), minute);
+        }
 
+        private AwtrixSettings BuildSettings(TimeSpan minute)
+        {
+            var awtrixSetting = new AwtrixSettings();
+            if (_timeActionMap.TryGetValue(minute, out var actions))
+            {
+                foreach (var action in actions)
+                {
+                    action(awtrixSetting);
+                }
+            }
+            return awtrixSetting;
+        }
+
+        private async Task PublishSettingsAsync(AwtrixSettings awtrixSetting, TimeSpan minute)
+        {
             if (awtrixSetting.Count == 0)
             {
                 Logger.LogWarning("{BaseTopic} @ {Time}: no valid settings to apply; skipping", AwtrixAddress.BaseTopic, minute);

@@ -227,23 +227,24 @@ namespace AwtrixSharpWeb.Apps.TripTimer
             }
             finally
             {
-                Deactivate();
+                await DeactivateAsync();
             }
         }
 
-        private void Deactivate()
+        private async Task DeactivateAsync()
         {
             Logger.LogInformation($"Schedule deactivating");
-            _ = AppClear().Result;
             _timerService.SecondChanged -= ClockTickSecond;
             _timerService.MinuteChanged -= ClockTickMinute;
+            await AppClear();
         }
 
         new protected void Dispose(bool disposing)
         {
             if (disposing)
             {
-                Deactivate();
+                // Synchronous dispose path (not a tick handler); async disposal is WS4 scope
+                DeactivateAsync().GetAwaiter().GetResult();
             }
                         
             base.Dispose(disposing);

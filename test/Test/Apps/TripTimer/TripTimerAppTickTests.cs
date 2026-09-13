@@ -4,6 +4,7 @@ using AwtrixSharpWeb.Domain;
 using AwtrixSharpWeb.HostedServices;
 using AwtrixSharpWeb.Interfaces;
 using AwtrixSharpWeb.Services;
+using AwtrixSharpWeb.Services.TripPlanner;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using Test.Domain;
@@ -78,6 +79,49 @@ namespace Test.Apps.TripTimer
             var exception = Record.Exception(() => InvokeClockTickSecond(app, now.DateTime));
 
             Assert.Null(exception);
+        }
+
+        [Fact]
+        public async Task SecondTick_NoFutureDeparturesWhileActive_ReturnsPromptlyWhenAppClearIsSlow()
+        {
+            var now = Departure.AddMinutes(5);
+            var cts = new CancellationTokenSource();
+            var (app, awtrix) = Create(now, cts);
+            var timer = new Mock<ITimerService>();
+            var planner = new Mock<ITripPlannerService>();
+            planner.Setup(p => p.GetNextDepartures(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<DateTime>()))
+                .ReturnsAsync(new List<TripSummary> { TripSummaryTests.Create(Departure) });
+            typeof(TripTimerApp).GetField("_timerService", BindingFlags.NonPublic | BindingFlags.Instance)!.SetValue(app, timer.Object);
+            typeof(TripTimerApp).GetField("_tripPlanner", BindingFlags.NonPublic | BindingFlags.Instance)!.SetValue(app, planner.Object);
+
+            var appClearGate = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            awtrix.Setup(a => a.Notify(It.IsAny<AwtrixAddress>(), It.IsAny<AwtrixAppMessage>())).ReturnsAsync(true);
+            awtrix.Setup(a => a.AppUpdate(It.IsAny<AwtrixAddress>(), It.IsAny<string>(), It.IsAny<AwtrixAppMessage>())).ReturnsAsync(true);
+            awtrix.Setup(a => a.AppClear(It.IsAny<AwtrixAddress>(), It.IsAny<string>())).Returns(appClearGate.Task);
+
+            var activate = typeof(TripTimerApp).GetMethod("ActivateScheduledWork", BindingFlags.NonPublic | BindingFlags.Instance)!;
+            // Start on the thread pool (no SynchronizationContext, as in production) so the
+            // cancellation continuation is free to run inline on the cancelling thread.
+            var activation = await Task.Factory.StartNew(
+                () => (Task)activate.Invoke(app, new object[] { cts })!,
+                CancellationToken.None, TaskCreationOptions.None, TaskScheduler.Default);
+            Assert.False(activation.IsCompleted, "activation should be waiting for cancellation");
+
+            // The tick (timer loop thread) cancels the activation; it must not wait on the slow AppClear.
+            var tick = Task.Run(() => InvokeClockTickSecond(app, now.DateTime));
+            try
+            {
+                var winner = await Task.WhenAny(tick, Task.Delay(TimeSpan.FromSeconds(5)));
+                Assert.Same(tick, winner);
+                Assert.True(cts.IsCancellationRequested);
+            }
+            finally
+            {
+                appClearGate.TrySetResult(true);
+            }
+
+            await activation.WaitAsync(TimeSpan.FromSeconds(5));
+            awtrix.Verify(a => a.AppClear(It.IsAny<AwtrixAddress>(), It.IsAny<string>()), Times.Once);
         }
     }
 }

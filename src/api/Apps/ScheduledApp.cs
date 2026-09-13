@@ -150,7 +150,9 @@ namespace AwtrixSharpWeb.Apps
 
         protected static Task WaitForCancellation(CancellationToken token)
         {
-            var tcs = new TaskCompletionSource();
+            // RunContinuationsAsynchronously: Cancel() is called from tick handlers on the TimerService loop;
+            // the awaiting continuation (deactivation I/O) must never run inline on that thread.
+            var tcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             token.Register(() => tcs.TrySetResult());
             return tcs.Task;
         }
