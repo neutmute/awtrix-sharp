@@ -1,3 +1,4 @@
+using AwtrixSharpWeb.Apps.Configs;
 using AwtrixSharpWeb.Domain;
 using AwtrixSharpWeb.HostedServices;
 using AwtrixSharpWeb.Interfaces;
@@ -20,7 +21,10 @@ namespace Test.HostedServices
             IHostEnvironment? hostEnvironment = null,
             IAwtrixService? awtrixService = null,
             IMqttConnector? mqttConnector = null,
-            IClock? clock = null)
+            IClock? clock = null,
+            ITimerService? timerService = null,
+            ITripPlannerService? tripPlanner = null,
+            ISlackConnector? slackConnector = null)
         {
             config ??= new AwtrixConfig { Devices = Array.Empty<DeviceConfig>() };
 
@@ -36,13 +40,24 @@ namespace Test.HostedServices
                 NullLogger<Conductor>.Instance,
                 env,
                 Options.Create(config),
-                new Mock<ITimerService>().Object,
-                new Mock<ITripPlannerService>().Object,
+                timerService ?? new Mock<ITimerService>().Object,
+                tripPlanner ?? new Mock<ITripPlannerService>().Object,
                 awtrixService ?? new Mock<IAwtrixService>().Object,
-                new Mock<ISlackConnector>().Object,
+                slackConnector ?? new Mock<ISlackConnector>().Object,
                 mqttConnector ?? new Mock<IMqttConnector>().Object,
                 clock ?? new Clock(),
                 NullLoggerFactory.Instance);
+        }
+
+        /// <summary>
+        /// An app mock that reports the device and Type the Conductor registry keys on.
+        /// </summary>
+        public static Mock<IAwtrixApp> MockApp(string baseTopic, string type)
+        {
+            var app = new Mock<IAwtrixApp>();
+            app.Setup(a => a.AwtrixAddress).Returns(new AwtrixAddress { BaseTopic = baseTopic });
+            app.Setup(a => a.GetConfig()).Returns(AppConfig.Empty().WithName(type));
+            return app;
         }
     }
 }

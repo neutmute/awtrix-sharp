@@ -1,4 +1,3 @@
-using System.Net;
 using System.Reflection;
 using AwtrixSharpWeb.Apps.Configs;
 using AwtrixSharpWeb.Apps.Diurnal;
@@ -17,19 +16,18 @@ using Test.Services;
 namespace Test.HostedServices
 {
     /// <summary>
-    /// Covers Conductor's app factory switch, ExecuteNow's guard clauses, FindApps filtering,
-    /// and StartAsync/StopAsync. Conductor depends only on interfaces, so StartAsync runs over
-    /// mocks (ConductorTestHelper) without a broker or network.
+    /// Covers Conductor's app factory switch, the registry (FindApps) and the StartAsync basics.
+    /// Startup isolation: ConductorStartupTests. ExecuteNow: ConductorExecuteNowTests. Stop: ConductorShutdownTests.
     /// </summary>
     public class ConductorTests
     {
-        private static IAwtrixApp InvokeAppFactory(AwtrixSharpWeb.HostedServices.Conductor conductor, DeviceConfig device, AppConfig appConfig)
+        private static IAwtrixApp? InvokeAppFactory(Conductor conductor, DeviceConfig device, AppConfig appConfig)
         {
-            var method = typeof(AwtrixSharpWeb.HostedServices.Conductor).GetMethod("AppFactory", BindingFlags.NonPublic | BindingFlags.Instance);
+            var method = typeof(Conductor).GetMethod("AppFactory", BindingFlags.NonPublic | BindingFlags.Instance);
             Assert.NotNull(method);
             try
             {
-                return (IAwtrixApp)method!.Invoke(conductor, new object[] { device, appConfig })!;
+                return (IAwtrixApp?)method!.Invoke(conductor, new object[] { device, appConfig });
             }
             catch (TargetInvocationException ex) when (ex.InnerException != null)
             {
@@ -39,13 +37,12 @@ namespace Test.HostedServices
 
         private static DeviceConfig CreateDevice() => new DeviceConfig { BaseTopic = "awtrix/clock1" };
 
+        private static readonly DateTimeOffset HalfPastMidnight = new DateTimeOffset(2026, 9, 13, 0, 30, 0, TimeSpan.FromHours(10));
+
         [Fact]
         public void AppFactory_DiurnalApp_CreatesDiurnalApp()
         {
-            var conductor = ConductorTestHelper.Create();
-            var config = AppConfig.Empty().WithName(AppNames.DiurnalApp);
-
-            var app = InvokeAppFactory(conductor, CreateDevice(), config);
+            var app = InvokeAppFactory(ConductorTestHelper.Create(), CreateDevice(), AppConfig.Empty().WithName(AppNames.DiurnalApp));
 
             Assert.IsType<DiurnalApp>(app);
         }
@@ -53,10 +50,7 @@ namespace Test.HostedServices
         [Fact]
         public void AppFactory_ButtonApp_CreatesButtonApp()
         {
-            var conductor = ConductorTestHelper.Create();
-            var config = AppConfig.Empty().WithName(AppNames.ButtonApp);
-
-            var app = InvokeAppFactory(conductor, CreateDevice(), config);
+            var app = InvokeAppFactory(ConductorTestHelper.Create(), CreateDevice(), AppConfig.Empty().WithName(AppNames.ButtonApp));
 
             Assert.IsType<ButtonApp>(app);
         }
@@ -64,10 +58,7 @@ namespace Test.HostedServices
         [Fact]
         public void AppFactory_MqttRenderApp_CreatesMqttRenderApp()
         {
-            var conductor = ConductorTestHelper.Create();
-            var config = AppConfig.Empty().WithName(AppNames.MqttRenderApp);
-
-            var app = InvokeAppFactory(conductor, CreateDevice(), config);
+            var app = InvokeAppFactory(ConductorTestHelper.Create(), CreateDevice(), AppConfig.Empty().WithName(AppNames.MqttRenderApp));
 
             Assert.IsType<MqttRenderApp>(app);
         }
@@ -75,10 +66,7 @@ namespace Test.HostedServices
         [Fact]
         public void AppFactory_MqttClockRenderApp_CreatesMqttClockRenderApp()
         {
-            var conductor = ConductorTestHelper.Create();
-            var config = AppConfig.Empty().WithName(AppNames.MqttClockRenderApp);
-
-            var app = InvokeAppFactory(conductor, CreateDevice(), config);
+            var app = InvokeAppFactory(ConductorTestHelper.Create(), CreateDevice(), AppConfig.Empty().WithName(AppNames.MqttClockRenderApp));
 
             Assert.IsType<MqttClockRenderApp>(app);
         }
@@ -86,10 +74,7 @@ namespace Test.HostedServices
         [Fact]
         public void AppFactory_TripTimerApp_CreatesTripTimerApp()
         {
-            var conductor = ConductorTestHelper.Create();
-            var config = AppConfig.Empty().WithName(AppNames.TripTimerApp);
-
-            var app = InvokeAppFactory(conductor, CreateDevice(), config);
+            var app = InvokeAppFactory(ConductorTestHelper.Create(), CreateDevice(), AppConfig.Empty().WithName(AppNames.TripTimerApp));
 
             Assert.IsType<TripTimerApp>(app);
         }
@@ -97,43 +82,40 @@ namespace Test.HostedServices
         [Fact]
         public void AppFactory_SlackStatusApp_CreatesSlackStatusApp()
         {
-            var conductor = ConductorTestHelper.Create();
-            var config = AppConfig.Empty().WithName(AppNames.SlackStatusApp);
-
-            var app = InvokeAppFactory(conductor, CreateDevice(), config);
+            var app = InvokeAppFactory(ConductorTestHelper.Create(), CreateDevice(), AppConfig.Empty().WithName(AppNames.SlackStatusApp));
 
             Assert.IsType<SlackStatusApp>(app);
         }
 
         [Fact]
-        public void AppFactory_UnknownType_ThrowsNotImplementedException()
+        public void AppFactory_UnknownType_ReturnsNullWithoutThrowing()
         {
-            var conductor = ConductorTestHelper.Create();
-            var config = AppConfig.Empty().WithName("SomeUnknownAppType");
+            // CR-30: a typo in Type is logged and skipped, not fatal
+            var app = InvokeAppFactory(ConductorTestHelper.Create(), CreateDevice(), AppConfig.Empty().WithName("SomeUnknownAppType"));
 
-            Assert.Throws<NotImplementedException>(() => InvokeAppFactory(conductor, CreateDevice(), config));
+            Assert.Null(app);
         }
 
         [Fact]
         public void AppFactory_CreatedApp_HasExpectedAwtrixAddress()
         {
-            var conductor = ConductorTestHelper.Create();
-            var device = CreateDevice();
-            var config = AppConfig.Empty().WithName(AppNames.DiurnalApp);
+            var app = InvokeAppFactory(ConductorTestHelper.Create(), CreateDevice(), AppConfig.Empty().WithName(AppNames.DiurnalApp));
 
-            var app = InvokeAppFactory(conductor, device, config);
+            Assert.Equal("awtrix/clock1", app!.AwtrixAddress.BaseTopic);
+        }
 
-            Assert.Equal("awtrix/clock1", app.AwtrixAddress.BaseTopic);
+        [Fact]
+        public void AppNamesAll_ListsEveryFactoryType()
+        {
+            Assert.Equal(
+                new[] { AppNames.DiurnalApp, AppNames.ButtonApp, AppNames.TripTimerApp, AppNames.SlackStatusApp, AppNames.MqttRenderApp, AppNames.MqttClockRenderApp },
+                AppNames.All);
         }
 
         [Fact]
         public void ExecuteNow_UnknownDevice_DoesNotThrow()
         {
-            var config = new AwtrixConfig
-            {
-                Devices = new[] { CreateDevice() }
-            };
-            var conductor = ConductorTestHelper.Create(config);
+            var conductor = ConductorTestHelper.Create(new AwtrixConfig { Devices = new[] { CreateDevice() } });
 
             var exception = Record.Exception(() => conductor.ExecuteNow("awtrix/does-not-exist", AppNames.DiurnalApp));
 
@@ -144,8 +126,7 @@ namespace Test.HostedServices
         public void ExecuteNow_UnknownAppOnKnownDevice_DoesNotThrow()
         {
             var device = CreateDevice();
-            var config = new AwtrixConfig { Devices = new[] { device } };
-            var conductor = ConductorTestHelper.Create(config);
+            var conductor = ConductorTestHelper.Create(new AwtrixConfig { Devices = new[] { device } });
 
             var exception = Record.Exception(() => conductor.ExecuteNow(device.BaseTopic, "NoSuchApp"));
 
@@ -157,21 +138,17 @@ namespace Test.HostedServices
         {
             var conductor = ConductorTestHelper.Create();
 
-            var result = conductor.FindApps(AppNames.DiurnalApp);
-
-            Assert.Empty(result);
+            Assert.Empty(conductor.FindApps(AppNames.DiurnalApp));
         }
 
         [Fact]
         public void FindApps_FiltersByConfigType()
         {
             var conductor = ConductorTestHelper.Create();
-            var matching = new Mock<IAwtrixApp>();
-            matching.Setup(a => a.GetConfig()).Returns(AppConfig.Empty().WithName(AppNames.DiurnalApp));
-            var nonMatching = new Mock<IAwtrixApp>();
-            nonMatching.Setup(a => a.GetConfig()).Returns(AppConfig.Empty().WithName(AppNames.MqttRenderApp));
-
-            SetAppsList(conductor, new List<IAwtrixApp> { matching.Object, nonMatching.Object });
+            var matching = ConductorTestHelper.MockApp("awtrix/clock1", AppNames.DiurnalApp);
+            var nonMatching = ConductorTestHelper.MockApp("awtrix/clock1", AppNames.MqttRenderApp);
+            conductor.RegisterApp(matching.Object);
+            conductor.RegisterApp(nonMatching.Object);
 
             var result = conductor.FindApps(AppNames.DiurnalApp);
 
@@ -180,30 +157,18 @@ namespace Test.HostedServices
         }
 
         [Fact]
-        public void StopAsync_WithNoRegisteredApps_CompletesWithoutError()
+        public void FindApps_WithBaseTopic_ReturnsOnlyThatDevicesApps()
         {
             var conductor = ConductorTestHelper.Create();
+            var clock1 = ConductorTestHelper.MockApp("awtrix/clock1", AppNames.TripTimerApp);
+            var clock2 = ConductorTestHelper.MockApp("awtrix/clock2", AppNames.TripTimerApp);
+            conductor.RegisterApp(clock1.Object);
+            conductor.RegisterApp(clock2.Object);
 
-            var task = conductor.StopAsync(CancellationToken.None);
-
-            Assert.True(task.IsCompletedSuccessfully);
+            Assert.Same(clock2.Object, Assert.Single(conductor.FindApps(AppNames.TripTimerApp, "awtrix/clock2")));
+            Assert.Equal(2, conductor.FindApps(AppNames.TripTimerApp).Count);
+            Assert.Empty(conductor.FindApps(AppNames.TripTimerApp, "AWTRIX/CLOCK2"));
         }
-
-        [Fact]
-        public async Task StopAsync_DisposesAllRegisteredApps()
-        {
-            var conductor = ConductorTestHelper.Create();
-            var app1 = new Mock<IAwtrixApp>();
-            var app2 = new Mock<IAwtrixApp>();
-            SetAppsList(conductor, new List<IAwtrixApp> { app1.Object, app2.Object });
-
-            await conductor.StopAsync(CancellationToken.None);
-
-            app1.Verify(a => a.Dispose(), Times.Once);
-            app2.Verify(a => a.Dispose(), Times.Once);
-        }
-
-        private static readonly DateTimeOffset HalfPastMidnight = new DateTimeOffset(2026, 9, 13, 0, 30, 0, TimeSpan.FromHours(10));
 
         [Fact]
         public async Task StartAsync_HttpDevice_DoesNotCreateButtonApp()
@@ -238,7 +203,7 @@ namespace Test.HostedServices
 
             await conductor.StartAsync(CancellationToken.None);
 
-            Assert.Single(conductor.FindApps(AppNames.ButtonApp));
+            Assert.Single(conductor.FindApps(AppNames.ButtonApp, "awtrix/clock1"));
             mqtt.Verify(m => m.Subscribe("awtrix/clock1/stats/buttonLeft"), Times.Once);
             mqtt.Verify(m => m.Subscribe("awtrix/clock1/stats/buttonSelect"), Times.Once);
             mqtt.Verify(m => m.Subscribe("awtrix/clock1/stats/buttonRight"), Times.Once);
@@ -267,28 +232,6 @@ namespace Test.HostedServices
             Assert.Null(exception);
             Assert.Single(conductor.FindApps(AppNames.DiurnalApp));
             Assert.NotEmpty(offline.Requests);
-        }
-
-        [Fact]
-        public async Task StopAsync_WhenOneAppDisposeThrows_StillDisposesOthers()
-        {
-            var conductor = ConductorTestHelper.Create();
-            var throwing = new Mock<IAwtrixApp>();
-            throwing.Setup(a => a.Dispose()).Throws(new AggregateException(new HttpRequestException("offline")));
-            var healthy = new Mock<IAwtrixApp>();
-            SetAppsList(conductor, new List<IAwtrixApp> { throwing.Object, healthy.Object });
-
-            var exception = await Record.ExceptionAsync(() => conductor.StopAsync(CancellationToken.None));
-
-            Assert.Null(exception);
-            healthy.Verify(a => a.Dispose(), Times.Once);
-        }
-
-        private static void SetAppsList(AwtrixSharpWeb.HostedServices.Conductor conductor, List<IAwtrixApp> apps)
-        {
-            var field = typeof(AwtrixSharpWeb.HostedServices.Conductor).GetField("_apps", BindingFlags.NonPublic | BindingFlags.Instance);
-            Assert.NotNull(field);
-            field!.SetValue(conductor, apps);
         }
     }
 }

@@ -13,17 +13,14 @@ using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Reflection;
 using Test.Apps;
+using Test.HostedServices;
 using Xunit;
 
 namespace Test.Apps.TripTimer
 {
     /// <summary>
-    /// Conductor is a concrete class (see class comment in Conductor.cs) with a heavy constructor
-    /// (MqttPublisher, HttpPublisher, SlackConnector, MqttConnector, TimerService, TripPlannerService, ...)
-    /// and non-virtual members, so it cannot be constructed normally or mocked via Moq for a focused
-    /// controller test. RuntimeHelpers.GetUninitializedObject bypasses its constructor entirely, and the
-    /// private `_apps` field it exposes (the only piece TripTimerController.TestTimingConfig touches via
-    /// Conductor.FindApps) is then seeded directly via reflection.
+    /// TripTimerController over a real Conductor (ConductorTestHelper) whose registry is seeded
+    /// through the internal RegisterApp seam.
     /// </summary>
     public class TripTimerControllerTests
     {
@@ -59,9 +56,11 @@ namespace Test.Apps.TripTimer
 
         private static Conductor CreateConductorWithApps(IEnumerable<IAwtrixApp> apps)
         {
-            var conductor = (Conductor)RuntimeHelpers.GetUninitializedObject(typeof(Conductor));
-            var appsField = typeof(Conductor).GetField("_apps", BindingFlags.NonPublic | BindingFlags.Instance);
-            appsField.SetValue(conductor, new List<IAwtrixApp>(apps));
+            var conductor = ConductorTestHelper.Create();
+            foreach (var app in apps)
+            {
+                conductor.RegisterApp(app);
+            }
             return conductor;
         }
 

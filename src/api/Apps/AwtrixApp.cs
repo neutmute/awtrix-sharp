@@ -12,6 +12,7 @@ namespace AwtrixSharpWeb.Apps
         public AwtrixAddress AwtrixAddress { get; private set; }
 
         private IAwtrixService AwtrixService;
+        private int _initState;
 
 
         public readonly TConfig Config;
@@ -28,8 +29,17 @@ namespace AwtrixSharpWeb.Apps
             Logger = logger;
         }
 
+        /// <summary>
+        /// Runs at most once. A second call (or a call after a failed first attempt) logs and returns.
+        /// </summary>
         public async Task InitAsync()
         {
+            if (Interlocked.Exchange(ref _initState, 1) == 1)
+            {
+                Logger.LogWarning("InitAsync called more than once for {AppType} on {AwtrixAddress}; ignoring", Config.Type, AwtrixAddress);
+                return;
+            }
+
             await AppClear();
 
             Logger.LogInformation("Initializing {Config} for {AwtrixAddress}", Config.Type, AwtrixAddress);

@@ -19,10 +19,17 @@ namespace AwtrixSharpWeb.HostedServices
         public const string SlackStatusApp = "SlackStatusApp";
         public const string MqttRenderApp = "MqttRenderApp";
         public const string MqttClockRenderApp = "MqttClockRenderApp";
+
+        /// <summary>
+        /// Every Type the factory can build, listed in "unknown app type" warnings.
+        /// </summary>
+        public static readonly string[] All = { DiurnalApp, ButtonApp, TripTimerApp, SlackStatusApp, MqttRenderApp, MqttClockRenderApp };
     }
 
     /// <summary>
-    /// Orchestrates the various Awtrix apps based on configuration
+    /// Orchestrates the various Awtrix apps based on configuration.
+    /// Lifecycle: create every app, init each exactly once (isolated), bind buttons, register;
+    /// on stop, dispose every registered app.
     /// </summary>
     public class Conductor : IHostedService
     {
@@ -35,9 +42,19 @@ namespace AwtrixSharpWeb.HostedServices
         private readonly IClock _clock;
         private readonly IHostEnvironment _hostEnvironment;
         private readonly ILoggerFactory _loggerFactory;
-        AwtrixConfig _awtrixConfig;
+        private readonly AwtrixConfig _awtrixConfig;
 
-        List<IAwtrixApp> _apps;
+        private readonly object _registryLock = new();
+        private readonly List<RegisteredApp> _registry = new();
+        private int _started;
+
+        /// <summary>
+        /// An app keyed by the device it drives and its configured Type.
+        /// </summary>
+        private sealed record RegisteredApp(AwtrixAddress? Device, string Type, IAwtrixApp App)
+        {
+            public string BaseTopic => Device?.BaseTopic ?? string.Empty;
+        }
 
         public Conductor(
             ILogger<Conductor> logger
@@ -61,15 +78,48 @@ namespace AwtrixSharpWeb.HostedServices
             _clock = clock;
             _hostEnvironment = env;
             _loggerFactory = loggerFactory;
-
-            _apps = new List<IAwtrixApp>();
         }
 
         public async Task StartAsync(CancellationToken cancellationToken)
         {
-            foreach (var device in _awtrixConfig.Devices)
+            if (Interlocked.Exchange(ref _started, 1) == 1)
             {
-                ButtonApp? buttonApp = null;
+                _logger.LogWarning("Conductor.StartAsync called more than once; ignoring");
+                return;
+            }
+
+            // Phase 1: create every app for every device. Nothing is initialised yet.
+            var created = CreateApps();
+
+            // Phase 2: initialise each app exactly once; a failure is isolated to that app.
+            var initialised = await Task.WhenAll(created.Select(InitOneAsync));
+            var running = created.Where((_, index) => initialised[index]).ToList();
+
+            // Phase 3: device-local bindings between running apps, then register.
+            foreach (var deviceApps in running.GroupBy(r => r.Device))
+            {
+                BindButtons(deviceApps.ToList());
+            }
+
+            lock (_registryLock)
+            {
+                _registry.AddRange(running);
+            }
+
+            _logger.LogInformation("Conductor started {Running} of {Created} app(s)", running.Count, created.Count);
+        }
+
+        private List<RegisteredApp> CreateApps()
+        {
+            var created = new List<RegisteredApp>();
+
+            foreach (var device in _awtrixConfig.Devices ?? Array.Empty<DeviceConfig>())
+            {
+                if (device == null || string.IsNullOrWhiteSpace(device.BaseTopic))
+                {
+                    _logger.LogWarning("Skipping a device with no BaseTopic");
+                    continue;
+                }
 
                 if (device.IsHttp)
                 {
@@ -79,46 +129,96 @@ namespace AwtrixSharpWeb.HostedServices
                 }
                 else
                 {
-                    buttonApp = (ButtonApp)AppFactory(device, AppConfig.Empty().WithName(AppNames.ButtonApp));
-                    _apps.Add(buttonApp);
-
-                    buttonApp.Click += (s, e) =>
-                    {
-                        _logger.LogInformation("{Button} button clicked on {Device}", e.Button, device.BaseTopic);
-                    };
-
-                    buttonApp.DoubleClick += (s, e) =>
-                    {
-                        _logger.LogInformation("{Button} button double-clicked on {Device}", e.Button, device.BaseTopic);
-                    };
+                    AddIfCreated(created, device, AppConfig.Empty().WithName(AppNames.ButtonApp));
                 }
 
-                foreach (var appConfig in device.Apps)
+                foreach (var appConfig in device.Apps ?? new List<AppConfig>())
                 {
-                    // Log the app configuration to debug configuration binding issues
-                    LogAppConfigDetails(appConfig);
+                    AddIfCreated(created, device, appConfig);
+                }
+            }
 
-                    var app = AppFactory(device, appConfig);
+            return created;
+        }
 
-                    // Hacky binding for now
-                    if (app is TripTimerApp tripTimerApp && buttonApp != null)
+        private void AddIfCreated(List<RegisteredApp> created, DeviceConfig device, AppConfig? appConfig)
+        {
+            if (appConfig == null || string.IsNullOrWhiteSpace(appConfig.Type))
+            {
+                _logger.LogWarning("Skipping an app with no Type on device {Device}", device.BaseTopic);
+                return;
+            }
+
+            LogAppConfigDetails(appConfig);
+
+            try
+            {
+                var app = AppFactory(device, appConfig);
+                if (app != null)
+                {
+                    created.Add(new RegisteredApp(device, appConfig.Type, app));
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to create app {AppType} on device {Device}: {Reason}; skipping", appConfig.Type, device.BaseTopic, ex.Message);
+            }
+        }
+
+        private async Task<bool> InitOneAsync(RegisteredApp entry)
+        {
+            try
+            {
+                await entry.App.InitAsync();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to initialise app {AppType} on device {Device}: {Reason}; the app will not run", entry.Type, entry.BaseTopic, ex.Message);
+                await DisposeOneAsync(entry, CancellationToken.None);
+                return false;
+            }
+        }
+
+        private void BindButtons(IReadOnlyList<RegisteredApp> deviceApps)
+        {
+            var buttonApp = deviceApps.Select(r => r.App).OfType<ButtonApp>().FirstOrDefault();
+            if (buttonApp == null)
+            {
+                return;
+            }
+
+            var baseTopic = deviceApps[0].BaseTopic;
+
+            buttonApp.Click += (s, e) =>
+            {
+                _logger.LogInformation("{Button} button clicked on {Device}", e.Button, baseTopic);
+            };
+
+            buttonApp.DoubleClick += (s, e) =>
+            {
+                _logger.LogInformation("{Button} button double-clicked on {Device}", e.Button, baseTopic);
+            };
+
+            // Right double-click starts this device's trip timer now
+            foreach (var tripTimerApp in deviceApps.Select(r => r.App).OfType<TripTimerApp>())
+            {
+                buttonApp.DoubleClick += (s, e) =>
+                {
+                    if (e.Button != Button.Right)
                     {
-                        buttonApp.DoubleClick += (s, e) =>
-                        {
-                            if (e.Button == Button.Right)
-                            {
-                                tripTimerApp.ExecuteNow();
-                            }
-                        };
+                        return;
                     }
 
-                    _apps.Add(app);
-                }
-
-                foreach (var app in _apps)
-                {
-                    await app.InitAsync();
-                }
+                    try
+                    {
+                        tripTimerApp.ExecuteNow();
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Starting TripTimerApp from a double-click failed on {Device}", baseTopic);
+                    }
+                };
             }
         }
 
@@ -136,14 +236,12 @@ namespace AwtrixSharpWeb.HostedServices
             );
         }
 
-        private IAwtrixApp AppFactory(DeviceConfig device, AppConfig appConfig)
+        /// <summary>
+        /// Builds an app for a known Type; returns null (logged) for an unknown Type.
+        /// </summary>
+        private IAwtrixApp? AppFactory(DeviceConfig device, AppConfig appConfig)
         {
             IAwtrixApp app;
-
-            _logger.LogInformation(
-                "Creating {AppName} for {device}"
-                , appConfig.Name
-                , device.BaseTopic);
 
             switch (appConfig.Type)
             {
@@ -164,7 +262,7 @@ namespace AwtrixSharpWeb.HostedServices
 
                 case AppNames.ButtonApp:
                     {
-                        var appLogger = _loggerFactory.CreateLogger<MqttRenderApp>();
+                        var appLogger = _loggerFactory.CreateLogger<ButtonApp>();
                         var mqttConfig = appConfig.As<MqttAppConfig>();
                         app = new ButtonApp(appLogger, mqttConfig, device, _awtrixService, _mqttConnector);
                     }
@@ -195,14 +293,22 @@ namespace AwtrixSharpWeb.HostedServices
                     break;
 
                 default:
-                    throw new NotImplementedException(appConfig.Type);
+                    _logger.LogWarning(
+                        "Unknown app type '{AppType}' on device '{Device}'; skipping. Known types: {KnownTypes}",
+                        appConfig.Type,
+                        device.BaseTopic,
+                        string.Join(", ", AppNames.All));
+                    return null;
             }
+
+            _logger.LogInformation("Created {AppType} for {Device}", appConfig.Type, device.BaseTopic);
 
             return app;
         }
 
         public void ExecuteNow(string baseTopic, string appName)
         {
+            // Interim: still builds a transient instance (CR-07). Task 3 replaces this with a registry lookup.
             try
             {
                 var device = _awtrixConfig.Devices.FirstOrDefault(d => d.BaseTopic == baseTopic);
@@ -220,6 +326,10 @@ namespace AwtrixSharpWeb.HostedServices
                 }
 
                 var app = AppFactory(device, config);
+                if (app == null)
+                {
+                    return;
+                }
                 app.InitAsync().GetAwaiter().GetResult();
                 app.ExecuteNow();
                 _logger.LogInformation("Successfully executed app '{AppName}' on device '{BaseTopic}'", appName, baseTopic);
@@ -230,26 +340,64 @@ namespace AwtrixSharpWeb.HostedServices
             }
         }
 
-        public List<IAwtrixApp> FindApps(string appName)
+        /// <summary>
+        /// Running apps of the given Type, optionally limited to one device (ordinal comparison).
+        /// </summary>
+        public List<IAwtrixApp> FindApps(string appType, string? baseTopic = null)
         {
-            var app = _apps.FindAll(a => a.GetConfig().Type == appName);
-            return app;
+            lock (_registryLock)
+            {
+                return _registry
+                    .Where(r => Matches(r, appType, baseTopic))
+                    .Select(r => r.App)
+                    .ToList();
+            }
         }
 
-        public Task StopAsync(CancellationToken cancellationToken)
+        /// <summary>
+        /// Test seam: registers an already-constructed app, keyed by its address and config Type.
+        /// </summary>
+        internal void RegisterApp(IAwtrixApp app)
+        {
+            lock (_registryLock)
+            {
+                _registry.Add(new RegisteredApp(app.AwtrixAddress, app.GetConfig()?.Type ?? string.Empty, app));
+            }
+        }
+
+        private static bool Matches(RegisteredApp entry, string appType, string? baseTopic)
+        {
+            return string.Equals(entry.Type, appType, StringComparison.Ordinal)
+                && (baseTopic == null || string.Equals(entry.BaseTopic, baseTopic, StringComparison.Ordinal));
+        }
+
+        public async Task StopAsync(CancellationToken cancellationToken)
         {
             _logger.LogInformation("Conductor stopping");
 
-            foreach (var app in _apps)
+            List<RegisteredApp> apps;
+            lock (_registryLock)
             {
-                try
-                {
-                    app.Dispose();
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Error disposing {AppType} on {Device}", app.GetConfig()?.Type, app.AwtrixAddress);
-                }
+                apps = _registry.ToList();
+                _registry.Clear();
+            }
+
+            foreach (var entry in apps)
+            {
+                await DisposeOneAsync(entry, cancellationToken);
+            }
+        }
+
+        private Task DisposeOneAsync(RegisteredApp entry, CancellationToken cancellationToken)
+        {
+            // Interim synchronous disposal; Task 4 awaits IAsyncDisposable with a timeout.
+            try
+            {
+                entry.App.Dispose();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error disposing {AppType} on {Device}", entry.Type, entry.BaseTopic);
             }
 
             return Task.CompletedTask;

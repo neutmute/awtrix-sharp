@@ -14,6 +14,8 @@ namespace Test.Apps
     {
         public int InitializeCallCount { get; private set; }
 
+        public Exception? InitializeException { get; set; }
+
         public TestAwtrixApp(ILogger logger, AppConfig config, AwtrixAddress awtrixAddress, IAwtrixService awtrixService)
             : base(logger, config, awtrixAddress, awtrixService)
         {
@@ -22,6 +24,10 @@ namespace Test.Apps
         protected override void Initialize()
         {
             InitializeCallCount++;
+            if (InitializeException != null)
+            {
+                throw InitializeException;
+            }
         }
 
         // Public wrappers to exercise protected publish helpers directly
@@ -88,6 +94,30 @@ namespace Test.Apps
             await sut.InitAsync();
 
             _mockAwtrixService.Verify(x => x.AppClear(It.IsAny<AwtrixAddress>(), It.IsAny<string>()), Times.Never);
+            Assert.Equal(1, sut.InitializeCallCount);
+        }
+
+        [Fact]
+        public async Task InitAsync_CalledTwice_ClearsAndInitializesOnce()
+        {
+            var sut = CreateSut("MyApp");
+
+            await sut.InitAsync();
+            await sut.InitAsync();
+
+            _mockAwtrixService.Verify(x => x.AppClear(_address, "MyApp"), Times.Once);
+            Assert.Equal(1, sut.InitializeCallCount);
+        }
+
+        [Fact]
+        public async Task InitAsync_WhenFirstAttemptThrows_IsNotRetried()
+        {
+            var sut = CreateSut("MyApp");
+            sut.InitializeException = new InvalidOperationException("bad config");
+
+            await Assert.ThrowsAsync<InvalidOperationException>(() => sut.InitAsync());
+            await sut.InitAsync();
+
             Assert.Equal(1, sut.InitializeCallCount);
         }
 
