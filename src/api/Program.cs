@@ -70,8 +70,6 @@ namespace AwtrixSharpWeb
                 app.UseSwaggerUI();
             }
 
-            app.UseHttpsRedirection();
-
             app.UseMiddleware<ApiKeyMiddleware>();
 
             app.MapControllers();
