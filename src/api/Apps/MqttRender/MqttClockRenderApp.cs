@@ -35,8 +35,21 @@ namespace AwtrixSharpWeb.Apps.MqttRender
             await base.OnActivateAsync(activation);
         }
 
+        protected override async Task OnDeactivateAsync(ScheduledActivation activation)
+        {
+            // CR-09: without this every activation added a handler that kept publishing after the window ended
+            _timerService.SecondChanged -= ClockTick;
+
+            await base.OnDeactivateAsync(activation);
+        }
+
         private void ClockTick(object? sender, ClockTickEventArgs e)
         {
+            if (CurrentActivation is not { IsEnded: false })
+            {
+                return; // a tick already dispatched when the window ended
+            }
+
             _currentTime = e.Time;
             _ = FireAndLog(() => UpdateDisplay(), nameof(ClockTick));
         }

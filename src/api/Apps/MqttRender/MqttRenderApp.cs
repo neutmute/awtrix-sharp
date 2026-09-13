@@ -1,5 +1,4 @@
 using AwtrixSharpWeb.Domain;
-using AwtrixSharpWeb.HostedServices;
 using AwtrixSharpWeb.Interfaces;
 using AwtrixSharpWeb.Services;
 using MQTTnet;
@@ -7,9 +6,8 @@ using System.Text;
 
 namespace AwtrixSharpWeb.Apps.MqttRender
 {
-
     /// <summary>
-    /// Render a subscribed MQTT payload
+    /// Render a subscribed MQTT payload while the scheduled window is active
     /// </summary>
     public class MqttRenderApp : ScheduledApp<MqttAppConfig>
     {
@@ -17,11 +15,11 @@ namespace AwtrixSharpWeb.Apps.MqttRender
 
         public MqttRenderApp(
          ILogger logger
-         ,IClock clock
-         ,MqttAppConfig config
-         ,AwtrixAddress awtrixAddress
-         ,IAwtrixService awtrixService
-         ,IMqttConnector mqttConnector) : base(logger, clock, awtrixAddress, awtrixService, config)
+         , IClock clock
+         , MqttAppConfig config
+         , AwtrixAddress awtrixAddress
+         , IAwtrixService awtrixService
+         , IMqttConnector mqttConnector) : base(logger, clock, awtrixAddress, awtrixService, config)
         {
             _mqttConnector = mqttConnector;
         }
@@ -30,7 +28,9 @@ namespace AwtrixSharpWeb.Apps.MqttRender
         {
             // Attach first: a retained message can arrive before Subscribe returns (CR-33)
             _mqttConnector.MessageReceived += RawMessageReceived;
-            await _mqttConnector.Subscribe(Config.ReadTopic);
+
+            // A SUBACK that never arrives must not keep the window open past ActiveTime
+            await _mqttConnector.Subscribe(Config.ReadTopic).WaitAsync(activation.Token);
         }
 
         protected override Task OnDeactivateAsync(ScheduledActivation activation)
@@ -39,11 +39,13 @@ namespace AwtrixSharpWeb.Apps.MqttRender
             return Task.CompletedTask;
         }
 
-        /// <summary>
-        /// Make sure we are a subscriber to this topic before continuing
-        /// </summary>
         private Task RawMessageReceived(MqttApplicationMessageReceivedEventArgs arg)
         {
+            if (CurrentActivation is not { IsEnded: false })
+            {
+                return Task.CompletedTask; // a dispatch already in flight when the window ended
+            }
+
             // the client can be subscribed to multiple topics, so we need to filter here
             if (arg.ApplicationMessage.Topic == Config.ReadTopic)
             {

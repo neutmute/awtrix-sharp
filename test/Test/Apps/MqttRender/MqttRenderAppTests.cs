@@ -1,9 +1,11 @@
-﻿using AwtrixSharpWeb.Apps.Configs;
+using System.Reflection;
+using AwtrixSharpWeb.Apps.Configs;
 using AwtrixSharpWeb.Apps.MqttRender;
 using AwtrixSharpWeb.Domain;
 using AwtrixSharpWeb.Interfaces;
 using AwtrixSharpWeb.Services;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Time.Testing;
 using Moq;
 using MQTTnet;
 
@@ -15,7 +17,8 @@ namespace Test.Apps.MqttRender
         private Mock<IAwtrixService> _mockAwtrixService;
         private Mock<IMqttConnector> _mockMqttConnector;
         private AwtrixAddress _address;
-        private MockClock _clock;
+        private FakeTimeProvider _time;
+        private IClock _clock;
         private MqttAppConfig _config;
 
         private AwtrixSharpWeb.Apps.MqttRender.MqttRenderApp CreateSut(string readTopic = "read/topic")
@@ -24,7 +27,9 @@ namespace Test.Apps.MqttRender
             _mockAwtrixService = new Mock<IAwtrixService>();
             _mockMqttConnector = new Mock<IMqttConnector>();
             _address = new AwtrixAddress { BaseTopic = "test/base/topic" };
-            _clock = new MockClock(DateTimeOffset.Now);
+            // Pinned instant (CR-39); FakeTimeProvider drives ActiveTime so windows can be ended deterministically
+            _time = new FakeTimeProvider(new DateTimeOffset(2025, 1, 1, 8, 0, 0, TimeSpan.Zero));
+            _clock = new Clock(_time);
 
             _mockAwtrixService.Setup(x => x.AppClear(It.IsAny<AwtrixAddress>(), It.IsAny<string>())).ReturnsAsync(true);
             _mockAwtrixService.Setup(x => x.AppUpdate(It.IsAny<AwtrixAddress>(), It.IsAny<string>(), It.IsAny<AwtrixAppMessage>())).ReturnsAsync(true);
@@ -142,6 +147,76 @@ namespace Test.Apps.MqttRender
                 It.Is<AwtrixAppMessage>(m => m.Text == "retained value")), Times.Once);
 
             sut.Dispose();
+        }
+
+        private async Task EndWindowAsync(AwtrixSharpWeb.Apps.MqttRender.MqttRenderApp sut)
+        {
+            _time.Advance(_config.ActiveTime);
+            await sut.LastRun.WaitAsync(TimeSpan.FromSeconds(5));
+            _mockAwtrixService.Invocations.Clear();
+        }
+
+        private int MessageHandlerAdds() => _mockMqttConnector.Invocations.Count(i => i.Method.Name == "add_MessageReceived");
+
+        [Fact]
+        public async Task MessageAfterActiveTimeEnds_IsNotRendered()
+        {
+            var sut = CreateSut("read/topic");
+            sut.ExecuteNow();
+            await EndWindowAsync(sut);
+
+            _mockMqttConnector.Raise(x => x.MessageReceived += null,
+                new object[] { MqttTestHelpers.CreateReceivedArgs("read/topic", "late") });
+
+            _mockAwtrixService.Verify(x => x.AppUpdate(It.IsAny<AwtrixAddress>(), It.IsAny<string>(), It.IsAny<AwtrixAppMessage>()), Times.Never);
+            _mockMqttConnector.VerifyRemove(x => x.MessageReceived -= It.IsAny<Func<MqttApplicationMessageReceivedEventArgs, Task>>(), Times.Once);
+        }
+
+        [Fact]
+        public async Task MessageDispatchedAfterDeactivation_IsIgnored()
+        {
+            // The connector snapshots its handler list, so a dispatch in flight can reach a detached handler
+            var sut = CreateSut("read/topic");
+            sut.ExecuteNow();
+            await EndWindowAsync(sut);
+
+            var handler = typeof(AwtrixSharpWeb.Apps.MqttRender.MqttRenderApp)
+                .GetMethod("RawMessageReceived", BindingFlags.NonPublic | BindingFlags.Instance)!;
+            await (Task)handler.Invoke(sut, new object[] { MqttTestHelpers.CreateReceivedArgs("read/topic", "late") })!;
+
+            _mockAwtrixService.Verify(x => x.AppUpdate(It.IsAny<AwtrixAddress>(), It.IsAny<string>(), It.IsAny<AwtrixAppMessage>()), Times.Never);
+        }
+
+        [Fact]
+        public async Task SubscribeThatNeverCompletes_DoesNotOutliveTheWindow()
+        {
+            var sut = CreateSut("read/topic");
+            _mockMqttConnector.Setup(x => x.Subscribe("read/topic")).Returns(new TaskCompletionSource().Task);
+            sut.ExecuteNow();
+
+            _time.Advance(_config.ActiveTime);
+
+            await sut.LastRun.WaitAsync(TimeSpan.FromSeconds(5));
+            _mockMqttConnector.VerifyRemove(x => x.MessageReceived -= It.IsAny<Func<MqttApplicationMessageReceivedEventArgs, Task>>(), Times.Once);
+        }
+
+        [Fact]
+        public async Task ExecuteNow_WhileAlreadyActive_EndsAfterActiveTime_AndRearmsTheCron()
+        {
+            // WS3 review M1: POST api/app/MqttRender/start on an active app used to start a window that never
+            // ended, and the cron never fired again until restart
+            var sut = CreateSut("read/topic");
+            await sut.InitAsync();
+            sut.ExecuteNow();
+            sut.ExecuteNow();
+            Assert.True(SpinWait.SpinUntil(() => MessageHandlerAdds() == 2, TimeSpan.FromSeconds(5))); // #2 wired after #1's teardown
+
+            _time.Advance(_config.ActiveTime);
+            await sut.LastRun.WaitAsync(TimeSpan.FromSeconds(5));
+
+            _mockMqttConnector.VerifyRemove(x => x.MessageReceived -= It.IsAny<Func<MqttApplicationMessageReceivedEventArgs, Task>>(), Times.Exactly(2));
+            Assert.Equal(new DateTimeOffset(2025, 1, 1, 8, 6, 0, TimeSpan.Zero), sut.NextWakeUp);
+            await sut.DisposeAsync();
         }
     }
 }
