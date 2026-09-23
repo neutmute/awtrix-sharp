@@ -143,6 +143,7 @@ namespace AwtrixSharpWeb
         }
 
         internal const string DefaultTransportOpenDataBaseUrl = "https://api.transport.nsw.gov.au/v1/tp";
+        private const string LegacyTransportOpenDataApiRoot = "https://api.transport.nsw.gov.au/v1";
         internal const string TransportOpenDataApiKeyEnvironmentVariable = "TRANSPORTOPENDATA__APIKEY";
 
         private static void AddSettings(IServiceCollection services, IConfiguration configuration)
@@ -155,7 +156,7 @@ namespace AwtrixSharpWeb
                 config.ApiKey = FirstNonBlank(
                     configuration["TransportOpenData:ApiKey"],
                     Environment.GetEnvironmentVariable(TransportOpenDataApiKeyEnvironmentVariable)) ?? string.Empty;
-                config.BaseUrl = FirstNonBlank(configuration["TransportOpenData:BaseUrl"]) ?? DefaultTransportOpenDataBaseUrl;
+                config.BaseUrl = NormaliseTransportOpenDataBaseUrl(FirstNonBlank(configuration["TransportOpenData:BaseUrl"]));
             });
 
             services.AddOptions<SlackSettings>()
@@ -165,6 +166,22 @@ namespace AwtrixSharpWeb
             services.AddOptions<DataSettings>()
                 .Configure(settings => settings.DataDirectory = configuration[DataSettings.DataDirectoryKey])
                 .PostConfigure(settings => settings.WithEnvironmentFallback());
+        }
+
+        /// <summary>
+        /// Blank falls back to the Trip Planner default. The legacy TfNSW API root (.../v1, the library's original default,
+        /// ignored until CR-36) also means the Trip Planner: honouring it as-is requests /v1/trip, which TfNSW rejects with a
+        /// 500 SOAP fault.
+        /// </summary>
+        internal static string NormaliseTransportOpenDataBaseUrl(string? baseUrl)
+        {
+            if (string.IsNullOrWhiteSpace(baseUrl)
+                || string.Equals(baseUrl.Trim().TrimEnd('/'), LegacyTransportOpenDataApiRoot, StringComparison.OrdinalIgnoreCase))
+            {
+                return DefaultTransportOpenDataBaseUrl;
+            }
+
+            return baseUrl;
         }
 
         internal static string? FirstNonBlank(params string?[] values) =>

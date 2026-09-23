@@ -55,6 +55,20 @@ namespace Test.Configuration
             }
         }
 
+        [Theory]
+        [InlineData("https://api.transport.nsw.gov.au/v1")]
+        [InlineData("https://api.transport.nsw.gov.au/v1/")]
+        [InlineData("HTTPS://API.TRANSPORT.NSW.GOV.AU/V1")]
+        public void TransportOpenDataBaseUrl_LegacyApiRoot_IsTreatedAsTheTripPlannerUrl(string legacyBaseUrl)
+        {
+            // The library's original default was .../v1, which was ignored until CR-36; honouring it sent requests
+            // to /v1/trip, which TfNSW rejects with a 500 SOAP fault
+            using var provider = Build(new() { ["TransportOpenData:BaseUrl"] = legacyBaseUrl });
+
+            Assert.Equal("https://api.transport.nsw.gov.au/v1/tp",
+                provider.GetRequiredService<IOptions<TransportOpenDataConfig>>().Value.BaseUrl);
+        }
+
         [Fact]
         public void SlackSettings_AreReadFromConfiguration()
         {
