@@ -49,8 +49,9 @@ All default to today's behaviour; none are required.
 
 - **.NET 10.** All projects and the Docker image were upgraded from net9.0 to net10.0 (this predates the WS1-WS8 work but ships on this branch). Ensure your runtime/host matches (.NET 10 SDK/runtime).
 - **CI now gates on tests.** `.github/workflows/docker-publish.yml` runs `dotnet test` before the Docker build/push job; a failing test now blocks the image. (WS8, CR-17)
+- **`TransportOpenData:BaseUrl` is now honoured.** It was previously ignored (the client always used `https://api.transport.nsw.gov.au/v1/tp`). The library's original default, `https://api.transport.nsw.gov.au/v1`, is mapped to `.../v1/tp` so old configs keep working; any other value is used as-is, so a custom value must be the Trip Planner base (ending `/tp`). (WS6, CR-36)
 - **Test-only dependency.** `Microsoft.AspNetCore.TestHost` 10.0.0 was added to `test/Test` only; no production package changes. (WS7)
-- The test suite grew from 33 tests (pre-remediation baseline) to 690 (`test/Test`) + 22 (`test/transportOpenData.Tests`), all TDD, each workstream independently reviewed.
+- The test suite grew from 33 tests (pre-remediation baseline) to 693 (`test/Test`) + 22 (`test/transportOpenData.Tests`), all TDD, each workstream independently reviewed.
 
 ## Known limitations / follow-ups
 

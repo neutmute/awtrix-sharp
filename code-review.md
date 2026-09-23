@@ -979,7 +979,7 @@ All eight workstreams (WS1-WS8) plus the standalone CR-17 CI fix were each spec'
 | CR-33 | Low | Fixed | WS2 | 6fefd7c | MqttRenderApp attaches its handler before subscribing. |
 | CR-34 | Low | Fixed | WS5 | 5af9eb9, 45df636 | Static setter table covers all message setters; arrays emitted as JSON arrays; invariant-culture numbers; one-time warnings for bad keys/values/regex. |
 | CR-35 | Low | Fixed | WS1 | 17980c2 | Interface seams (`IMqttConnector`, `ITimerService`, `IAwtrixService`, `TimeProvider`) added for testability. |
-| CR-36 | Low | Fixed | WS6 | e0dfc97 | `TransportOpenData:BaseUrl` now applied to the generated client, with a working default. |
+| CR-36 | Low | Fixed | WS6 | e0dfc97, 80c1997 | `TransportOpenData:BaseUrl` now applied to the generated client, with a working default; the legacy `.../v1` root maps to `.../v1/tp` (honouring it as-is broke live trip lookups with a 500). |
 | CR-37 | Low | Fixed | WS6 | ff07a3a | Trip file cache: fallback to the API on a bad/missing file, midnight rollover, ID sanitisation. Feature kept (not removed), per Deferred table. |
 | CR-38 | Low | Fixed | WS6 | 9da5617 | Lenient enum handling on the generated trip-planner model. |
 | CR-39 | Low | Fixed | WS4 | 9bdf019 | ValueMap tests restored; ScheduledApp lifecycle, MqttClockRenderApp and no-departures tests added. |
