@@ -26,6 +26,31 @@ namespace Test.Services.Firmware
             Assert.Equal("{\"text\":\"[not json\"}", App(m));
         }
 
+        [Fact]
+        public void Text_ArrayOfNonObjects_IsSentAsPlainString()
+        {
+            var m = new AwtrixAppMessage().SetText("[1,2]");
+            Assert.Equal("{\"text\":\"[1,2]\"}", App(m));
+        }
+
+        /// <summary>A non-string t/c anywhere makes the whole array fall back to the plain string (never a partial array).</summary>
+        [Fact]
+        public void Text_FragmentWithNonStringValues_IsSentAsPlainString()
+        {
+            var m = new AwtrixAppMessage().SetText("[{\"t\":5}]");
+            Assert.Equal("{\"text\":\"[{\\\"t\\\":5}]\"}", App(m));
+        }
+
+        [Fact]
+        public void Text_EmptyFragmentArray_IsEmptyArray() => Assert.Equal("{\"text\":[]}", App(new AwtrixAppMessage().SetText("[]")));
+
+        [Fact]
+        public void Text_FragmentWithoutText_OmitsTextKey()
+        {
+            var m = new AwtrixAppMessage().SetText("[{\"c\":\"#FF0000\"}]");
+            Assert.Equal("{\"text\":[{\"color\":\"#FF0000\"}]}", App(m));
+        }
+
         [Theory]
         [InlineData(0, "inherit")]
         [InlineData(1, "upper")]

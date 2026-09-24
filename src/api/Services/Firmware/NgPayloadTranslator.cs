@@ -206,7 +206,11 @@ namespace AwtrixSharpWeb.Services.Firmware
         private static bool PutEnum(Dictionary<string, object?> output, string key, string? raw, params string[] names)
             => TryInt(raw, out var i) && i >= 0 && i < names.Length && Put(output, key, names[i]);
 
-        /// <summary>AWTRIX 3 fragments are [{"t","c"}]; NG wants [{"text","color"}]. Anything unparsable is sent as the plain string.</summary>
+        /// <summary>
+        /// AWTRIX 3 fragments are [{"t","c"}]; NG wants [{"text","color"}]. Anything unparsable is sent as the plain
+        /// string, and so is the whole array (never a partial one) when any element is not an object or any
+        /// fragment's text/colour value is not a JSON string. A fragment with no text key is emitted without "text".
+        /// </summary>
         private static object? TranslateText(string? raw)
         {
             if (raw == null) return null;
@@ -218,14 +222,16 @@ namespace AwtrixSharpWeb.Services.Firmware
                 var fragments = new List<Dictionary<string, object?>>();
                 foreach (var el in doc.RootElement.EnumerateArray())
                 {
+                    if (el.ValueKind != JsonValueKind.Object) return raw;
+
                     var fragment = new Dictionary<string, object?>();
-                    if (el.TryGetProperty("t", out var t)) fragment["text"] = t.GetString();
-                    else if (el.TryGetProperty("text", out var t2)) fragment["text"] = t2.GetString();
+                    if (!TryReadString(el, "t", "text", out var text)) return raw;
+                    if (text != null) fragment["text"] = text;
 
-                    if (el.TryGetProperty("c", out var c)) fragment["color"] = NgColour.Normalise(c.GetString());
-                    else if (el.TryGetProperty("color", out var c2)) fragment["color"] = NgColour.Normalise(c2.GetString());
+                    if (!TryReadString(el, "c", "color", out var colour)) return raw;
+                    var normalised = colour == null ? null : NgColour.Normalise(colour);
+                    if (normalised != null) fragment["color"] = normalised;
 
-                    if (fragment.TryGetValue("color", out var colour) && colour is null) fragment.Remove("color");
                     fragments.Add(fragment);
                 }
                 return fragments;
@@ -234,6 +240,23 @@ namespace AwtrixSharpWeb.Services.Firmware
             {
                 return raw;
             }
+        }
+
+        /// <summary>
+        /// Reads the short key, else the long key. False when the chosen key is present but not a string;
+        /// true with a null value when neither key is present.
+        /// </summary>
+        private static bool TryReadString(JsonElement fragment, string shortKey, string longKey, out string? value)
+        {
+            value = null;
+            if (!fragment.TryGetProperty(shortKey, out var property) && !fragment.TryGetProperty(longKey, out property))
+            {
+                return true;
+            }
+
+            if (property.ValueKind != JsonValueKind.String) return false;
+            value = property.GetString();
+            return true;
         }
     }
 }
