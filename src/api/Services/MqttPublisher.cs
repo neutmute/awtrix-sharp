@@ -1,4 +1,5 @@
 using AwtrixSharpWeb.Interfaces;
+using AwtrixSharpWeb.Services.Firmware;
 
 namespace AwtrixSharpWeb.Services
 {
@@ -14,15 +15,15 @@ namespace AwtrixSharpWeb.Services
             _mqttConnector = mqttConnector;
         }
 
-        public override async Task<bool> Publish(string topic, string payload)
+        public override async Task<bool> Publish(AwtrixRequest request)
         {
             try
             {
-                return await _mqttConnector.PublishAsync(topic, payload);
+                return await _mqttConnector.PublishAsync(request.Address, request.Payload);
             }
             catch (Exception ex)
             {
-                Logger.LogWarning(ex, "MQTT publish to {Topic} failed", topic);
+                Logger.LogWarning(ex, "MQTT publish to {Topic} failed", request.Address);
                 return false;
             }
         }

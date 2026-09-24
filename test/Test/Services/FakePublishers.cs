@@ -1,6 +1,7 @@
 using System.Net;
 using AwtrixSharpWeb.HostedServices;
 using AwtrixSharpWeb.Services;
+using AwtrixSharpWeb.Services.Firmware;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using AwtrixSharpWeb.Domain;
@@ -16,6 +17,7 @@ namespace Test.Services
     {
         public string? LastUrl { get; private set; }
         public string? LastPayload { get; private set; }
+        public HttpMethod? LastMethod { get; private set; }
         public int PublishCallCount { get; private set; }
         public bool ReturnValue { get; set; } = true;
         public Exception? ThrowOnPublish { get; set; }
@@ -25,10 +27,11 @@ namespace Test.Services
         {
         }
 
-        public override Task<bool> Publish(string url, string payload)
+        public override Task<bool> Publish(AwtrixRequest request)
         {
-            LastUrl = url;
-            LastPayload = payload;
+            LastUrl = request.Address;
+            LastPayload = request.Payload;
+            LastMethod = request.Method;
             PublishCallCount++;
             if (ThrowOnPublish != null)
             {
@@ -46,6 +49,7 @@ namespace Test.Services
     {
         public string? LastUrl { get; private set; }
         public string? LastPayload { get; private set; }
+        public HttpMethod? LastMethod { get; private set; }
         public int PublishCallCount { get; private set; }
         public bool ReturnValue { get; set; } = true;
         public Exception? ThrowOnPublish { get; set; }
@@ -56,10 +60,11 @@ namespace Test.Services
         {
         }
 
-        public override Task<bool> Publish(string url, string payload)
+        public override Task<bool> Publish(AwtrixRequest request)
         {
-            LastUrl = url;
-            LastPayload = payload;
+            LastUrl = request.Address;
+            LastPayload = request.Payload;
+            LastMethod = request.Method;
             PublishCallCount++;
             if (ThrowOnPublish != null)
             {

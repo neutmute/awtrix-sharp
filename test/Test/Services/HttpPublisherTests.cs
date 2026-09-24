@@ -1,5 +1,7 @@
 using System.Net;
+using System.Net.Http;
 using AwtrixSharpWeb.Services;
+using AwtrixSharpWeb.Services.Firmware;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Test.Services
@@ -103,6 +105,62 @@ namespace Test.Services
         public void DefaultTimeout_IsFiveSeconds()
         {
             Assert.Equal(TimeSpan.FromSeconds(5), HttpPublisher.DefaultTimeout);
+        }
+
+        [Fact]
+        public async Task Publish_DeleteWithEmptyPayload_SendsNoBody()
+        {
+            var handler = StubHttpMessageHandler.Returning(HttpStatusCode.OK);
+            var publisher = CreatePublisher(handler, out _);
+
+            var result = await publisher.Publish(new AwtrixRequest("http://localhost:8080/api/v1/apps/x", HttpMethod.Delete, string.Empty));
+
+            Assert.True(result);
+            var request = Assert.Single(handler.Requests);
+            Assert.Equal(HttpMethod.Delete, request.Method);
+            Assert.Null(request.Content);
+        }
+
+        [Fact]
+        public async Task Publish_PutWithPayload_SendsJsonBodyWithPut()
+        {
+            var handler = StubHttpMessageHandler.Returning(HttpStatusCode.OK);
+            var publisher = CreatePublisher(handler, out _);
+
+            await publisher.Publish(new AwtrixRequest("http://localhost:8080/api/v1/apps/pushed/x", HttpMethod.Put, "{\"text\":\"hi\"}"));
+
+            var request = Assert.Single(handler.Requests);
+            Assert.Equal(HttpMethod.Put, request.Method);
+            Assert.Equal("application/json", request.Content!.Headers.ContentType!.MediaType);
+            Assert.Equal("{\"text\":\"hi\"}", handler.RequestBodies[0]);
+        }
+
+        [Fact]
+        public async Task Publish_PostWithEmptyPayload_StillSendsEmptyJsonBody()
+        {
+            // AWTRIX 3 clears a custom app with an empty POST body; that must keep working
+            var handler = StubHttpMessageHandler.Returning(HttpStatusCode.OK);
+            var publisher = CreatePublisher(handler, out _);
+
+            await publisher.Publish("http://192.168.1.50/api/custom?name=x", string.Empty);
+
+            var request = Assert.Single(handler.Requests);
+            Assert.NotNull(request.Content);
+            Assert.Equal(string.Empty, handler.RequestBodies[0]);
+        }
+
+        [Fact]
+        public async Task Publish_4xxWithBody_ReturnsFalse()
+        {
+            var handler = new StubHttpMessageHandler((_, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.UnprocessableEntity)
+            {
+                Content = new StringContent("{\"error\":\"unknown field color\"}")
+            }));
+            var publisher = CreatePublisher(handler, out _);
+
+            var result = await publisher.Publish(new AwtrixRequest("http://localhost:8080/api/v1/apps/pushed/x", HttpMethod.Put, "{}"));
+
+            Assert.False(result);
         }
 
         private sealed class TrackingContent : StringContent

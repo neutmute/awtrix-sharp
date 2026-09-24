@@ -1,5 +1,6 @@
 using AwtrixSharpWeb.Domain;
 using AwtrixSharpWeb.Services;
+using AwtrixSharpWeb.Services.Firmware;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Test.Services
@@ -12,16 +13,18 @@ namespace Test.Services
     {
         public string? LastUrl { get; private set; }
         public string? LastPayload { get; private set; }
+        public HttpMethod? LastMethod { get; private set; }
         public bool ReturnValue { get; set; } = true;
 
         public RecordingPublisher() : base(NullLogger<RecordingPublisher>.Instance)
         {
         }
 
-        public override Task<bool> Publish(string url, string payload)
+        public override Task<bool> Publish(AwtrixRequest request)
         {
-            LastUrl = url;
-            LastPayload = payload;
+            LastUrl = request.Address;
+            LastPayload = request.Payload;
+            LastMethod = request.Method;
             return Task.FromResult(ReturnValue);
         }
     }
@@ -89,6 +92,27 @@ namespace Test.Services
             var publisher = new RecordingPublisher();
 
             Assert.Equal("awtrix/clock1/custom/MyApp", publisher.BuildCustomAppUrl("awtrix/clock1", "MyApp"));
+        }
+
+        [Fact]
+        public async Task Publish_UrlAndPayload_IsAPostRequest()
+        {
+            var publisher = new RecordingPublisher();
+
+            await publisher.Publish("topic/x", "{}");
+
+            Assert.Equal(HttpMethod.Post, publisher.LastMethod);
+            Assert.Equal("topic/x", publisher.LastUrl);
+            Assert.Equal("{}", publisher.LastPayload);
+        }
+
+        [Fact]
+        public void AwtrixRequest_Post_DefaultsMethodAndEmptyDroppedKeys()
+        {
+            var request = AwtrixRequest.Post("a/b", "x");
+
+            Assert.Equal(HttpMethod.Post, request.Method);
+            Assert.Empty(request.DroppedKeys);
         }
     }
 }
