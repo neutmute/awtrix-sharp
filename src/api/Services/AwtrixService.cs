@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using AwtrixSharpWeb.Domain;
 using AwtrixSharpWeb.Services.Firmware;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -9,6 +10,9 @@ namespace AwtrixSharpWeb.Services
         private readonly HttpPublisher _httpPublisher;
         private readonly MqttPublisher _mqttPublisher;
         private readonly ILogger _logger;
+
+        /// <summary>(BaseTopic, key) pairs already warned about: a misconfigured ValueMap is visible once, not every tick.</summary>
+        private readonly ConcurrentDictionary<(string, string), byte> _warnedDroppedKeys = new();
 
         public AwtrixService(HttpPublisher httpPublisher, MqttPublisher mqttPublisher, ILogger<AwtrixService>? logger = null)
         {
@@ -142,6 +146,17 @@ namespace AwtrixSharpWeb.Services
             {
                 var firmware = AwtrixFirmware.For(address.Firmware);
                 var request = build(firmware);
+                foreach (var key in request.DroppedKeys)
+                {
+                    if (_warnedDroppedKeys.TryAdd((baseTopic, key), 0))
+                    {
+                        _logger.LogWarning("{Firmware} has no equivalent for '{Key}' (or its value is invalid); it was dropped for {BaseTopic}", firmware.Kind, key, baseTopic);
+                    }
+                    else
+                    {
+                        _logger.LogDebug("Dropped '{Key}' again for {BaseTopic}", key, baseTopic);
+                    }
+                }
                 var publisher = ResolvePublisher(baseTopic);
                 _logger.LogDebug("{Publisher} {Method} {Address} payload: {Payload}", publisher.GetType().Name, request.Method, request.Address, request.Payload);
                 var delivered = await publisher.Publish(request);

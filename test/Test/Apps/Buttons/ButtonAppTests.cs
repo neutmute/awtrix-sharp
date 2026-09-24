@@ -134,5 +134,21 @@ namespace Test.Apps.Buttons
             Assert.Equal(2, clickCount);
             Assert.Equal(0, doubleClickCount);
         }
+
+        [Fact]
+        public async Task InitAsync_NgDevice_SubscribesToNgButtonTopics()
+        {
+            var sut = CreateSut();
+            // CreateSut built the topics from _address at construction time, so build a fresh app with the NG address
+            var ngAddress = new AwtrixAddress { BaseTopic = "test/base/topic", Firmware = AwtrixSharpWeb.Services.Firmware.AwtrixFirmwareKind.NG };
+            var ng = new ButtonApp(_mockLogger.Object, new AppConfig(), ngAddress, _mockAwtrixService.Object, _mockMqttConnector.Object);
+
+            await ng.InitAsync();
+
+            _mockMqttConnector.Verify(x => x.Subscribe("test/base/topic/state/buttons/left"), Times.Once);
+            _mockMqttConnector.Verify(x => x.Subscribe("test/base/topic/state/buttons/right"), Times.Once);
+            _mockMqttConnector.Verify(x => x.Subscribe("test/base/topic/state/buttons/select"), Times.Once);
+            _mockMqttConnector.Verify(x => x.Subscribe(It.Is<string>(t => t.Contains("stats/button"))), Times.Never);
+        }
     }
 }

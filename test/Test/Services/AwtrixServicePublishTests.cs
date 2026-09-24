@@ -1,5 +1,8 @@
 using AwtrixSharpWeb.Domain;
 using AwtrixSharpWeb.Services;
+using AwtrixSharpWeb.Services.Firmware;
+using Microsoft.Extensions.Logging;
+using Moq;
 
 namespace Test.Services
 {
@@ -271,6 +274,52 @@ namespace Test.Services
 
             Assert.Equal(0, mqtt.PublishCallCount);
             Assert.Equal(0, http.PublishCallCount);
+        }
+
+        [Fact]
+        public async Task AppUpdate_NgDevice_UsesNgTopicAndPayload()
+        {
+            var (service, _, mqtt) = CreateService();
+            var address = new AwtrixAddress { BaseTopic = "awtrix/clock2", Firmware = AwtrixFirmwareKind.NG };
+
+            await service.AppUpdate(address, "X", new AwtrixAppMessage().SetText("42").SetColor("FF0000"));
+
+            Assert.Equal("awtrix/clock2/cmd/apps/pushed/X", mqtt.LastUrl);
+            Assert.Equal("{\"text\":\"42\",\"textColor\":\"#FF0000\"}", mqtt.LastPayload);
+        }
+
+        [Fact]
+        public async Task AppClear_NgHttpDevice_SendsDelete()
+        {
+            var (service, http, _) = CreateService();
+            var address = new AwtrixAddress { BaseTopic = "http://localhost:8080", Firmware = AwtrixFirmwareKind.NG };
+
+            await service.AppClear(address, "X");
+
+            Assert.Equal("http://localhost:8080/api/v1/apps/X", http.LastUrl);
+            Assert.Equal(HttpMethod.Delete, http.LastMethod);
+        }
+
+        [Fact]
+        public async Task AppUpdate_NgDroppedKey_LogsWarningOncePerDeviceAndKey()
+        {
+            var logger = new Mock<ILogger<AwtrixService>>();
+            logger.Setup(l => l.IsEnabled(It.IsAny<LogLevel>())).Returns(true);
+            var service = new AwtrixService(new FakeHttpPublisher(), new FakeMqttPublisher(), logger.Object);
+            var clock2 = new AwtrixAddress { BaseTopic = "awtrix/clock2", Firmware = AwtrixFirmwareKind.NG };
+            var clock3 = new AwtrixAddress { BaseTopic = "awtrix/clock3", Firmware = AwtrixFirmwareKind.NG };
+            var message = new AwtrixAppMessage().SetText("x").SetTopText(true);
+
+            await service.AppUpdate(clock2, "X", message);
+            await service.AppUpdate(clock2, "X", message);
+            await service.AppUpdate(clock3, "X", message);
+
+            logger.Verify(l => l.Log(LogLevel.Warning, It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((v, _) => v.ToString()!.Contains("topText") && v.ToString()!.Contains("awtrix/clock2")),
+                null, It.IsAny<Func<It.IsAnyType, Exception?, string>>()), Times.Once);
+            logger.Verify(l => l.Log(LogLevel.Warning, It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((v, _) => v.ToString()!.Contains("topText") && v.ToString()!.Contains("awtrix/clock3")),
+                null, It.IsAny<Func<It.IsAnyType, Exception?, string>>()), Times.Once);
         }
     }
 }
