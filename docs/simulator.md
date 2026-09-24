@@ -28,14 +28,10 @@ dotnet run --project src/api
 User secrets are only loaded in the Development environment, so the real broker and clock are unreachable
 (`test/Test/Configuration/SimulatorEnvironmentTests.cs` pins this).
 
-**Warning:** `AWTRIXSHARP_`-prefixed environment variables override every other configuration source,
-including `appsettings.Simulator.json` (see the precedence note in `Program.SetupConfiguration`). If your
-shell profile persistently exports real broker settings (e.g. `AWTRIXSHARP_MQTT__HOST`,
-`AWTRIXSHARP_MQTT__USERNAME`, `AWTRIXSHARP_MQTT__PASSWORD`), those values leak into the Simulator
-environment too and `MqttClockRenderApp` (or any MQTT-reading app) will connect to the real broker with
-real credentials. Unset any `AWTRIXSHARP_MQTT__*` variables in the shell before running in Simulator mode,
-or confirm none are set with `env | grep AWTRIXSHARP_` (`Get-ChildItem Env: | Where-Object Name -like
-'AWTRIXSHARP_*'` on PowerShell).
+User secrets are not loaded outside the Development environment, and the Simulator environment additionally
+ignores `AWTRIXSHARP_`-prefixed environment variables (they are only registered for other environments), so
+the real broker, clock and Slack workspace cannot be reached even if your shell exports those variables.
+Both guarantees are pinned by `test/Test/Configuration/SimulatorEnvironmentTests.cs`.
 
 ## Optional: MQTT path
 

@@ -14,6 +14,12 @@ namespace AwtrixSharpWeb
 {
     public class Program
     {
+        /// <summary>
+        /// The local-only environment name that targets the AWTRIX NG simulator. Running under this
+        /// environment must never be able to reach real hardware or brokers.
+        /// </summary>
+        public const string SimulatorEnvironmentName = "Simulator";
+
         public static void Main(string[] args)
         {
             var builder = WebApplication.CreateBuilder(args);
@@ -21,7 +27,7 @@ namespace AwtrixSharpWeb
 
             var services = builder.Services;
 
-            SetupConfiguration(configuration, services);
+            SetupConfiguration(configuration, services, builder.Environment.EnvironmentName);
 
             ConfigureLogging(builder);
 
@@ -192,9 +198,22 @@ namespace AwtrixSharpWeb
         /// environment variables and the command line (in that order). Only the AWTRIXSHARP_ provider is added
         /// here, last, so it keeps overriding everything (CR-13: appsettings.json is not re-added).
         /// </summary>
-        internal static void SetupConfiguration(ConfigurationManager configuration, IServiceCollection services)
+        internal static void SetupConfiguration(ConfigurationManager configuration, IServiceCollection services) =>
+            SetupConfiguration(configuration, services, environmentName: null);
+
+        /// <summary>
+        /// As above, but skips registering the AWTRIXSHARP_ environment-variable provider when
+        /// <paramref name="environmentName"/> is the local-only Simulator environment. Real broker/clock/Slack
+        /// credentials are commonly exported as AWTRIXSHARP_-prefixed environment variables on developer
+        /// machines (outside of .NET User Secrets), and since this provider is added last it would otherwise
+        /// override appsettings.Simulator.json and defeat the Simulator environment's safety guarantee.
+        /// </summary>
+        internal static void SetupConfiguration(ConfigurationManager configuration, IServiceCollection services, string? environmentName)
         {
-            configuration.AddEnvironmentVariables("AWTRIXSHARP_");
+            if (!string.Equals(environmentName, SimulatorEnvironmentName, StringComparison.OrdinalIgnoreCase))
+            {
+                configuration.AddEnvironmentVariables("AWTRIXSHARP_");
+            }
 
             services.Configure<MqttSettings>(configuration.GetSection("Mqtt"));
             services.Configure<AwtrixConfig>(configuration.GetSection("Awtrix"));

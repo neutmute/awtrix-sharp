@@ -46,7 +46,7 @@ namespace Test.Configuration
                 EnvironmentName = environment,
                 ApplicationName = "awtrix-api",
             });
-            AwtrixSharpWeb.Program.SetupConfiguration(builder.Configuration, builder.Services);
+            AwtrixSharpWeb.Program.SetupConfiguration(builder.Configuration, builder.Services, environment);
             _builders.Add(builder);
             return builder;
         }
@@ -54,7 +54,7 @@ namespace Test.Configuration
         [Fact]
         public void Simulator_DoesNotLoadUserSecrets()
         {
-            var builder = CreateBuilder("Simulator");
+            var builder = CreateBuilder(AwtrixSharpWeb.Program.SimulatorEnvironmentName);
 
             var sources = ((IConfigurationBuilder)builder.Configuration).Sources;
             Assert.DoesNotContain(sources, s => s is JsonConfigurationSource json && json.Path != null && json.Path.EndsWith("secrets.json", StringComparison.OrdinalIgnoreCase));
@@ -72,7 +72,7 @@ namespace Test.Configuration
         [Fact]
         public void Simulator_LoadsSimulatorSettingsFile()
         {
-            var builder = CreateBuilder("Simulator");
+            var builder = CreateBuilder(AwtrixSharpWeb.Program.SimulatorEnvironmentName);
 
             var sources = ((IConfigurationBuilder)builder.Configuration).Sources.OfType<JsonConfigurationSource>().Select(s => s.Path).ToList();
             Assert.Contains("appsettings.Simulator.json", sources);
@@ -81,13 +81,41 @@ namespace Test.Configuration
         [Fact]
         public void Simulator_TargetsOnlyTheLocalSimulator()
         {
-            var builder = CreateBuilder("Simulator");
-            var config = builder.Configuration.GetSection("Awtrix").Get<AwtrixSharpWeb.Domain.AwtrixConfig>()!;
+            const string name = "AWTRIXSHARP_MQTT__HOST";
+            var previous = Environment.GetEnvironmentVariable(name);
+            Environment.SetEnvironmentVariable(name, "real-broker.invalid");
+            try
+            {
+                var builder = CreateBuilder(AwtrixSharpWeb.Program.SimulatorEnvironmentName);
+                var config = builder.Configuration.GetSection("Awtrix").Get<AwtrixSharpWeb.Domain.AwtrixConfig>()!;
 
-            var device = Assert.Single(config.Devices);
-            Assert.Equal("http://localhost:8080", device.BaseTopic);
-            Assert.Equal(AwtrixSharpWeb.Services.Firmware.AwtrixFirmwareKind.NG, device.Firmware);
-            Assert.Equal("localhost", builder.Configuration["Mqtt:Host"]);
+                var device = Assert.Single(config.Devices);
+                Assert.Equal("http://localhost:8080", device.BaseTopic);
+                Assert.Equal(AwtrixSharpWeb.Services.Firmware.AwtrixFirmwareKind.NG, device.Firmware);
+                Assert.Equal("localhost", builder.Configuration["Mqtt:Host"]);
+            }
+            finally
+            {
+                Environment.SetEnvironmentVariable(name, previous);
+            }
+        }
+
+        [Fact]
+        public void Production_StillLoadsAwtrixSharpPrefixedVariables()
+        {
+            const string name = "AWTRIXSHARP_MQTT__HOST";
+            var previous = Environment.GetEnvironmentVariable(name);
+            Environment.SetEnvironmentVariable(name, "real-broker.invalid");
+            try
+            {
+                var builder = CreateBuilder("Production");
+
+                Assert.Equal("real-broker.invalid", builder.Configuration["Mqtt:Host"]);
+            }
+            finally
+            {
+                Environment.SetEnvironmentVariable(name, previous);
+            }
         }
 
         public void Dispose()
