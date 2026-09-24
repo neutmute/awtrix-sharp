@@ -1,7 +1,11 @@
+using AwtrixSharpWeb.Domain;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Configuration.Json;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using System.Text.Json;
+using TransportOpenData;
 
 namespace Test.Configuration
 {
@@ -14,6 +18,9 @@ namespace Test.Configuration
     public class SimulatorEnvironmentTests : IDisposable
     {
         private const string MqttHostVariable = "AWTRIXSHARP_MQTT__HOST";
+        private const string SlackAppTokenVariable = SlackSettings.AppTokenEnvironmentVariable;
+        private const string SlackUserIdVariable = SlackSettings.UserIdEnvironmentVariable;
+        private const string TransportOpenDataApiKeyVariable = AwtrixSharpWeb.Program.TransportOpenDataApiKeyEnvironmentVariable;
         private readonly List<WebApplicationBuilder> _builders = new();
         private static readonly string ApiProjectDir = ResolveApiProjectDir();
 
@@ -105,6 +112,66 @@ namespace Test.Configuration
 
                 Assert.Equal("real-broker.invalid", builder.Configuration["Mqtt:Host"]);
                 Assert.Contains(JsonSourcePaths(builder), path => string.Equals(path, "appsettings.json", StringComparison.OrdinalIgnoreCase));
+            });
+
+        [Fact]
+        public void Simulator_IgnoresSlackEnvironmentFallback() =>
+            ProcessEnvironmentCollection.WithVariable(SlackAppTokenVariable, "xapp-test", () =>
+            ProcessEnvironmentCollection.WithVariable(SlackUserIdVariable, "U-TEST", () =>
+            {
+                var builder = CreateBuilder(AwtrixSharpWeb.Program.SimulatorEnvironmentName);
+                builder.Services.AddLogging();
+                AwtrixSharpWeb.Program.AddAwtrixServices(builder.Services, builder.Configuration, environmentName: "Simulator");
+
+                using var provider = builder.Services.BuildServiceProvider();
+                var slack = provider.GetRequiredService<IOptions<SlackSettings>>().Value;
+
+                Assert.True(string.IsNullOrEmpty(slack.AppToken));
+                Assert.True(string.IsNullOrEmpty(slack.UserId));
+            }));
+
+        [Fact]
+        public void Production_StillUsesSlackEnvironmentFallback() =>
+            ProcessEnvironmentCollection.WithVariable(SlackAppTokenVariable, "xapp-test", () =>
+            ProcessEnvironmentCollection.WithVariable(SlackUserIdVariable, "U-TEST", () =>
+            {
+                var builder = CreateBuilder("Production");
+                builder.Services.AddLogging();
+                AwtrixSharpWeb.Program.AddAwtrixServices(builder.Services, builder.Configuration, environmentName: "Production");
+
+                using var provider = builder.Services.BuildServiceProvider();
+                var slack = provider.GetRequiredService<IOptions<SlackSettings>>().Value;
+
+                Assert.Equal("xapp-test", slack.AppToken);
+                Assert.Equal("U-TEST", slack.UserId);
+            }));
+
+        [Fact]
+        public void Simulator_IgnoresTransportOpenDataApiKeyFallback() =>
+            ProcessEnvironmentCollection.WithVariable(TransportOpenDataApiKeyVariable, "key-test", () =>
+            {
+                var builder = CreateBuilder(AwtrixSharpWeb.Program.SimulatorEnvironmentName);
+                builder.Services.AddLogging();
+                AwtrixSharpWeb.Program.AddAwtrixServices(builder.Services, builder.Configuration, environmentName: "Simulator");
+
+                using var provider = builder.Services.BuildServiceProvider();
+                var apiKey = provider.GetRequiredService<IOptions<TransportOpenDataConfig>>().Value.ApiKey;
+
+                Assert.True(string.IsNullOrEmpty(apiKey));
+            });
+
+        [Fact]
+        public void Production_StillUsesTransportOpenDataApiKeyFallback() =>
+            ProcessEnvironmentCollection.WithVariable(TransportOpenDataApiKeyVariable, "key-test", () =>
+            {
+                var builder = CreateBuilder("Production");
+                builder.Services.AddLogging();
+                AwtrixSharpWeb.Program.AddAwtrixServices(builder.Services, builder.Configuration, environmentName: "Production");
+
+                using var provider = builder.Services.BuildServiceProvider();
+                var apiKey = provider.GetRequiredService<IOptions<TransportOpenDataConfig>>().Value.ApiKey;
+
+                Assert.Equal("key-test", apiKey);
             });
 
         [Fact]

@@ -217,7 +217,10 @@ Purpose: run the real service against the NG simulator on this machine, never th
   base `appsettings.json` is not loaded. `SimulatorEnvironmentTests` builds the host with
   `EnvironmentName = "Simulator"` and pins both (plus no user-secrets source, and a single simulator
   device with only `DiurnalApp` and `MqttClockRenderApp`); `Production_StillLoadsAwtrixSharpPrefixedVariables`
-  proves the skip is Simulator-only.
+  proves the skip is Simulator-only. The Slack (`AWTRIXSHARP_SLACK__*`), Data
+  (`AWTRIXSHARP_SETTINGS__DATA_DIRECTORY`) and TransportOpenData (`TRANSPORTOPENDATA__APIKEY`) literal
+  environment-variable fallbacks in `Program.AddSettings` are disabled the same way in the Simulator
+  environment, pinned by `SimulatorEnvironmentTests`.
 - `docs/simulator.md` runbook: build the simulator (`pio run -e native_sim`), run it, optional local
   Mosquitto, `dotnet run --project src/api --launch-profile Simulator` (a plain `dotnet run` uses the
   first launch profile, which pins `ASPNETCORE_ENVIRONMENT=Development`), what to look for

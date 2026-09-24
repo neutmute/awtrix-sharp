@@ -31,8 +31,10 @@ The launch profile is required: a plain `dotnet run` uses the first profile in
 and `MqttClockRenderApp` only) and points MQTT at `localhost`. User secrets are only loaded in the Development
 environment; in the Simulator environment `AWTRIXSHARP_`-prefixed environment variables are ignored and the base
 `appsettings.json` is not loaded, so the real broker, clock and Slack workspace cannot be reached even if your
-shell exports those variables. `test/Test/Configuration/SimulatorEnvironmentTests.cs` pins all of this, including
-the `Simulator` launch profile.
+shell exports those variables. The Slack, Data and TransportOpenData literal environment-variable fallbacks
+(`AWTRIXSHARP_SLACK__*`, `AWTRIXSHARP_SETTINGS__DATA_DIRECTORY`, `TRANSPORTOPENDATA__APIKEY`) are also disabled in
+the Simulator environment, so a developer's real Slack app token can't leak into a Simulator run either.
+`test/Test/Configuration/SimulatorEnvironmentTests.cs` pins all of this, including the `Simulator` launch profile.
 
 ## Optional: MQTT path
 
