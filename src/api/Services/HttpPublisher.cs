@@ -19,14 +19,6 @@ namespace AwtrixSharpWeb.Services
             _httpClientFactory = httpClientFactory;
         }
 
-        /// <summary>
-        /// Awtrix 3 HTTP API: POST http://[ip]/api/custom?name=[app]
-        /// </summary>
-        public override string BuildCustomAppUrl(string baseTopic, string appName)
-        {
-            return $"{baseTopic.TrimEnd('/')}/custom?name={Uri.EscapeDataString(appName)}";
-        }
-
         private const int MaxLoggedBodyLength = 512;
 
         public override async Task<bool> Publish(AwtrixRequest request)
