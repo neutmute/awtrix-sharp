@@ -190,6 +190,26 @@ Use the `ValueMaps` to transform the slack status to include an icon or shorten 
 }
 ```
 
+## AWTRIX NG
+
+AwtrixSharp drives both [AWTRIX 3](https://blueforcer.github.io/awtrix3) and
+[AWTRIX NG](https://blueforcer.github.io/awtrix-ng/) clocks. Add `"Firmware": "NG"` to a device; the default is
+`Awtrix3`, so existing configs are unchanged.
+
+```json
+{ "BaseTopic": "awtrix/clock2", "Firmware": "NG", "Apps": [ ... ] }
+```
+
+`BaseTopic` for NG is the device's `mqttPrefix` (MQTT) or its root URL such as `http://192.168.1.51` (HTTP).
+
+App config keeps the AWTRIX 3 vocabulary (`Color`, `Duration` in seconds, `PushIcon` 0/1/2, `Bar`, `ProgressC`,
+Diurnal `Brightness=`/`GlobalTextColor=`); the service translates it for NG. Keys with no NG equivalent
+(`TopText`) are dropped with one warning per device. NG-only features (multiple icons, palette animation,
+scripts) are not exposed. NG effect names differ from AWTRIX 3 and are passed through unchanged; an unknown
+name is rejected by the clock with a 422 that appears in the log.
+
+To test against the NG simulator without a clock, see [docs/simulator.md](docs/simulator.md).
+
 ## Environment Variables
 
 | Variable                       | Example Value        | Description                |
