@@ -18,6 +18,14 @@
       "dotnetRunMessages": true,
       "applicationUrl": "http://localhost:5115"
     },
+    "Simulator": {
+      "commandName": "Project",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Simulator"
+      },
+      "dotnetRunMessages": true,
+      "applicationUrl": "http://localhost:5115"
+    },
     "Container (Dockerfile)": {
       "commandName": "Docker",
       "launchUrl": "{Scheme}://{ServiceHost}:{ServicePort}",

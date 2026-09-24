@@ -1,15 +1,19 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Configuration.Json;
+using System.Text.Json;
 
 namespace Test.Configuration
 {
     /// <summary>
     /// The Simulator environment is the only one the app may be run in locally: it must not load user secrets
     /// (which hold the real broker and clock) and must target only the NG simulator on localhost.
+    /// Tests that set AWTRIXSHARP_MQTT__HOST run in the non-parallel process-environment collection.
     /// </summary>
+    [Collection(ProcessEnvironmentCollection.Name)]
     public class SimulatorEnvironmentTests : IDisposable
     {
+        private const string MqttHostVariable = "AWTRIXSHARP_MQTT__HOST";
         private readonly List<WebApplicationBuilder> _builders = new();
         private static readonly string ApiProjectDir = ResolveApiProjectDir();
 
@@ -79,12 +83,8 @@ namespace Test.Configuration
         }
 
         [Fact]
-        public void Simulator_TargetsOnlyTheLocalSimulator()
-        {
-            const string name = "AWTRIXSHARP_MQTT__HOST";
-            var previous = Environment.GetEnvironmentVariable(name);
-            Environment.SetEnvironmentVariable(name, "real-broker.invalid");
-            try
+        public void Simulator_TargetsOnlyTheLocalSimulator() =>
+            ProcessEnvironmentCollection.WithVariable(MqttHostVariable, "real-broker.invalid", () =>
             {
                 var builder = CreateBuilder(AwtrixSharpWeb.Program.SimulatorEnvironmentName);
                 var config = builder.Configuration.GetSection("Awtrix").Get<AwtrixSharpWeb.Domain.AwtrixConfig>()!;
@@ -92,31 +92,35 @@ namespace Test.Configuration
                 var device = Assert.Single(config.Devices);
                 Assert.Equal("http://localhost:8080", device.BaseTopic);
                 Assert.Equal(AwtrixSharpWeb.Services.Firmware.AwtrixFirmwareKind.NG, device.Firmware);
+                Assert.Equal(new[] { "DiurnalApp", "MqttClockRenderApp" }, device.Apps.Select(a => a.Type).ToArray());
                 Assert.Equal("localhost", builder.Configuration["Mqtt:Host"]);
-            }
-            finally
-            {
-                Environment.SetEnvironmentVariable(name, previous);
-            }
-        }
+                Assert.DoesNotContain(JsonSourcePaths(builder), path => string.Equals(path, "appsettings.json", StringComparison.OrdinalIgnoreCase));
+            });
 
         [Fact]
-        public void Production_StillLoadsAwtrixSharpPrefixedVariables()
-        {
-            const string name = "AWTRIXSHARP_MQTT__HOST";
-            var previous = Environment.GetEnvironmentVariable(name);
-            Environment.SetEnvironmentVariable(name, "real-broker.invalid");
-            try
+        public void Production_StillLoadsAwtrixSharpPrefixedVariables() =>
+            ProcessEnvironmentCollection.WithVariable(MqttHostVariable, "real-broker.invalid", () =>
             {
                 var builder = CreateBuilder("Production");
 
                 Assert.Equal("real-broker.invalid", builder.Configuration["Mqtt:Host"]);
-            }
-            finally
-            {
-                Environment.SetEnvironmentVariable(name, previous);
-            }
+                Assert.Contains(JsonSourcePaths(builder), path => string.Equals(path, "appsettings.json", StringComparison.OrdinalIgnoreCase));
+            });
+
+        [Fact]
+        public void LaunchSettings_HasSimulatorProfilePinnedToSimulatorEnvironment()
+        {
+            var path = Path.Combine(ApiProjectDir, "Properties", "launchSettings.json");
+            using var doc = JsonDocument.Parse(File.ReadAllText(path), new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip });
+
+            var profile = doc.RootElement.GetProperty("profiles").GetProperty(AwtrixSharpWeb.Program.SimulatorEnvironmentName);
+
+            Assert.Equal("Simulator", profile.GetProperty("environmentVariables").GetProperty("ASPNETCORE_ENVIRONMENT").GetString());
+            Assert.Equal("Project", profile.GetProperty("commandName").GetString());
         }
+
+        private static List<string?> JsonSourcePaths(WebApplicationBuilder builder) =>
+            ((IConfigurationBuilder)builder.Configuration).Sources.OfType<JsonConfigurationSource>().Select(s => s.Path).ToList();
 
         public void Dispose()
         {

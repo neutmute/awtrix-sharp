@@ -4,6 +4,7 @@ using AwtrixSharpWeb.Interfaces;
 using AwtrixSharpWeb.Middleware;
 using AwtrixSharpWeb.Services;
 using AwtrixSharpWeb.Services.TripPlanner;
+using Microsoft.Extensions.Configuration.Json;
 using Microsoft.Extensions.Options;
 using Microsoft.OpenApi.Models;
 using System.Reflection;
@@ -195,28 +196,54 @@ namespace AwtrixSharpWeb
 
         /// <summary>
         /// WebApplication.CreateBuilder already loads appsettings.json, appsettings.{Env}.json, user secrets,
-        /// environment variables and the command line (in that order). Only the AWTRIXSHARP_ provider is added
-        /// here, last, so it keeps overriding everything (CR-13: appsettings.json is not re-added).
+        /// environment variables and the command line (in that order). Outside the Simulator environment the
+        /// AWTRIXSHARP_ provider is added here, last, so it keeps overriding everything (CR-13: appsettings.json
+        /// is not re-added). This overload has no environment name, so it always applies that non-Simulator path.
         /// </summary>
         internal static void SetupConfiguration(ConfigurationManager configuration, IServiceCollection services) =>
             SetupConfiguration(configuration, services, environmentName: null);
 
         /// <summary>
-        /// As above, but skips registering the AWTRIXSHARP_ environment-variable provider when
-        /// <paramref name="environmentName"/> is the local-only Simulator environment. Real broker/clock/Slack
-        /// credentials are commonly exported as AWTRIXSHARP_-prefixed environment variables on developer
-        /// machines (outside of .NET User Secrets), and since this provider is added last it would otherwise
-        /// override appsettings.Simulator.json and defeat the Simulator environment's safety guarantee.
+        /// As above, except in the local-only Simulator environment (<paramref name="environmentName"/> equal to
+        /// <see cref="SimulatorEnvironmentName"/>), which must never reach real hardware or brokers:
+        /// <list type="bullet">
+        /// <item>The base appsettings.json source is removed. Configuration arrays merge by index, so otherwise the
+        /// Simulator device would inherit the base file's extra apps (and their keys); appsettings.Simulator.json is
+        /// self-contained.</item>
+        /// <item>The AWTRIXSHARP_ environment-variable provider is not registered. Real broker/clock/Slack
+        /// credentials are commonly exported as AWTRIXSHARP_ variables on developer machines, and since this
+        /// provider is added last it would otherwise override appsettings.Simulator.json.</item>
+        /// </list>
+        /// Every other environment keeps the CR-13 behaviour.
         /// </summary>
         internal static void SetupConfiguration(ConfigurationManager configuration, IServiceCollection services, string? environmentName)
         {
-            if (!string.Equals(environmentName, SimulatorEnvironmentName, StringComparison.OrdinalIgnoreCase))
+            var isSimulator = string.Equals(environmentName, SimulatorEnvironmentName, StringComparison.OrdinalIgnoreCase);
+
+            if (isSimulator)
+            {
+                RemoveBaseAppSettings(configuration);
+            }
+            else
             {
                 configuration.AddEnvironmentVariables("AWTRIXSHARP_");
             }
 
             services.Configure<MqttSettings>(configuration.GetSection("Mqtt"));
             services.Configure<AwtrixConfig>(configuration.GetSection("Awtrix"));
+        }
+
+        private static void RemoveBaseAppSettings(IConfigurationBuilder configuration)
+        {
+            var sources = configuration.Sources;
+            for (var i = sources.Count - 1; i >= 0; i--)
+            {
+                if (sources[i] is JsonConfigurationSource json
+                    && string.Equals(json.Path, "appsettings.json", StringComparison.OrdinalIgnoreCase))
+                {
+                    sources.RemoveAt(i);
+                }
+            }
         }
 
         private static void ConfigureLogging(WebApplicationBuilder builder)
