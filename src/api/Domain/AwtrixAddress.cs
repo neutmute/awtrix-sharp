@@ -1,3 +1,5 @@
+using AwtrixSharpWeb.Services.Firmware;
+
 namespace AwtrixSharpWeb.Domain
 {
 
@@ -7,6 +9,12 @@ namespace AwtrixSharpWeb.Domain
         /// eg: "awtrix/clock1" (MQTT) or "http://192.168.1.50/api" (HTTP)
         /// </summary>
         public string BaseTopic { get; set; }
+
+        /// <summary>
+        /// Firmware dialect of the device. Defaults to Awtrix3 so existing configs bind unchanged.
+        /// For NG, BaseTopic is the device's mqttPrefix (MQTT) or its root URL such as http://192.168.1.51 (HTTP).
+        /// </summary>
+        public AwtrixFirmwareKind Firmware { get; set; } = AwtrixFirmwareKind.Awtrix3;
 
         /// <summary>
         /// True when BaseTopic addresses the device's HTTP API. Get-only, so ignored by configuration binding.
