@@ -20,18 +20,19 @@ terminal rendering.
 ## Run AwtrixSharp against it
 
 ```powershell
-$env:ASPNETCORE_ENVIRONMENT = "Simulator"
-dotnet run --project src/api
+dotnet run --project src/api --launch-profile Simulator
 ```
 
-`appsettings.Simulator.json` lists one NG device at `http://localhost:8080` and points MQTT at `localhost`.
-User secrets are only loaded in the Development environment, so the real broker and clock are unreachable
-(`test/Test/Configuration/SimulatorEnvironmentTests.cs` pins this).
+The launch profile is required: a plain `dotnet run` uses the first profile in
+`src/api/Properties/launchSettings.json`, which pins `ASPNETCORE_ENVIRONMENT=Development` and overrides your shell
+(the alternative is `$env:ASPNETCORE_ENVIRONMENT = "Simulator"` with `dotnet run --project src/api --no-launch-profile`).
 
-User secrets are not loaded outside the Development environment, and the Simulator environment additionally
-ignores `AWTRIXSHARP_`-prefixed environment variables (they are only registered for other environments), so
-the real broker, clock and Slack workspace cannot be reached even if your shell exports those variables.
-Both guarantees are pinned by `test/Test/Configuration/SimulatorEnvironmentTests.cs`.
+`appsettings.Simulator.json` is self-contained: it lists one NG device at `http://localhost:8080` (apps `DiurnalApp`
+and `MqttClockRenderApp` only) and points MQTT at `localhost`. User secrets are only loaded in the Development
+environment; in the Simulator environment `AWTRIXSHARP_`-prefixed environment variables are ignored and the base
+`appsettings.json` is not loaded, so the real broker, clock and Slack workspace cannot be reached even if your
+shell exports those variables. `test/Test/Configuration/SimulatorEnvironmentTests.cs` pins all of this, including
+the `Simulator` launch profile.
 
 ## Optional: MQTT path
 

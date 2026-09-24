@@ -36,8 +36,9 @@ payload with HTTP 422 when it contains an unknown key. Sources used for the tabl
   - NG HTTP: the device root, e.g. `http://192.168.1.51` or `http://localhost:8080`. A trailing
     `/`, `/api` or `/api/v1` is tolerated and stripped, so copying an AWTRIX 3 style address does
     not double the path.
-- An unrecognised `Firmware` string fails configuration binding, which is the existing behaviour for
-  bad enums; `Conductor` already logs and skips a device that fails to bind.
+- An unrecognised `Firmware` string fails configuration binding. `Conductor` binds the whole
+  `IOptions<AwtrixConfig>`, so the bad enum value throws when `Conductor` is constructed and the
+  service fails to start (fail-fast for the whole service, not a per-device skip).
 
 No other config changes. `ValueMaps` keys and Diurnal `Brightness=` / `GlobalTextColor=` keep
 their AWTRIX 3 vocabulary; the NG profile translates.
@@ -210,12 +211,16 @@ Purpose: run the real service against the NG simulator on this machine, never th
 - `src/api/appsettings.Simulator.json`: `Mqtt:Host` `localhost`; one device
   `{ "BaseTopic": "http://localhost:8080", "Firmware": "NG", "Apps": [DiurnalApp, MqttClockRenderApp] }`
   using the same app configs as `appsettings.json` minus TripTimer and Slack (they need secrets).
+  The file is self-contained: configuration arrays merge by index, so the base file must not load.
 - Safety relies on `WebApplication.CreateBuilder` loading user secrets **only in Development**.
-  A test in `test/Test/Configuration` builds the host with `EnvironmentName = "Simulator"` and
-  asserts no user-secrets configuration source is present and `Awtrix:Devices[0].BaseTopic` is the
-  simulator address, and that `AWTRIXSHARP_` variables still override (existing precedence rule).
+  In the Simulator environment the `AWTRIXSHARP_` environment-variable provider is not added and the
+  base `appsettings.json` is not loaded. `SimulatorEnvironmentTests` builds the host with
+  `EnvironmentName = "Simulator"` and pins both (plus no user-secrets source, and a single simulator
+  device with only `DiurnalApp` and `MqttClockRenderApp`); `Production_StillLoadsAwtrixSharpPrefixedVariables`
+  proves the skip is Simulator-only.
 - `docs/simulator.md` runbook: build the simulator (`pio run -e native_sim`), run it, optional local
-  Mosquitto, `ASPNETCORE_ENVIRONMENT=Simulator dotnet run --project src/api`, what to look for
+  Mosquitto, `dotnet run --project src/api --launch-profile Simulator` (a plain `dotnet run` uses the
+  first launch profile, which pins `ASPNETCORE_ENVIRONMENT=Development`), what to look for
   (pushed app on the preview grid, `GET /api/v1/apps`, 422 bodies in the service log).
 - The owner's "never run locally" rule is relaxed only for this environment.
 - PlatformIO is not installed on the implementation machine, so the simulator run is a manual

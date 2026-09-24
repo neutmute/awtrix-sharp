@@ -74,7 +74,7 @@ Every app config can include a `ValueMaps[]` array. Each entry has a `ValueMatch
 
 - **MQTT** (`MqttPublisher`) and **HTTP** (`HttpPublisher`) are dumb transports: they send an `AwtrixRequest(Address, Method, Payload)`.
 - `AwtrixAddress.BaseTopic` (starts with `http` or not) selects the transport; `AwtrixAddress.Firmware` (`Awtrix3` default, `NG`) selects the dialect via `AwtrixFirmware.For(...)` in `src/api/Services/Firmware/`. `Awtrix3Firmware` is transitional and deletable; `NgFirmware` + `NgPayloadTranslator` map the AWTRIX 3 config vocabulary onto NG topics/endpoints/keys. See `docs/superpowers/specs/2026-09-24-awtrix-ng-firmware-design.md`.
-- Never run the app in the Development environment (user secrets point at the real broker/clock). `ASPNETCORE_ENVIRONMENT=Simulator` targets only the NG simulator (`docs/simulator.md`).
+- Never run the app in the Development environment (user secrets point at the real broker/clock). The Simulator environment targets only the NG simulator (`docs/simulator.md`); start it with `dotnet run --project src/api --launch-profile Simulator` (setting `ASPNETCORE_ENVIRONMENT` alone is not enough, because the default launch profile overrides it with Development).
 
 ### TransportOpenData Library
 

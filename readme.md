@@ -201,6 +201,7 @@ AwtrixSharp drives both [AWTRIX 3](https://blueforcer.github.io/awtrix3) and
 ```
 
 `BaseTopic` for NG is the device's `mqttPrefix` (MQTT) or its root URL such as `http://192.168.1.51` (HTTP).
+`Firmware` must be `Awtrix3` or `NG`; any other value stops the service at startup.
 
 App config keeps the AWTRIX 3 vocabulary (`Color`, `Duration` in seconds, `PushIcon` 0/1/2, `Bar`, `ProgressC`,
 Diurnal `Brightness=`/`GlobalTextColor=`); the service translates it for NG. Keys with no NG equivalent
