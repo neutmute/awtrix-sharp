@@ -52,7 +52,7 @@ Configure it with
        "ValueMatcher": "",
        "Icon": "1667",
        "Text": "Go now!",
-       "Color": "#FFFFFF"
+       "TextColor": "#FFFFFF"
      }
    ]
 }
@@ -73,8 +73,8 @@ For example, dim down to red at night. Brighten up to white during the day
    "Type": "DiurnalApp",
    "Config": {
      "0600": "Brightness=8",
-     "0700": "GlobalTextColor=#FFFFFF",
-     "1900": "GlobalTextColor=#FF0000",
+     "0700": "TextColor=#FFFFFF",
+     "1900": "TextColor=#FF0000",
      "2100": "Brightness=1"
    }
  }
@@ -99,12 +99,12 @@ Using the `ValueMap` section, mutate the display configuration to show red text 
      {
        "ValueMatcher": "^-",
        "Icon": "52465",
-       "Color": "#FF0000"
+       "TextColor": "#FF0000"
      },
      {
        "ValueMatcher": "^(?!-).*",
        "Icon": "52464",
-       "Color": "#FFDE21"
+       "TextColor": "#FFDE21"
      }
    ]
  }
@@ -174,17 +174,17 @@ Use the `ValueMaps` to transform the slack status to include an icon or shorten 
       "ValueMatcher": "busy",
       "Icon": "38789",
       "Text": "Busy",
-      "Color": "#FF0000",
-      "Background": "#FFFFFF",
-      "Duration": "60"
+      "TextColor": "#FF0000",
+      "BackgroundColor": "#FFFFFF",
+      "DurationMs": "60000"
     },
     {
       "ValueMatcher": "lunch",
       "Icon": "21380",
       "Text": "lunch",
-      "Color": "#FFFFFF",
-      "Background": "#000000",
-      "Duration": "60"
+      "TextColor": "#FFFFFF",
+      "BackgroundColor": "#000000",
+      "DurationMs": "60000"
     }
   ]
 }
@@ -192,22 +192,21 @@ Use the `ValueMaps` to transform the slack status to include an icon or shorten 
 
 ## AWTRIX NG
 
-AwtrixSharp drives both [AWTRIX 3](https://blueforcer.github.io/awtrix3) and
-[AWTRIX NG](https://blueforcer.github.io/awtrix-ng/) clocks. Add `"Firmware": "NG"` to a device; the default is
-`Awtrix3`, so existing configs are unchanged.
+AwtrixSharp drives [AWTRIX NG](https://blueforcer.github.io/awtrix-ng/) clocks and nothing else. AWTRIX 3 is
+not supported.
 
-```json
-{ "BaseTopic": "awtrix/clock2", "Firmware": "NG", "Apps": [ ... ] }
-```
+`BaseTopic` is the device's `mqttPrefix` (MQTT, e.g. `awtrix/clock1`) or its root URL (HTTP, e.g.
+`http://192.168.1.51`, no `/api` suffix).
 
-`BaseTopic` for NG is the device's `mqttPrefix` (MQTT) or its root URL such as `http://192.168.1.51` (HTTP).
-`Firmware` must be `Awtrix3` or `NG`; any other value stops the service at startup.
+App config uses the NG payload vocabulary directly. ValueMap keys are the NG payload names
+(`TextColor`, `BackgroundColor`, `DurationMs`, `IconMode`, `Palette`, `ProgressColor`, `LineChart`, ...),
+colours are `#RRGGBB`, `#RGB` or `r,g,b`, durations are milliseconds, and enum-valued keys take NG names
+(`IconMode: pushOnce`, `TextCase: upper`, `LifetimeExpiry: mark`). Rainbow text is
+`"Palette": "Rainbow", "TextColor": "palette"`. DiurnalApp entries are `Brightness=` and `TextColor=`.
+Unknown keys are reported once at startup and ignored.
 
-App config keeps the AWTRIX 3 vocabulary (`Color`, `Duration` in seconds, `PushIcon` 0/1/2, `Bar`, `ProgressC`,
-Diurnal `Brightness=`/`GlobalTextColor=`); the service translates it for NG. Keys with no NG equivalent
-(`TopText`) are dropped with one warning per device. NG-only features (multiple icons, palette animation,
-scripts) are not exposed. NG effect names differ from AWTRIX 3 and are passed through unchanged; an unknown
-name is rejected by the clock with a 422 that appears in the log.
+Configs written for AWTRIX 3 must be converted; see [docs/config-migration.md](docs/config-migration.md)
+(or ask Claude Code to migrate it: the `awtrix3-config-migration` skill applies the same rules).
 
 To test against the NG simulator without a clock, see [docs/simulator.md](docs/simulator.md).
 

@@ -54,7 +54,7 @@ appsettings.json → Conductor → App Factory → AwtrixApp instances
 | `AwtrixApp<TConfig>` | `src/api/Apps/AwtrixApp.cs` | Abstract base for all apps; holds publish helpers |
 | `ScheduledApp` | `src/api/Apps/ScheduledApp.cs` | Base for cron-scheduled apps (uses NCrontab) |
 | `AwtrixService` | `src/api/Services/AwtrixService.cs` | Sends Notify/Dismiss/Update/Clear to a device |
-| `AwtrixAppMessage` | `src/api/Domain/AwtrixAppMessage.cs` | Fluent builder for display messages (extends `Dictionary<string,string>`) |
+| `AwtrixAppMessage` | `src/api/Domain/AwtrixAppMessage.cs` | Fluent builder for NG payloads (extends `Dictionary<string,object?>`) |
 | `MqttConnector` | `src/api/HostedServices/MqttConnector.cs` | Maintains MQTT broker connection (MQTTnet 5) |
 | `SlackConnector` | `src/api/HostedServices/SlackConnector.cs` | Slack Socket Mode listener |
 
@@ -73,7 +73,7 @@ Every app config can include a `ValueMaps[]` array. Each entry has a `ValueMatch
 ### Two Publisher Transports
 
 - **MQTT** (`MqttPublisher`) and **HTTP** (`HttpPublisher`) are dumb transports: they send an `AwtrixRequest(Address, Method, Payload)`.
-- `AwtrixAddress.BaseTopic` (starts with `http` or not) selects the transport; `AwtrixAddress.Firmware` (`Awtrix3` default, `NG`) selects the dialect via `AwtrixFirmware.For(...)` in `src/api/Services/Firmware/`. `Awtrix3Firmware` is transitional and deletable; `NgFirmware` + `NgPayloadTranslator` map the AWTRIX 3 config vocabulary onto NG topics/endpoints/keys. See `docs/superpowers/specs/2026-09-24-awtrix-ng-firmware-design.md`.
+- `AwtrixAddress.BaseTopic` (starts with `http` or not) selects the transport. `AwtrixEndpoints` (`src/api/Services/AwtrixEndpoints.cs`) is the single AWTRIX NG addressing table; `AwtrixAppMessage` / `AwtrixSettings` are NG payloads with typed values, so there is no translation layer. Config vocabulary is NG's; `docs/config-migration.md` and the `awtrix3-config-migration` skill convert AWTRIX 3 configs. See `docs/superpowers/specs/2026-09-26-ng-native-design.md`.
 - Never run the app in the Development environment (user secrets point at the real broker/clock). The Simulator environment targets only the NG simulator (`docs/simulator.md`); start it with `dotnet run --project src/api --launch-profile Simulator` (setting `ASPNETCORE_ENVIRONMENT` alone is not enough, because the default launch profile overrides it with Development).
 
 ### TransportOpenData Library
