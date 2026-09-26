@@ -92,6 +92,9 @@ namespace Test.Domain
         {
             Assert.False(AwtrixAppMessage.TryParseIntArray("1,x", out _));
             Assert.False(AwtrixAppMessage.TryParseIntArray("", out _));
+            Assert.False(AwtrixAppMessage.TryParseIntArray(null, out _));
+            Assert.False(AwtrixAppMessage.TryParseIntArray("1,,2", out _));
+            Assert.False(AwtrixAppMessage.TryParseIntArray("1.5", out _));
         }
 
         [Fact]

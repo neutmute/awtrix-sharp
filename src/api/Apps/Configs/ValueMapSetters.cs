@@ -60,14 +60,27 @@ namespace AwtrixSharpWeb.Apps.Configs
             {
                 return false;
             }
-            if (AwtrixAppMessage.TryParseIntMatrix(value, out var matrix))
+
+            // A value with row/item separators must be a well-formed RGB matrix: every row exactly 3 ints,
+            // each 0-255, and no empty rows (e.g. a trailing ";"). Anything else with separators is malformed
+            // and rejected, rather than silently treated as a name.
+            if (value.Contains(',') || value.Contains(';'))
             {
+                var rows = value.Split(';', StringSplitOptions.TrimEntries);
+                var matrix = new int[rows.Length][];
+                for (var i = 0; i < rows.Length; i++)
+                {
+                    if (!AwtrixColour.TryParse(rows[i], out var colour) || colour is not int[] rgb)
+                    {
+                        return false;
+                    }
+                    matrix[i] = rgb;
+                }
                 message.SetPalette(matrix);
+                return true;
             }
-            else
-            {
-                message.SetPalette(value.Trim());
-            }
+
+            message.SetPalette(value.Trim());
             return true;
         }
 

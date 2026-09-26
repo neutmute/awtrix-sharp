@@ -135,6 +135,11 @@ namespace AwtrixSharpWeb.Controllers
         [HttpPost("awtrix/settings/text-color")]
         public async Task<IActionResult> SetTextColor(string hexColor = "#00FF00")
         {
+            if (!AwtrixColour.TryParse(hexColor, out _))
+            {
+                return BadRequest("hexColor must be #RRGGBB, #RGB or r,g,b");
+            }
+
             foreach (var device in _awtrixConfig.Devices)
             {
                 var message = new AwtrixSettings().SetTextColor(hexColor);

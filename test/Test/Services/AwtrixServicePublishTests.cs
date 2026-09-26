@@ -48,6 +48,34 @@ namespace Test.Services
         }
 
         [Fact]
+        public async Task Notify_WithNullText_DelegatesToDismiss()
+        {
+            var (service, _, mqtt) = CreateService();
+            var address = new AwtrixAddress { BaseTopic = "awtrix/clock1" };
+            var message = new AwtrixAppMessage().SetText((string)null!);
+
+            var result = await service.Notify(address, message);
+
+            Assert.True(result);
+            Assert.Equal("awtrix/clock1/cmd/notify/dismiss", mqtt.LastUrl);
+            Assert.Equal(string.Empty, mqtt.LastPayload);
+        }
+
+        [Fact]
+        public async Task Notify_WithEmptyFragments_DelegatesToDismiss()
+        {
+            var (service, _, mqtt) = CreateService();
+            var address = new AwtrixAddress { BaseTopic = "awtrix/clock1" };
+            var message = new AwtrixAppMessage().SetText(Array.Empty<TextFragment>());
+
+            var result = await service.Notify(address, message);
+
+            Assert.True(result);
+            Assert.Equal("awtrix/clock1/cmd/notify/dismiss", mqtt.LastUrl);
+            Assert.Equal(string.Empty, mqtt.LastPayload);
+        }
+
+        [Fact]
         public async Task Notify_WithWhitespaceText_DelegatesToDismiss()
         {
             var (service, http, mqtt) = CreateService();

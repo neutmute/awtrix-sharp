@@ -17,6 +17,20 @@ namespace Test.Domain
         public void Text_WhenNotSet_ReturnsNull() => Assert.Null(new AwtrixAppMessage().Text);
 
         [Fact]
+        public void SetText_Null_RemovesKey()
+        {
+            var m = new AwtrixAppMessage().SetText("hello").SetText((string)null!);
+            Assert.False(m.ContainsKey("text"));
+        }
+
+        [Fact]
+        public void SetIcon_Null_RemovesKey()
+        {
+            var m = new AwtrixAppMessage().SetIcon("1667").SetIcon((string)null!);
+            Assert.False(m.ContainsKey("icon"));
+        }
+
+        [Fact]
         public void Text_WhenFragments_ReturnsNull()
         {
             var m = new AwtrixAppMessage().SetText(new[] { new TextFragment("a", "#FF0000") });

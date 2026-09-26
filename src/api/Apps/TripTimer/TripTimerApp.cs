@@ -335,7 +335,6 @@ namespace AwtrixSharpWeb.Apps.TripTimer
                     new TextFragment(clockText, nowColor),
                     new TextFragment($" ->{nextAlarm:mm}", "#FF0000"),
                 })
-                .SetStack(false)
                 .SetDuration(TimeSpan.FromMinutes(5))
                 .SetProgress(useProgress);
 

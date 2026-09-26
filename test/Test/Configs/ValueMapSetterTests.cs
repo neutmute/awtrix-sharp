@@ -240,5 +240,19 @@ namespace Test.Configs
             new ValueMap { { "Palette", value } }.Decorate(message, _logger.Object);
             Assert.Equal(value.Trim(), message["palette"]);
         }
+
+        [Theory]
+        [InlineData("255,0,0;0,x")]
+        [InlineData("1,2;3,4")]
+        [InlineData("300,0,0")]
+        [InlineData("255,0,0;")]
+        public void Decorate_MalformedPaletteMatrix_IsRejected(string value)
+        {
+            Assert.False(ValueMapSetters.IsValidValue("Palette", value));
+
+            var message = new AwtrixAppMessage();
+            new ValueMap { { "Palette", value } }.Decorate(message, _logger.Object);
+            Assert.False(message.ContainsKey("palette"));
+        }
     }
 }

@@ -143,5 +143,19 @@ namespace Test.Controllers
             Assert.Equal("awtrix/clock1/cmd/settings", mqtt.LastUrl);
             Assert.Equal("{\"textColor\":\"#123456\"}", mqtt.LastPayload);
         }
+
+        [Fact]
+        public async Task SetTextColor_InvalidColour_ReturnsBadRequest_WithoutPublishing()
+        {
+            var device = new DeviceConfig { BaseTopic = "awtrix/clock1" };
+            var (controller, http, mqtt) = CreateController(new AwtrixConfig { Devices = new[] { device } });
+
+            var result = await controller.SetTextColor("not-a-colour");
+
+            var badRequest = Assert.IsType<BadRequestObjectResult>(result);
+            Assert.Equal("hexColor must be #RRGGBB, #RGB or r,g,b", badRequest.Value);
+            Assert.Equal(0, http.PublishCallCount);
+            Assert.Equal(0, mqtt.PublishCallCount);
+        }
     }
 }

@@ -1,5 +1,6 @@
 using AwtrixSharpWeb.Domain;
 using Microsoft.Extensions.Logging.Abstractions;
+using System.Linq;
 
 namespace AwtrixSharpWeb.Services
 {
@@ -73,7 +74,7 @@ namespace AwtrixSharpWeb.Services
                 return Task.FromResult(false);
             }
 
-            if (!message.ContainsKey("text") || (message["text"] is string s && string.IsNullOrWhiteSpace(s)))
+            if (IsBlankText(message))
             {
                 return Dismiss(awtrixAddress);
             }
@@ -117,6 +118,22 @@ namespace AwtrixSharpWeb.Services
             }
 
             return SafePublish(awtrixAddress, () => AwtrixEndpoints.Dismiss(awtrixAddress));
+        }
+
+        /// <summary>No "text" key, a null/whitespace string, or a fragment array that is empty or whose fragments are all whitespace.</summary>
+        private static bool IsBlankText(AwtrixAppMessage message)
+        {
+            if (!message.TryGetValue("text", out var value))
+            {
+                return true;
+            }
+
+            return value switch
+            {
+                string s => string.IsNullOrWhiteSpace(s),
+                TextFragment[] fragments => fragments.Length == 0 || fragments.All(f => string.IsNullOrWhiteSpace(f.Text)),
+                _ => false,
+            };
         }
 
         /// <summary>Serializes the message without keys the target operation cannot carry; each removal is logged at Debug.</summary>

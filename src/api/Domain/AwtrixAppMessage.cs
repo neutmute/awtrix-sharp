@@ -28,7 +28,7 @@ namespace AwtrixSharpWeb.Domain
         /// <summary>The plain text, or null when unset or when the text is a fragment array.</summary>
         public string? Text => TryGetValue(TextKey, out var value) && value is string s ? s : null;
 
-        public AwtrixAppMessage SetText(string value) => Put(TextKey, value);
+        public AwtrixAppMessage SetText(string? value) => Put(TextKey, value);
 
         public AwtrixAppMessage SetText(IEnumerable<TextFragment> fragments) => Put(TextKey, fragments.ToArray());
 
@@ -48,7 +48,7 @@ namespace AwtrixSharpWeb.Domain
 
         public AwtrixAppMessage SetBackgroundColor(string value) => Put("backgroundColor", AwtrixColour.Parse(value));
 
-        public AwtrixAppMessage SetPalette(string name) => Put("palette", name);
+        public AwtrixAppMessage SetPalette(string? name) => Put("palette", name);
 
         public AwtrixAppMessage SetPalette(int[][] colours)
         {
@@ -65,7 +65,7 @@ namespace AwtrixSharpWeb.Domain
 
         public AwtrixAppMessage SetTextFadeMs(int value) => Put("textFadeMs", value);
 
-        public AwtrixAppMessage SetIcon(string value) => Put("icon", value);
+        public AwtrixAppMessage SetIcon(string? value) => Put("icon", value);
 
         public AwtrixAppMessage SetIconMode(IconMode value) => Put("iconMode", value);
 
@@ -85,7 +85,7 @@ namespace AwtrixSharpWeb.Domain
 
         public AwtrixAppMessage SetChartAutoscale(bool value) => Put("chartAutoscale", value);
 
-        public AwtrixAppMessage SetOverlay(string value) => Put("overlay", value);
+        public AwtrixAppMessage SetOverlay(string? value) => Put("overlay", value);
 
         public AwtrixAppMessage SetProgress(int value) => Put("progress", value);
 
@@ -95,13 +95,22 @@ namespace AwtrixSharpWeb.Domain
 
         public AwtrixAppMessage SetScrollSpeed(int value) => Put("scroll", new Dictionary<string, object> { ["speed"] = value });
 
-        public AwtrixAppMessage SetEffect(string value) => Put("effect", value);
+        public AwtrixAppMessage SetEffect(string? value) => Put("effect", value);
 
         public AwtrixAppMessage SetEffectSpeed(double value) => Put("effectSpeed", value);
 
+        /// <summary>A null value removes the key rather than storing it: System.Text.Json's WhenWritingNull
+        /// does not suppress null dictionary values, so a stored null would still serialize as e.g. "text":null.</summary>
         private AwtrixAppMessage Put(string key, object? value)
         {
-            this[key] = value;
+            if (value is null)
+            {
+                Remove(key);
+            }
+            else
+            {
+                this[key] = value;
+            }
             return this;
         }
 
