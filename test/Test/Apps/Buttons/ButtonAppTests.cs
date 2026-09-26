@@ -38,9 +38,9 @@ namespace Test.Apps.Buttons
 
             await sut.InitAsync();
 
-            _mockMqttConnector.Verify(x => x.Subscribe("test/base/topic/stats/buttonLeft"), Times.Once);
-            _mockMqttConnector.Verify(x => x.Subscribe("test/base/topic/stats/buttonRight"), Times.Once);
-            _mockMqttConnector.Verify(x => x.Subscribe("test/base/topic/stats/buttonSelect"), Times.Once);
+            _mockMqttConnector.Verify(x => x.Subscribe("test/base/topic/state/buttons/left"), Times.Once);
+            _mockMqttConnector.Verify(x => x.Subscribe("test/base/topic/state/buttons/right"), Times.Once);
+            _mockMqttConnector.Verify(x => x.Subscribe("test/base/topic/state/buttons/select"), Times.Once);
         }
 
         [Fact]
@@ -55,11 +55,11 @@ namespace Test.Apps.Buttons
             ButtonEventArgs? received = null;
             sut.Click += (s, e) => received = e;
             _mockMqttConnector.Raise(x => x.MessageReceived += null,
-                new object[] { MqttTestHelpers.CreateReceivedArgs("test/base/topic/stats/buttonRight", "1") });
+                new object[] { MqttTestHelpers.CreateReceivedArgs("test/base/topic/state/buttons/right", "1") });
 
             Assert.NotNull(received);
             Assert.Equal(Button.Right, received!.Button);
-            _mockMqttConnector.Verify(x => x.Subscribe("test/base/topic/stats/buttonRight"), Times.Once);
+            _mockMqttConnector.Verify(x => x.Subscribe("test/base/topic/state/buttons/right"), Times.Once);
         }
 
         [Fact]
@@ -70,7 +70,7 @@ namespace Test.Apps.Buttons
             ButtonEventArgs? received = null;
             sut.Click += (s, e) => received = e;
 
-            var args = MqttTestHelpers.CreateReceivedArgs("test/base/topic/stats/buttonLeft", "1");
+            var args = MqttTestHelpers.CreateReceivedArgs("test/base/topic/state/buttons/left", "1");
             _mockMqttConnector.Raise(x => x.MessageReceived += null, new object[] { args });
 
             Assert.NotNull(received);
@@ -103,7 +103,7 @@ namespace Test.Apps.Buttons
             sut.Click += (s, e) => clickCount++;
             sut.DoubleClick += (s, e) => doubleClickCount++;
 
-            var topic = "test/base/topic/stats/buttonSelect";
+            var topic = "test/base/topic/state/buttons/select";
             _mockMqttConnector.Raise(x => x.MessageReceived += null, new object[] { MqttTestHelpers.CreateReceivedArgs(topic, "1") });
             time.Advance(TimeSpan.FromMilliseconds(100));
             _mockMqttConnector.Raise(x => x.MessageReceived += null, new object[] { MqttTestHelpers.CreateReceivedArgs(topic, "0") });
@@ -125,7 +125,7 @@ namespace Test.Apps.Buttons
             sut.Click += (s, e) => clickCount++;
             sut.DoubleClick += (s, e) => doubleClickCount++;
 
-            var topic = "test/base/topic/stats/buttonSelect";
+            var topic = "test/base/topic/state/buttons/select";
             _mockMqttConnector.Raise(x => x.MessageReceived += null, new object[] { MqttTestHelpers.CreateReceivedArgs(topic, "1") });
             _mockMqttConnector.Raise(x => x.MessageReceived += null, new object[] { MqttTestHelpers.CreateReceivedArgs(topic, "0") });
             time.Advance(TimeSpan.FromMilliseconds(301));
@@ -133,22 +133,6 @@ namespace Test.Apps.Buttons
 
             Assert.Equal(2, clickCount);
             Assert.Equal(0, doubleClickCount);
-        }
-
-        [Fact]
-        public async Task InitAsync_NgDevice_SubscribesToNgButtonTopics()
-        {
-            var sut = CreateSut();
-            // CreateSut built the topics from _address at construction time, so build a fresh app with the NG address
-            var ngAddress = new AwtrixAddress { BaseTopic = "test/base/topic", Firmware = AwtrixSharpWeb.Services.Firmware.AwtrixFirmwareKind.NG };
-            var ng = new ButtonApp(_mockLogger.Object, new AppConfig(), ngAddress, _mockAwtrixService.Object, _mockMqttConnector.Object);
-
-            await ng.InitAsync();
-
-            _mockMqttConnector.Verify(x => x.Subscribe("test/base/topic/state/buttons/left"), Times.Once);
-            _mockMqttConnector.Verify(x => x.Subscribe("test/base/topic/state/buttons/right"), Times.Once);
-            _mockMqttConnector.Verify(x => x.Subscribe("test/base/topic/state/buttons/select"), Times.Once);
-            _mockMqttConnector.Verify(x => x.Subscribe(It.Is<string>(t => t.Contains("stats/button"))), Times.Never);
         }
     }
 }

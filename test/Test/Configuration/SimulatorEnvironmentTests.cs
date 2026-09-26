@@ -98,7 +98,7 @@ namespace Test.Configuration
 
                 var device = Assert.Single(config.Devices);
                 Assert.Equal("http://localhost:8080", device.BaseTopic);
-                Assert.Equal(AwtrixSharpWeb.Services.Firmware.AwtrixFirmwareKind.NG, device.Firmware);
+                Assert.Equal("NG", device.Firmware);
                 Assert.Equal(new[] { "DiurnalApp", "MqttClockRenderApp" }, device.Apps.Select(a => a.Type).ToArray());
                 Assert.Equal("localhost", builder.Configuration["Mqtt:Host"]);
                 Assert.DoesNotContain(JsonSourcePaths(builder), path => string.Equals(path, "appsettings.json", StringComparison.OrdinalIgnoreCase));

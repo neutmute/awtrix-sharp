@@ -70,7 +70,7 @@ namespace Test.Apps
 
             await app.DisposeAsync();
             mqtt.Raise(m => m.MessageReceived += null,
-                new object[] { MqttTestHelpers.CreateReceivedArgs("awtrix/clock1/stats/buttonLeft", "1") });
+                new object[] { MqttTestHelpers.CreateReceivedArgs("awtrix/clock1/state/buttons/left", "1") });
 
             Assert.Equal(0, clicks);
             mqtt.VerifyRemove(m => m.MessageReceived -= It.IsAny<Func<MqttApplicationMessageReceivedEventArgs, Task>>(), Times.Once);

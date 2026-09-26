@@ -1,18 +1,23 @@
-using System.Collections.Concurrent;
 using AwtrixSharpWeb.Domain;
-using AwtrixSharpWeb.Services.Firmware;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace AwtrixSharpWeb.Services
 {
+    /// <summary>
+    /// Sends operations to an AWTRIX NG device (https://blueforcer.github.io/awtrix-ng/reference/payload/).
+    /// Never throws: every failure is logged and reported as false.
+    /// </summary>
     public class AwtrixService : IAwtrixService
     {
+        /// <summary>NG rejects a pushed-app payload carrying these (notification-only) keys with 422.</summary>
+        internal static readonly string[] NotificationOnlyKeys = { "hold", "stack" };
+
+        /// <summary>NG rejects a notification payload carrying these (pushed-app-only) keys with 422.</summary>
+        internal static readonly string[] AppOnlyKeys = { "lifetimeMs", "lifetimeExpiry" };
+
         private readonly HttpPublisher _httpPublisher;
         private readonly MqttPublisher _mqttPublisher;
         private readonly ILogger _logger;
-
-        /// <summary>(BaseTopic, key) pairs already warned about: a misconfigured ValueMap is visible once, not every tick.</summary>
-        private readonly ConcurrentDictionary<(string, string), byte> _warnedDroppedKeys = new();
 
         public AwtrixService(HttpPublisher httpPublisher, MqttPublisher mqttPublisher, ILogger<AwtrixService>? logger = null)
         {
@@ -21,9 +26,6 @@ namespace AwtrixSharpWeb.Services
             _logger = (ILogger?)logger ?? NullLogger.Instance;
         }
 
-        /// <summary>
-        /// https://blueforcer.github.io/awtrix3/#/api?id=change-settings
-        /// </summary>
         public Task<bool> Set(AwtrixAddress awtrixAddress, AwtrixSettings settings)
         {
             if (IsNull(awtrixAddress, nameof(awtrixAddress), nameof(Set)) || IsNull(settings, nameof(settings), nameof(Set)))
@@ -31,12 +33,9 @@ namespace AwtrixSharpWeb.Services
                 return Task.FromResult(false);
             }
 
-            return SafePublish(awtrixAddress, f => f.Settings(awtrixAddress, settings));
+            return SafePublish(awtrixAddress, () => AwtrixEndpoints.Settings(awtrixAddress, settings.ToJson()));
         }
 
-        /// <summary>
-        /// https://blueforcer.github.io/awtrix3/#/api?id=sound-playback
-        /// </summary>
         public Task<bool> PlayRtttl(AwtrixAddress awtrixAddress, string rtttl)
         {
             if (IsNull(awtrixAddress, nameof(awtrixAddress), nameof(PlayRtttl)) || IsNull(rtttl, nameof(rtttl), nameof(PlayRtttl)))
@@ -44,7 +43,7 @@ namespace AwtrixSharpWeb.Services
                 return Task.FromResult(false);
             }
 
-            return SafePublish(awtrixAddress, f => f.PlayRtttl(awtrixAddress, rtttl));
+            return SafePublish(awtrixAddress, () => AwtrixEndpoints.PlayRtttl(awtrixAddress, rtttl));
         }
 
         public Task<bool> AppUpdate(AwtrixAddress awtrixAddress, string appName, AwtrixAppMessage message)
@@ -54,7 +53,7 @@ namespace AwtrixSharpWeb.Services
                 return Task.FromResult(false);
             }
 
-            return SafePublish(awtrixAddress, f => f.AppUpdate(awtrixAddress, appName, message));
+            return SafePublish(awtrixAddress, () => AwtrixEndpoints.AppUpdate(awtrixAddress, appName, Serialize(message, NotificationOnlyKeys, awtrixAddress)));
         }
 
         public Task<bool> AppClear(AwtrixAddress awtrixAddress, string appName)
@@ -64,7 +63,7 @@ namespace AwtrixSharpWeb.Services
                 return Task.FromResult(false);
             }
 
-            return SafePublish(awtrixAddress, f => f.AppClear(awtrixAddress, appName));
+            return SafePublish(awtrixAddress, () => AwtrixEndpoints.AppClear(awtrixAddress, appName));
         }
 
         public Task<bool> Notify(AwtrixAddress awtrixAddress, AwtrixAppMessage message)
@@ -79,7 +78,7 @@ namespace AwtrixSharpWeb.Services
                 return Dismiss(awtrixAddress);
             }
 
-            return SafePublish(awtrixAddress, f => f.Notify(awtrixAddress, message));
+            return SafePublish(awtrixAddress, () => AwtrixEndpoints.Notify(awtrixAddress, Serialize(message, AppOnlyKeys, awtrixAddress)));
         }
 
         /// <summary>
@@ -110,7 +109,6 @@ namespace AwtrixSharpWeb.Services
             return (p, blink);
         }
 
-        /// <remarks>https://blueforcer.github.io/awtrix3/#/api?id=dismiss-notification</remarks>
         public Task<bool> Dismiss(AwtrixAddress awtrixAddress)
         {
             if (IsNull(awtrixAddress, nameof(awtrixAddress), nameof(Dismiss)))
@@ -118,7 +116,20 @@ namespace AwtrixSharpWeb.Services
                 return Task.FromResult(false);
             }
 
-            return SafePublish(awtrixAddress, f => f.Dismiss(awtrixAddress));
+            return SafePublish(awtrixAddress, () => AwtrixEndpoints.Dismiss(awtrixAddress));
+        }
+
+        /// <summary>Serializes the message without keys the target operation cannot carry; each removal is logged at Debug.</summary>
+        private string Serialize(AwtrixAppMessage message, string[] excludedKeys, AwtrixAddress address)
+        {
+            foreach (var key in excludedKeys)
+            {
+                if (message.ContainsKey(key))
+                {
+                    _logger.LogDebug("'{Key}' is not valid for this operation; omitted for {BaseTopic}", key, address.BaseTopic);
+                }
+            }
+            return message.ToJson(excludedKeys);
         }
 
         /// <summary>
@@ -136,27 +147,15 @@ namespace AwtrixSharpWeb.Services
         }
 
         /// <summary>
-        /// Builds the request with the device's firmware profile and hands it to the transport for its address.
-        /// Publishers must not throw, but if one (or a profile) does the failure is contained here.
+        /// Builds the request and hands it to the transport for its address. Publishers must not throw,
+        /// but if one (or the request builder) does the failure is contained here.
         /// </summary>
-        private async Task<bool> SafePublish(AwtrixAddress address, Func<IAwtrixFirmware, AwtrixRequest> build)
+        private async Task<bool> SafePublish(AwtrixAddress address, Func<AwtrixRequest> build)
         {
             var baseTopic = address.BaseTopic;
             try
             {
-                var firmware = AwtrixFirmware.For(address.Firmware);
-                var request = build(firmware);
-                foreach (var key in request.DroppedKeys)
-                {
-                    if (_warnedDroppedKeys.TryAdd((baseTopic, key), 0))
-                    {
-                        _logger.LogWarning("{Firmware} has no equivalent for '{Key}' (or its value is invalid); it was dropped for {BaseTopic}", firmware.Kind, key, baseTopic);
-                    }
-                    else
-                    {
-                        _logger.LogDebug("Dropped '{Key}' again for {BaseTopic}", key, baseTopic);
-                    }
-                }
+                var request = build();
                 var publisher = ResolvePublisher(baseTopic);
                 _logger.LogDebug("{Publisher} {Method} {Address} payload: {Payload}", publisher.GetType().Name, request.Method, request.Address, request.Payload);
                 var delivered = await publisher.Publish(request);

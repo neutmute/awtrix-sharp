@@ -1,7 +1,6 @@
 using System.Net;
 using System.Net.Http;
 using AwtrixSharpWeb.Services;
-using AwtrixSharpWeb.Services.Firmware;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Test.Services
@@ -127,7 +126,7 @@ namespace Test.Services
         [Fact]
         public async Task Publish_PostWithEmptyPayload_StillSendsEmptyJsonBody()
         {
-            // AWTRIX 3 clears a custom app with an empty POST body; that must keep working
+            // an empty body is still sent for non-DELETE verbs
             var handler = StubHttpMessageHandler.Returning(HttpStatusCode.OK);
             var publisher = CreatePublisher(handler, out _);
 

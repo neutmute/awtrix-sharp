@@ -1,8 +1,5 @@
 using AwtrixSharpWeb.Domain;
 using AwtrixSharpWeb.Services;
-using AwtrixSharpWeb.Services.Firmware;
-using Microsoft.Extensions.Logging;
-using Moq;
 
 namespace Test.Services
 {
@@ -31,7 +28,7 @@ namespace Test.Services
             var result = await service.Notify(address, message);
 
             Assert.True(result);
-            Assert.Equal("awtrix/clock1/notify", mqtt.LastUrl);
+            Assert.Equal("awtrix/clock1/cmd/notify", mqtt.LastUrl);
             Assert.Equal(0, http.PublishCallCount);
             Assert.Contains("\"text\":\"Hello\"", mqtt.LastPayload);
         }
@@ -46,7 +43,7 @@ namespace Test.Services
             var result = await service.Notify(address, message);
 
             Assert.True(result);
-            Assert.Equal("awtrix/clock1/notify/dismiss", mqtt.LastUrl);
+            Assert.Equal("awtrix/clock1/cmd/notify/dismiss", mqtt.LastUrl);
             Assert.Equal(string.Empty, mqtt.LastPayload);
         }
 
@@ -59,7 +56,7 @@ namespace Test.Services
 
             await service.Notify(address, message);
 
-            Assert.Equal("awtrix/clock1/notify/dismiss", mqtt.LastUrl);
+            Assert.Equal("awtrix/clock1/cmd/notify/dismiss", mqtt.LastUrl);
         }
 
         [Fact]
@@ -71,7 +68,7 @@ namespace Test.Services
             var result = await service.Dismiss(address);
 
             Assert.True(result);
-            Assert.Equal("awtrix/clock1/notify/dismiss", mqtt.LastUrl);
+            Assert.Equal("awtrix/clock1/cmd/notify/dismiss", mqtt.LastUrl);
             Assert.Equal(string.Empty, mqtt.LastPayload);
         }
 
@@ -85,7 +82,7 @@ namespace Test.Services
             var result = await service.AppUpdate(address, "MyApp", message);
 
             Assert.True(result);
-            Assert.Equal("awtrix/clock1/custom/MyApp", mqtt.LastUrl);
+            Assert.Equal("awtrix/clock1/cmd/apps/pushed/MyApp", mqtt.LastUrl);
             Assert.Contains("42", mqtt.LastPayload);
         }
 
@@ -98,7 +95,7 @@ namespace Test.Services
             var result = await service.AppClear(address, "MyApp");
 
             Assert.True(result);
-            Assert.Equal("awtrix/clock1/custom/MyApp", mqtt.LastUrl);
+            Assert.Equal("awtrix/clock1/cmd/apps/pushed/MyApp", mqtt.LastUrl);
             Assert.Equal(string.Empty, mqtt.LastPayload);
         }
 
@@ -112,12 +109,12 @@ namespace Test.Services
             var result = await service.Set(address, settings);
 
             Assert.True(result);
-            Assert.Equal("awtrix/clock1/settings", mqtt.LastUrl);
+            Assert.Equal("awtrix/clock1/cmd/settings", mqtt.LastUrl);
             Assert.Equal("{\"BRI\":\"128\"}", mqtt.LastPayload);
         }
 
         [Fact]
-        public async Task PlayRtttl_PublishesRawStringToRtttlTopic()
+        public async Task PlayRtttl_PublishesJsonWrappedStringToAudioPlayTopic()
         {
             var (service, _, mqtt) = CreateService();
             var address = new AwtrixAddress { BaseTopic = "awtrix/clock1" };
@@ -125,9 +122,8 @@ namespace Test.Services
             var result = await service.PlayRtttl(address, "d=4,o=5,b=140:8g,8a");
 
             Assert.True(result);
-            Assert.Equal("awtrix/clock1/rtttl", mqtt.LastUrl);
-            // PlayRtttl publishes the raw string directly - it is NOT JSON-wrapped.
-            Assert.Equal("d=4,o=5,b=140:8g,8a", mqtt.LastPayload);
+            Assert.Equal("awtrix/clock1/cmd/audio/play", mqtt.LastUrl);
+            Assert.Equal("{\"rtttl\":\"d=4,o=5,b=140:8g,8a\"}", mqtt.LastPayload);
         }
 
         [Fact]
@@ -140,7 +136,8 @@ namespace Test.Services
 
             Assert.Equal(1, http.PublishCallCount);
             Assert.Equal(0, mqtt.PublishCallCount);
-            Assert.Equal("http://192.168.1.50/notify/dismiss", http.LastUrl);
+            Assert.Equal("http://192.168.1.50/api/v1/notifications/active", http.LastUrl);
+            Assert.Equal(HttpMethod.Delete, http.LastMethod);
         }
 
         [Fact]
@@ -196,40 +193,43 @@ namespace Test.Services
         }
 
         [Fact]
-        public async Task HttpBaseTopic_AppUpdate_UsesCustomQueryNameUrl()
+        public async Task HttpBaseTopic_AppUpdate_PutsToPushedAppsUrl()
         {
             var (service, http, mqtt) = CreateService();
-            var address = new AwtrixAddress { BaseTopic = "http://192.168.1.50/api" };
+            var address = new AwtrixAddress { BaseTopic = "http://192.168.1.50" };
 
             var result = await service.AppUpdate(address, "TripTimerApp", new AwtrixAppMessage().SetText("42"));
 
             Assert.True(result);
-            Assert.Equal("http://192.168.1.50/api/custom?name=TripTimerApp", http.LastUrl);
+            Assert.Equal("http://192.168.1.50/api/v1/apps/pushed/TripTimerApp", http.LastUrl);
+            Assert.Equal(HttpMethod.Put, http.LastMethod);
             Assert.Contains("42", http.LastPayload);
             Assert.Equal(0, mqtt.PublishCallCount);
         }
 
         [Fact]
-        public async Task HttpBaseTopicWithTrailingSlash_AppClear_UsesCustomQueryNameUrlWithEmptyPayload()
+        public async Task HttpBaseTopicWithTrailingSlash_AppClear_DeletesAppUrl()
         {
             var (service, http, _) = CreateService();
-            var address = new AwtrixAddress { BaseTopic = "http://192.168.1.50/api/" };
+            var address = new AwtrixAddress { BaseTopic = "http://192.168.1.50/" };
 
             await service.AppClear(address, "TripTimerApp");
 
-            Assert.Equal("http://192.168.1.50/api/custom?name=TripTimerApp", http.LastUrl);
+            Assert.Equal("http://192.168.1.50/api/v1/apps/TripTimerApp", http.LastUrl);
+            Assert.Equal(HttpMethod.Delete, http.LastMethod);
             Assert.Equal(string.Empty, http.LastPayload);
         }
 
         [Fact]
-        public async Task HttpBaseTopic_Settings_PathUnchanged()
+        public async Task HttpBaseTopic_Settings_PatchesSettingsUrl()
         {
             var (service, http, _) = CreateService();
-            var address = new AwtrixAddress { BaseTopic = "http://192.168.1.50/api" };
+            var address = new AwtrixAddress { BaseTopic = "http://192.168.1.50" };
 
             await service.Set(address, new AwtrixSettings().SetBrightness(8));
 
-            Assert.Equal("http://192.168.1.50/api/settings", http.LastUrl);
+            Assert.Equal("http://192.168.1.50/api/v1/settings", http.LastUrl);
+            Assert.Equal(HttpMethod.Patch, http.LastMethod);
         }
 
         [Fact]
@@ -277,49 +277,29 @@ namespace Test.Services
         }
 
         [Fact]
-        public async Task AppUpdate_NgDevice_UsesNgTopicAndPayload()
+        public async Task AppUpdate_StripsNotificationOnlyKeys()
         {
             var (service, _, mqtt) = CreateService();
-            var address = new AwtrixAddress { BaseTopic = "awtrix/clock2", Firmware = AwtrixFirmwareKind.NG };
+            var message = new AwtrixAppMessage().SetText("x");
+            message["hold"] = "true";
+            message["stack"] = "false";
 
-            await service.AppUpdate(address, "X", new AwtrixAppMessage().SetText("42").SetColor("FF0000"));
+            await service.AppUpdate(new AwtrixAddress { BaseTopic = "awtrix/clock1" }, "App", message);
 
-            Assert.Equal("awtrix/clock2/cmd/apps/pushed/X", mqtt.LastUrl);
-            Assert.Equal("{\"text\":\"42\",\"textColor\":\"#FF0000\"}", mqtt.LastPayload);
+            Assert.Equal("{\"text\":\"x\"}", mqtt.LastPayload);
         }
 
         [Fact]
-        public async Task AppClear_NgHttpDevice_SendsDelete()
+        public async Task Notify_StripsAppOnlyKeys()
         {
-            var (service, http, _) = CreateService();
-            var address = new AwtrixAddress { BaseTopic = "http://localhost:8080", Firmware = AwtrixFirmwareKind.NG };
+            var (service, _, mqtt) = CreateService();
+            var message = new AwtrixAppMessage().SetText("x");
+            message["lifetimeMs"] = "5000";
+            message["lifetimeExpiry"] = "mark";
 
-            await service.AppClear(address, "X");
+            await service.Notify(new AwtrixAddress { BaseTopic = "awtrix/clock1" }, message);
 
-            Assert.Equal("http://localhost:8080/api/v1/apps/X", http.LastUrl);
-            Assert.Equal(HttpMethod.Delete, http.LastMethod);
-        }
-
-        [Fact]
-        public async Task AppUpdate_NgDroppedKey_LogsWarningOncePerDeviceAndKey()
-        {
-            var logger = new Mock<ILogger<AwtrixService>>();
-            logger.Setup(l => l.IsEnabled(It.IsAny<LogLevel>())).Returns(true);
-            var service = new AwtrixService(new FakeHttpPublisher(), new FakeMqttPublisher(), logger.Object);
-            var clock2 = new AwtrixAddress { BaseTopic = "awtrix/clock2", Firmware = AwtrixFirmwareKind.NG };
-            var clock3 = new AwtrixAddress { BaseTopic = "awtrix/clock3", Firmware = AwtrixFirmwareKind.NG };
-            var message = new AwtrixAppMessage().SetText("x").SetTopText(true);
-
-            await service.AppUpdate(clock2, "X", message);
-            await service.AppUpdate(clock2, "X", message);
-            await service.AppUpdate(clock3, "X", message);
-
-            logger.Verify(l => l.Log(LogLevel.Warning, It.IsAny<EventId>(),
-                It.Is<It.IsAnyType>((v, _) => v.ToString()!.Contains("topText") && v.ToString()!.Contains("awtrix/clock2")),
-                null, It.IsAny<Func<It.IsAnyType, Exception?, string>>()), Times.Once);
-            logger.Verify(l => l.Log(LogLevel.Warning, It.IsAny<EventId>(),
-                It.Is<It.IsAnyType>((v, _) => v.ToString()!.Contains("topText") && v.ToString()!.Contains("awtrix/clock3")),
-                null, It.IsAny<Func<It.IsAnyType, Exception?, string>>()), Times.Once);
+            Assert.Equal("{\"text\":\"x\"}", mqtt.LastPayload);
         }
     }
 }

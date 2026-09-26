@@ -88,7 +88,7 @@ namespace Test.Controllers
             Assert.IsType<OkResult>(result);
             // Dismiss() then Notify() -> two publishes; last one is the notify with our text.
             Assert.Equal(2, mqtt.PublishCallCount);
-            Assert.Equal("awtrix/clock1/notify", mqtt.LastUrl);
+            Assert.Equal("awtrix/clock1/cmd/notify", mqtt.LastUrl);
             Assert.Contains("Hello World", mqtt.LastPayload);
         }
 
@@ -127,7 +127,8 @@ namespace Test.Controllers
 
             Assert.IsType<OkResult>(result);
             Assert.Equal(2, mqtt.PublishCallCount);
-            Assert.Equal("d=4,o=5,b=140:8g", mqtt.LastPayload);
+            Assert.Equal("awtrix/clock2/cmd/audio/play", mqtt.LastUrl);
+            Assert.Equal("{\"rtttl\":\"d=4,o=5,b=140:8g\"}", mqtt.LastPayload);
         }
 
         [Fact]
@@ -139,7 +140,7 @@ namespace Test.Controllers
             var result = await controller.SetGlobalTextColor("#123456");
 
             Assert.IsType<OkResult>(result);
-            Assert.Equal("awtrix/clock1/settings", mqtt.LastUrl);
+            Assert.Equal("awtrix/clock1/cmd/settings", mqtt.LastUrl);
             Assert.Equal("{\"TCOL\":\"#123456\"}", mqtt.LastPayload);
         }
     }

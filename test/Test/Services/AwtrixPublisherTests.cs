@@ -1,5 +1,4 @@
 using AwtrixSharpWeb.Services;
-using AwtrixSharpWeb.Services.Firmware;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Test.Services
@@ -43,12 +42,11 @@ namespace Test.Services
         }
 
         [Fact]
-        public void AwtrixRequest_Post_DefaultsMethodAndEmptyDroppedKeys()
+        public void AwtrixRequest_Post_DefaultsMethod()
         {
             var request = AwtrixRequest.Post("a/b", "x");
 
             Assert.Equal(HttpMethod.Post, request.Method);
-            Assert.Empty(request.DroppedKeys);
         }
     }
 }

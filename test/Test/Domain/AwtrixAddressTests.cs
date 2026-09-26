@@ -1,5 +1,4 @@
 using AwtrixSharpWeb.Domain;
-using AwtrixSharpWeb.Services.Firmware;
 using Microsoft.Extensions.Configuration;
 
 namespace Test.Domain
@@ -54,40 +53,22 @@ namespace Test.Domain
         }
 
         [Fact]
-        public void Firmware_DefaultsToAwtrix3()
-        {
-            Assert.Equal(AwtrixFirmwareKind.Awtrix3, new AwtrixAddress().Firmware);
-        }
+        public void Firmware_DefaultsToNull() => Assert.Null(new AwtrixAddress().Firmware);
 
-        [Theory]
-        [InlineData("NG", AwtrixFirmwareKind.NG)]
-        [InlineData("ng", AwtrixFirmwareKind.NG)]
-        [InlineData("Awtrix3", AwtrixFirmwareKind.Awtrix3)]
-        public void Firmware_BindsFromConfigurationCaseInsensitively(string value, AwtrixFirmwareKind expected)
+        [Fact]
+        public void Firmware_BindsAsPlainString()
         {
             var configuration = new ConfigurationBuilder()
                 .AddInMemoryCollection(new Dictionary<string, string?>
                 {
-                    ["Awtrix:Devices:0:BaseTopic"] = "awtrix/clock2",
-                    ["Awtrix:Devices:0:Firmware"] = value,
+                    ["Awtrix:Devices:0:BaseTopic"] = "awtrix/x",
+                    ["Awtrix:Devices:0:Firmware"] = "NG",
                 })
                 .Build();
 
             var config = configuration.GetSection("Awtrix").Get<AwtrixConfig>()!;
 
-            Assert.Equal(expected, config.Devices[0].Firmware);
-        }
-
-        [Fact]
-        public void Firmware_AbsentFromConfiguration_DefaultsToAwtrix3()
-        {
-            var configuration = new ConfigurationBuilder()
-                .AddInMemoryCollection(new Dictionary<string, string?> { ["Awtrix:Devices:0:BaseTopic"] = "awtrix/clock1" })
-                .Build();
-
-            var config = configuration.GetSection("Awtrix").Get<AwtrixConfig>()!;
-
-            Assert.Equal(AwtrixFirmwareKind.Awtrix3, config.Devices[0].Firmware);
+            Assert.Equal("NG", config.Devices[0].Firmware);
         }
     }
 }

@@ -1,5 +1,4 @@
 using AwtrixSharpWeb.Domain;
-using AwtrixSharpWeb.Services.Firmware;
 
 namespace AwtrixSharpWeb.Services
 {

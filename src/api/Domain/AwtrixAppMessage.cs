@@ -257,12 +257,15 @@ namespace AwtrixSharpWeb.Domain
             );
         }
 
-        public string ToJson()
+        public string ToJson() => ToJson(Array.Empty<string>());
+
+        public string ToJson(params string[] excludedKeys)
         {
             var dictionaryToSerialize = new Dictionary<string, object>(this.Count);
 
             foreach (var kvp in this)
             {
+                if (excludedKeys.Contains(kvp.Key, StringComparer.Ordinal)) continue;
                 dictionaryToSerialize[kvp.Key] = ToJsonValue(kvp.Key, kvp.Value);
             }
 

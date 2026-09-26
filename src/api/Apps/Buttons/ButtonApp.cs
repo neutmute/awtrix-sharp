@@ -2,7 +2,6 @@
 using AwtrixSharpWeb.Domain;
 using AwtrixSharpWeb.Interfaces;
 using AwtrixSharpWeb.Services;
-using AwtrixSharpWeb.Services.Firmware;
 using MQTTnet;
 using System.Text;
 
@@ -51,7 +50,7 @@ namespace AwtrixSharpWeb.Apps.MqttRender
 
         private string GetTopic(Button button)
         {
-            return AwtrixFirmware.For(AwtrixAddress.Firmware).ButtonTopic(AwtrixAddress, button);
+            return AwtrixEndpoints.ButtonTopic(AwtrixAddress, button);
         }
 
         protected override void Initialize()

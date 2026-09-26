@@ -1,5 +1,3 @@
-using AwtrixSharpWeb.Services.Firmware;
-
 namespace AwtrixSharpWeb.Domain
 {
 
@@ -11,10 +9,10 @@ namespace AwtrixSharpWeb.Domain
         public string BaseTopic { get; set; }
 
         /// <summary>
-        /// Firmware dialect of the device. Defaults to Awtrix3 so existing configs bind unchanged.
-        /// For NG, BaseTopic is the device's mqttPrefix (MQTT) or its root URL such as http://192.168.1.51 (HTTP).
+        /// Obsolete: every device is AWTRIX NG. Bound only so a leftover "Firmware" key can be reported at startup
+        /// (ConfigurationWarnings); never read otherwise. See docs/config-migration.md.
         /// </summary>
-        public AwtrixFirmwareKind Firmware { get; set; } = AwtrixFirmwareKind.Awtrix3;
+        public string? Firmware { get; set; }
 
         /// <summary>
         /// True when BaseTopic addresses the device's HTTP API. Get-only, so ignored by configuration binding.

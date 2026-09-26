@@ -94,7 +94,7 @@ namespace Test.HostedServices
             awtrix.Verify(a => a.AppClear(clock1, AppNames.DiurnalApp), Times.Once);
             awtrix.Verify(a => a.AppClear(clock1, AppNames.ButtonApp), Times.Once);
             awtrix.Verify(a => a.AppClear(clock2, AppNames.DiurnalApp), Times.Once);
-            mqtt.Verify(m => m.Subscribe("awtrix/clock1/stats/buttonLeft"), Times.Once);
+            mqtt.Verify(m => m.Subscribe("awtrix/clock1/state/buttons/left"), Times.Once);
             timer.VerifyAdd(t => t.MinuteChanged += It.IsAny<EventHandler<ClockTickEventArgs>>(), Times.Exactly(2));
         }
 
@@ -206,7 +206,7 @@ namespace Test.HostedServices
                 tripPlanner: tripPlanner.Object);
             await conductor.StartAsync(CancellationToken.None);
 
-            RaiseDoubleClick(mqtt, "awtrix/clock1/stats/buttonRight");
+            RaiseDoubleClick(mqtt, "awtrix/clock1/state/buttons/right");
 
             // TripTimerApp's activation announces itself with one Notify ("Starting trip timer")
             awtrix.Verify(a => a.Notify(clock1, It.IsAny<AwtrixAppMessage>()), Times.Once);

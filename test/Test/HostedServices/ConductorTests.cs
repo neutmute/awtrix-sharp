@@ -205,9 +205,9 @@ namespace Test.HostedServices
             await conductor.StartAsync(CancellationToken.None);
 
             Assert.Single(conductor.FindApps(AppNames.ButtonApp, "awtrix/clock1"));
-            mqtt.Verify(m => m.Subscribe("awtrix/clock1/stats/buttonLeft"), Times.Once);
-            mqtt.Verify(m => m.Subscribe("awtrix/clock1/stats/buttonSelect"), Times.Once);
-            mqtt.Verify(m => m.Subscribe("awtrix/clock1/stats/buttonRight"), Times.Once);
+            mqtt.Verify(m => m.Subscribe("awtrix/clock1/state/buttons/left"), Times.Once);
+            mqtt.Verify(m => m.Subscribe("awtrix/clock1/state/buttons/select"), Times.Once);
+            mqtt.Verify(m => m.Subscribe("awtrix/clock1/state/buttons/right"), Times.Once);
         }
 
         [Fact]

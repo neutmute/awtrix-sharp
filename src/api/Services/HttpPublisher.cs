@@ -1,5 +1,4 @@
 using System.Text;
-using AwtrixSharpWeb.Services.Firmware;
 
 namespace AwtrixSharpWeb.Services
 {
@@ -28,7 +27,7 @@ namespace AwtrixSharpWeb.Services
             {
                 var client = _httpClientFactory.CreateClient(HttpClientName);
                 using var httpRequest = new HttpRequestMessage(request.Method, url);
-                // DELETE carries no body; every other verb sends JSON, even when empty (AWTRIX 3 clears an app with an empty POST)
+                // DELETE carries no body; every other verb sends JSON, even when empty
                 if (request.Method != HttpMethod.Delete || request.Payload.Length > 0)
                 {
                     httpRequest.Content = new StringContent(request.Payload, Encoding.UTF8, "application/json");

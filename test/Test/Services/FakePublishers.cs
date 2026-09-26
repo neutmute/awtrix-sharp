@@ -1,7 +1,6 @@
 using System.Net;
 using AwtrixSharpWeb.HostedServices;
 using AwtrixSharpWeb.Services;
-using AwtrixSharpWeb.Services.Firmware;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using AwtrixSharpWeb.Domain;
