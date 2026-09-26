@@ -85,7 +85,7 @@ namespace Test.Apps.TripTimer
             RaiseSecond();
 
             _awtrix.Verify(a => a.AppUpdate(It.IsAny<AwtrixAddress>(), AppNames.TripTimerApp,
-                It.Is<AwtrixAppMessage>(m => m.Text != null && m.Text.Contains("->41"))), Times.Once);
+                It.Is<AwtrixAppMessage>(m => m["text"] is TextFragment[] && ((TextFragment[])m["text"]!)[1].Text.Contains("->41"))), Times.Once);
             await app.DisposeAsync();
         }
 

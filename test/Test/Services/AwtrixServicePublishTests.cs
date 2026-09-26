@@ -280,9 +280,7 @@ namespace Test.Services
         public async Task AppUpdate_StripsNotificationOnlyKeys()
         {
             var (service, _, mqtt) = CreateService();
-            var message = new AwtrixAppMessage().SetText("x");
-            message["hold"] = "true";
-            message["stack"] = "false";
+            var message = new AwtrixAppMessage().SetText("x").SetHold().SetStack(false);
 
             await service.AppUpdate(new AwtrixAddress { BaseTopic = "awtrix/clock1" }, "App", message);
 
@@ -293,9 +291,7 @@ namespace Test.Services
         public async Task Notify_StripsAppOnlyKeys()
         {
             var (service, _, mqtt) = CreateService();
-            var message = new AwtrixAppMessage().SetText("x");
-            message["lifetimeMs"] = "5000";
-            message["lifetimeExpiry"] = "mark";
+            var message = new AwtrixAppMessage().SetText("x").SetLifetimeMs(5000).SetLifetimeExpiry(LifetimeExpiry.Mark);
 
             await service.Notify(new AwtrixAddress { BaseTopic = "awtrix/clock1" }, message);
 

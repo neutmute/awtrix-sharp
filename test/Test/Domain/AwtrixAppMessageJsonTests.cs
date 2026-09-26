@@ -3,112 +3,103 @@ using System.Globalization;
 
 namespace Test.Domain
 {
-    /// <summary>
-    /// CR-34: Awtrix expects arrays for line/bar/progressC/progressBC/gradient, and numbers must not follow
-    /// the host culture. Stored dictionary values stay unchanged (see AwtrixAppMessageBuilderTests).
-    /// </summary>
+    /// <summary>ToJson is a plain typed serialize: NG validates types and rejects unknown keys (spec §1).</summary>
     public class AwtrixAppMessageJsonTests
     {
         [Fact]
-        public void ToJson_Line_EmitsJsonArray()
-        {
-            var message = new AwtrixAppMessage().SetLine(new[] { 1, 2, 3 });
+        public void ToJson_EmptyMessage_ReturnsEmptyObject() => Assert.Equal("{}", new AwtrixAppMessage().ToJson());
 
-            Assert.Equal("{\"line\":[1,2,3]}", message.ToJson());
-            Assert.Equal("1,2,3", message["line"]);
+        [Fact]
+        public void ToJson_TextFirst_ThenKeysSorted()
+        {
+            var m = new AwtrixAppMessage().SetProgress(1).SetIcon("5").SetText("t");
+            Assert.Equal("{\"text\":\"t\",\"icon\":\"5\",\"progress\":1}", m.ToJson());
         }
 
         [Fact]
-        public void ToJson_Bar_EmitsJsonArray()
+        public void ToJson_TypedScalars()
         {
-            var message = new AwtrixAppMessage().SetBar(new[] { 4, -5, 6, 7 });
-
-            Assert.Equal("{\"bar\":[4,-5,6,7]}", message.ToJson());
+            var m = new AwtrixAppMessage().SetDurationMs(5000).SetHold().SetEffectSpeed(1.5).SetTextOffsetX(-2);
+            Assert.Equal("{\"durationMs\":5000,\"effectSpeed\":1.5,\"hold\":true,\"textOffsetX\":-2}", m.ToJson());
         }
 
         [Fact]
-        public void ToJson_ProgressColours_EmitJsonArrays()
+        public void ToJson_Enums_UseNgNames()
         {
-            var message = new AwtrixAppMessage()
-                .SetProgressC(new[] { 255, 0, 0 })
-                .SetProgressBC(new[] { 0, 0, 255 });
-
-            Assert.Equal("{\"progressC\":[255,0,0],\"progressBC\":[0,0,255]}", message.ToJson());
+            var m = new AwtrixAppMessage().SetTextCase(TextCase.AsTyped).SetIconMode(IconMode.PushOnce).SetLifetimeExpiry(LifetimeExpiry.Mark);
+            Assert.Equal("{\"iconMode\":\"pushOnce\",\"lifetimeExpiry\":\"mark\",\"textCase\":\"asTyped\"}", m.ToJson());
         }
 
         [Fact]
-        public void ToJson_Gradient_EmitsNestedJsonArrays()
+        public void ToJson_Arrays()
         {
-            var message = new AwtrixAppMessage().SetGradient(new[] { new[] { 255, 0, 0 }, new[] { 0, 255, 0 } });
-
-            Assert.Equal("{\"gradient\":[[255,0,0],[0,255,0]]}", message.ToJson());
+            var m = new AwtrixAppMessage().SetLineChart(new[] { 1, 2, 3 }).SetProgressColor("255,0,0")
+                .SetPalette(new[] { new[] { 255, 0, 0 }, new[] { 0, 255, 0 } });
+            Assert.Equal("{\"lineChart\":[1,2,3],\"palette\":[[255,0,0],[0,255,0]],\"progressColor\":[255,0,0]}", m.ToJson());
         }
 
         [Fact]
-        public void ToJson_UnparsableArrayValue_FallsBackToString()
+        public void ToJson_Scroll_IsNested()
         {
-            var message = new AwtrixAppMessage();
-            message["bar"] = "not,numbers";
-
-            Assert.Equal("{\"bar\":\"not,numbers\"}", message.ToJson());
+            Assert.Equal("{\"scroll\":{\"speed\":100}}", new AwtrixAppMessage().SetScrollSpeed(100).ToJson());
         }
 
         [Fact]
-        public void ToJson_ScalarsRemainStrings()
+        public void ToJson_Fragments_UseTextAndColor_AndOmitNullColor()
         {
-            // Deliberately unchanged by WS5 (spec non-goal): scalars are still emitted as JSON strings.
-            var message = new AwtrixAppMessage().SetDuration(5).SetRainbow();
-
-            Assert.Equal("{\"duration\":\"5\",\"rainbow\":\"true\"}", message.ToJson());
+            var m = new AwtrixAppMessage().SetText(new[] { new TextFragment("12:00", "#00FF00"), new TextFragment(" ->41"), new TextFragment("x", "1,2,3") });
+            Assert.Equal("{\"text\":[{\"text\":\"12:00\",\"color\":\"#00FF00\"},{\"text\":\" ->41\"},{\"text\":\"x\",\"color\":[1,2,3]}]}", m.ToJson());
         }
 
         [Fact]
-        public void DoubleSetters_UnderCommaDecimalCulture_UseInvariantFormat()
+        public void ToJson_DoesNotEscapeNonAscii()
         {
-            var previous = CultureInfo.CurrentCulture;
-            CultureInfo.CurrentCulture = new CultureInfo("de-DE");
+            Assert.Equal("{\"text\":\"→ café\"}", new AwtrixAppMessage().SetText("→ café").ToJson());
+        }
+
+        [Fact]
+        public void ToJson_ExcludedKeys_AreOmitted()
+        {
+            var m = new AwtrixAppMessage().SetText("t").SetHold().SetStack(false).SetLifetimeMs(1);
+            Assert.Equal("{\"text\":\"t\",\"lifetimeMs\":1}", m.ToJson("hold", "stack"));
+            Assert.Equal("{\"text\":\"t\",\"hold\":true,\"lifetimeMs\":1,\"stack\":false}", m.ToJson());
+        }
+
+        [Fact]
+        public void ToJson_UnderCommaDecimalCulture_UsesInvariantFormat()
+        {
+            var original = CultureInfo.CurrentCulture;
             try
             {
-                var message = new AwtrixAppMessage().SetBlinkText(0.5).SetFadeText(1.5);
-
-                Assert.Equal("0.5", message["blinkText"]);
-                Assert.Equal("1.5", message["fadeText"]);
+                CultureInfo.CurrentCulture = new CultureInfo("de-DE");
+                Assert.Equal("{\"effectSpeed\":0.5}", new AwtrixAppMessage().SetEffectSpeed(0.5).ToJson());
             }
             finally
             {
-                CultureInfo.CurrentCulture = previous;
+                CultureInfo.CurrentCulture = original;
             }
         }
 
-        [Theory]
-        [InlineData("1,2,3", new[] { 1, 2, 3 })]
-        [InlineData(" 7 , 8 ", new[] { 7, 8 })]
-        [InlineData("-1", new[] { -1 })]
-        public void TryParseIntArray_Valid_ReturnsValues(string input, int[] expected)
+        [Fact]
+        public void TryParseIntArray_Valid_ReturnsValues()
         {
-            Assert.True(AwtrixAppMessage.TryParseIntArray(input, out var result));
-            Assert.Equal(expected, result);
+            Assert.True(AwtrixAppMessage.TryParseIntArray(" 1, -2 ,3", out var values));
+            Assert.Equal(new[] { 1, -2, 3 }, values);
         }
 
-        [Theory]
-        [InlineData(null)]
-        [InlineData("")]
-        [InlineData("1,,2")]
-        [InlineData("1,a")]
-        [InlineData("1.5")]
-        public void TryParseIntArray_Invalid_ReturnsFalse(string? input)
+        [Fact]
+        public void TryParseIntArray_Invalid_ReturnsFalse()
         {
-            Assert.False(AwtrixAppMessage.TryParseIntArray(input, out _));
+            Assert.False(AwtrixAppMessage.TryParseIntArray("1,x", out _));
+            Assert.False(AwtrixAppMessage.TryParseIntArray("", out _));
         }
 
         [Fact]
         public void TryParseIntMatrix_ValidAndInvalid()
         {
-            Assert.True(AwtrixAppMessage.TryParseIntMatrix("255,0,0;0,255,0", out var matrix));
-            Assert.Equal(new[] { new[] { 255, 0, 0 }, new[] { 0, 255, 0 } }, matrix);
-
-            Assert.False(AwtrixAppMessage.TryParseIntMatrix("255,0,0;red", out _));
-            Assert.False(AwtrixAppMessage.TryParseIntMatrix("", out _));
+            Assert.True(AwtrixAppMessage.TryParseIntMatrix("1,2;3,4", out var matrix));
+            Assert.Equal(new[] { new[] { 1, 2 }, new[] { 3, 4 } }, matrix);
+            Assert.False(AwtrixAppMessage.TryParseIntMatrix("1,2;x", out _));
         }
     }
 }

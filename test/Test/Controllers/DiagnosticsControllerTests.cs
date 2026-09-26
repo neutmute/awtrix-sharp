@@ -113,7 +113,7 @@ namespace Test.Controllers
 
             Assert.IsType<OkResult>(result);
             Assert.Equal(1, mqtt.PublishCallCount);
-            Assert.Contains("\"progress\":\"80\"", mqtt.LastPayload);
+            Assert.Contains("\"progress\":80", mqtt.LastPayload);
         }
 
         [Fact]

@@ -99,7 +99,7 @@ namespace Test.Apps.TripTimer
             var message = InvokeBuildMessage(sut, now.DateTime);
 
             // Assert
-            Assert.Contains("\"c\": \"00FF00\"", message.Text);
+            Assert.Equal("#00FF00", Assert.IsType<TextFragment[]>(message["text"])[0].Color);
         }
 
         [Fact]
@@ -114,7 +114,7 @@ namespace Test.Apps.TripTimer
             var message = InvokeBuildMessage(sut, now.DateTime);
 
             // Assert
-            Assert.Contains("\"c\": \"FFA500\"", message.Text);
+            Assert.Equal("#FFA500", Assert.IsType<TextFragment[]>(message["text"])[0].Color);
         }
 
         [Fact]
@@ -129,7 +129,7 @@ namespace Test.Apps.TripTimer
             var message = InvokeBuildMessage(sut, now.DateTime);
 
             // Assert
-            Assert.Contains("\"c\": \"FFA500\"", message.Text);
+            Assert.Equal("#FFA500", Assert.IsType<TextFragment[]>(message["text"])[0].Color);
         }
 
         [Fact]
@@ -145,7 +145,7 @@ namespace Test.Apps.TripTimer
             var message = InvokeBuildMessage(sut, now.DateTime);
 
             // Assert
-            Assert.NotEqual("GO!", message.Text);
+            Assert.IsType<TextFragment[]>(message["text"]);
         }
 
         [Fact]
@@ -161,8 +161,9 @@ namespace Test.Apps.TripTimer
 
             // Assert
             Assert.Equal("GO!", message.Text);
-            Assert.Equal("true", message["rainbow"]);
-            Assert.Equal("100", message["progress"]);
+            Assert.Equal("Rainbow", message["palette"]);
+            Assert.Equal("palette", message["textColor"]);
+            Assert.Equal(100, message["progress"]);
         }
 
         [Fact]
@@ -173,7 +174,7 @@ namespace Test.Apps.TripTimer
             var now = departureTime.AddSeconds(-19);
             var sut = GetSystemUnderTest(now, departureTime);
 
-            var valueMap = new ValueMap { ["Text"] = "ALMOST THERE", ["Color"] = "00FFFF" };
+            var valueMap = new ValueMap { ["Text"] = "ALMOST THERE", ["TextColor"] = "#00FFFF" };
             _timerConfig.ValueMaps.Add(valueMap);
 
             // Act
@@ -181,7 +182,7 @@ namespace Test.Apps.TripTimer
 
             // Assert
             Assert.Equal("ALMOST THERE", message.Text);
-            Assert.Equal("00FFFF", message["color"]);
+            Assert.Equal("#00FFFF", message["textColor"]);
         }
     }
 }

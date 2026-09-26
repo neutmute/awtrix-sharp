@@ -37,9 +37,9 @@ namespace Test.Configs
                 { "ValueMatcher", "busy" },
                 { "Text", "I am busy" },
                 { "Icon", "12345" },
-                { "Color", "255,0,0" },
-                { "Duration", "30" },
-                { "Center", "true" }
+                { "TextColor", "255,0,0" },
+                { "DurationMs", "30000" },
+                { "TextCenter", "true" }
             };
 
             var message = new AwtrixAppMessage();
@@ -47,9 +47,9 @@ namespace Test.Configs
 
             Assert.Equal("I am busy", message.Text);
             Assert.Equal("12345", message["icon"]);
-            Assert.Equal("255,0,0", message["color"]);
-            Assert.Equal("30", message["duration"]);
-            Assert.Equal("true", message["center"]);
+            Assert.Equal(new[] { 255, 0, 0 }, message["textColor"]);
+            Assert.Equal(30000, message["durationMs"]);
+            Assert.Equal(true, message["textCenter"]);
         }
 
         [Fact]
@@ -58,14 +58,14 @@ namespace Test.Configs
             var valueMap = new ValueMap
             {
                 { "ValueMatcher", "busy" },
-                { "Duration", "not-a-number" }
+                { "DurationMs", "not-a-number" }
             };
 
             var message = new AwtrixAppMessage();
             var ex = Record.Exception(() => valueMap.Decorate(message, _mockLogger.Object));
 
             Assert.Null(ex);
-            Assert.False(message.ContainsKey("duration"));
+            Assert.False(message.ContainsKey("durationMs"));
         }
 
         [Fact]
@@ -74,13 +74,13 @@ namespace Test.Configs
             var valueMap = new ValueMap
             {
                 { "ValueMatcher", "busy" },
-                { "Center", "not-a-bool" }
+                { "TextCenter", "not-a-bool" }
             };
 
             var message = new AwtrixAppMessage();
             valueMap.Decorate(message, _mockLogger.Object);
 
-            Assert.False(message.ContainsKey("center"));
+            Assert.False(message.ContainsKey("textCenter"));
         }
 
         [Fact]
@@ -89,13 +89,13 @@ namespace Test.Configs
             var valueMap = new ValueMap
             {
                 { "ValueMatcher", "busy" },
-                { "EffectSpeed", "50" }
+                { "Progress", "50" }
             };
 
             var message = new AwtrixAppMessage();
             valueMap.Decorate(message, _mockLogger.Object);
 
-            Assert.Equal("50", message["effectSpeed"]);
+            Assert.Equal(50, message["progress"]);
         }
 
         [Fact]
@@ -104,13 +104,13 @@ namespace Test.Configs
             var valueMap = new ValueMap
             {
                 { "ValueMatcher", "busy" },
-                { "Rainbow", "true" }
+                { "Hold", "true" }
             };
 
             var message = new AwtrixAppMessage();
             valueMap.Decorate(message, _mockLogger.Object);
 
-            Assert.Equal("true", message["rainbow"]);
+            Assert.Equal(true, message["hold"]);
         }
 
         [Fact]
@@ -134,13 +134,13 @@ namespace Test.Configs
             var valueMap = new ValueMap
             {
                 { "ValueMatcher", "busy" },
-                { "Line", "1,2,3" }
+                { "LineChart", "1,2,3" }
             };
 
             var message = new AwtrixAppMessage();
             valueMap.Decorate(message, _mockLogger.Object);
 
-            Assert.Equal("1,2,3", message["line"]);
+            Assert.Equal(new[] { 1, 2, 3 }, message["lineChart"]);
         }
 
         [Fact]
@@ -167,7 +167,7 @@ namespace Test.Configs
                 { "Icon", "1" },
                 { "Text", "hi" },
                 { "EffectSpeed", "10" },
-                { "Color", "1,2,3" }
+                { "TextColor", "1,2,3" }
             };
 
             var message = new AwtrixAppMessage();
@@ -175,8 +175,8 @@ namespace Test.Configs
 
             Assert.Equal("hi", message.Text);
             Assert.Equal("1", message["icon"]);
-            Assert.Equal("1,2,3", message["color"]);
-            Assert.Equal("10", message["effectSpeed"]);
+            Assert.Equal(new[] { 1, 2, 3 }, message["textColor"]);
+            Assert.Equal(10.0, message["effectSpeed"]);
         }
 
         [Fact]

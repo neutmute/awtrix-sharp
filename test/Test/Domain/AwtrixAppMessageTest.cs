@@ -1,38 +1,20 @@
-﻿using AwtrixSharpWeb.Domain;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using AwtrixSharpWeb.Domain;
 
 namespace Test.Domain
 {
     public class AwtrixAppMessageTest
     {
         [Fact]
-        public void ToJsonTextSimple()
+        public void ToJsonTextSimple() => Assert.Equal("{\"text\":\"Hello World\"}", new AwtrixAppMessage().SetText("Hello World").ToJson());
+
+        [Fact]
+        public void SetText_StringStartingWithBracket_IsPlainText()
         {
-            var message = new AwtrixAppMessage()
-                .SetText("Hello World");
-
-            var json = message.ToJson();
-
-            Assert.Equal(
-                "{\"text\":\"Hello World\"}",
-                json);
+            // No more "text that looks like JSON is parsed": fragments are built with TextFragment
+            Assert.Equal("{\"text\":\"[not json\"}", new AwtrixAppMessage().SetText("[not json").ToJson());
         }
 
         [Fact]
-        public void ToJsonTextJson()
-        {
-            var message = new AwtrixAppMessage()
-                .SetText("[\r\n    {\r\n      \"t\": \"Hello, \",\r\n      \"c\": \"FF0000\"\r\n    },\r\n    {\r\n      \"t\": \"world!\",\r\n      \"c\": \"00FF00\"\r\n    }\r\n  ]");
-
-            var json = message.ToJson();
-            Console.WriteLine(json);
-            Assert.Equal(
-                "{\"text\":[{\"t\":\"Hello, \",\"c\":\"FF0000\"},{\"t\":\"world!\",\"c\":\"00FF00\"}]}",
-                json);
-        }
+        public void TextFragment_InvalidColour_Throws() => Assert.Throws<ArgumentException>(() => new TextFragment("a", "FF0000"));
     }
 }

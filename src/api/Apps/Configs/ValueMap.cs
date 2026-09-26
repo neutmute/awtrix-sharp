@@ -97,7 +97,7 @@ namespace AwtrixSharpWeb.Apps.Configs
 
                 if (!ValueMapSetters.IsKnown(key))
                 {
-                    problems.Add($"Unknown key '{key}' is ignored");
+                    problems.Add($"Unknown key '{key}' is ignored (AWTRIX 3 name? see docs/config-migration.md)");
                 }
                 else if (!ValueMapSetters.IsValidValue(key, value))
                 {

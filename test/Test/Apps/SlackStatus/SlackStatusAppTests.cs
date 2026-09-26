@@ -114,7 +114,7 @@ namespace Test.Apps.SlackStatus
 
             var message = Assert.Single(_published);
             Assert.Equal("In a meeting", message.Text);
-            Assert.Equal("50", message["duration"]);
+            Assert.Equal(50000, message["durationMs"]);
             _awtrix.Verify(a => a.AppUpdate(_address, AppName, It.IsAny<AwtrixAppMessage>()), Times.Once);
         }
 

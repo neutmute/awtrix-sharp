@@ -104,7 +104,7 @@ namespace Test.Apps.MqttRender
             _mockAwtrixService.Verify(x => x.AppUpdate(
                 _address,
                 "MqttRenderApp",
-                It.Is<AwtrixAppMessage>(m => m["icon"] == "12345")), Times.Once);
+                It.Is<AwtrixAppMessage>(m => Equals(m["icon"], "12345"))), Times.Once);
 
             sut.Dispose();
         }

@@ -68,7 +68,7 @@ namespace AwtrixSharpWeb.Apps.MqttRender
 
             var message = new AwtrixAppMessage()
                                 .SetText(messageText)
-                                .SetDuration(3600);
+                                .SetDuration(TimeSpan.FromHours(1));
 
             return AppUpdate(message);
         }

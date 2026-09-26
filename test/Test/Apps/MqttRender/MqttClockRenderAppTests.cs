@@ -100,7 +100,7 @@ namespace Test.Apps.MqttRender
             _mockAwtrixService.Verify(x => x.AppUpdate(
                 _address,
                 "MqttClockRenderApp",
-                It.Is<AwtrixAppMessage>(m => m["duration"] == "3600")), Times.Once);
+                It.Is<AwtrixAppMessage>(m => Equals(m["durationMs"], 3600000))), Times.Once);
 
             sut.Dispose();
         }

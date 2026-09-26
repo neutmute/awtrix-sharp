@@ -313,29 +313,13 @@ namespace AwtrixSharpWeb.Apps.TripTimer
 
             var clockText = TimerService.FormatClockString(tickTime, false);
 
-            var nowColor = "00FF00";
+            var nowColor = "#00FF00";
 
             if (nextAlarm.AddMinutes(-1) <= Clock.Now)
             {
                 // We are in the last minute before the alarm
-                nowColor = "FFA500";
+                nowColor = "#FFA500";
             }
-
-            var jsonFormat = @"[
-	{
-	  ""t"": ""(NOW_TIME)"",
-	  ""c"": ""(NOW_COLOR)""
-	},
-	{
-	  ""t"": "" ->(ALARM_TIME)"",
-	  ""c"": ""FF0000""
-	}
-]";
-
-            var text = jsonFormat
-                .Replace("(NOW_TIME)", clockText)
-                .Replace("(NOW_COLOR)", nowColor)
-                .Replace("(ALARM_TIME)", $"{nextAlarm:mm}");
 
             var quantisedProgress = GetProgress(Clock, nextAlarm);
             var useProgress = quantisedProgress.quantized;
@@ -346,9 +330,13 @@ namespace AwtrixSharpWeb.Apps.TripTimer
             }
 
             var message = new AwtrixAppMessage()
-                .SetText(text)
+                .SetText(new[]
+                {
+                    new TextFragment(clockText, nowColor),
+                    new TextFragment($" ->{nextAlarm:mm}", "#FF0000"),
+                })
                 .SetStack(false)
-                .SetDuration(300)
+                .SetDuration(TimeSpan.FromMinutes(5))
                 .SetProgress(useProgress);
 
             if (timeToAlarm < VisualAlertBuffer)
@@ -363,7 +351,8 @@ namespace AwtrixSharpWeb.Apps.TripTimer
                 {
                     message
                         .SetText("GO!")
-                        .SetRainbow()
+                        .SetPalette("Rainbow")
+                        .SetTextColor("palette")
                         .SetProgress(100);
 
                     Logger.LogInformation("{Text}", message.Text);

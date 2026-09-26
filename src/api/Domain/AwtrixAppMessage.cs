@@ -1,201 +1,111 @@
 using System.Globalization;
+using System.Text.Encodings.Web;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace AwtrixSharpWeb.Domain
 {
-
     /// <summary>
-    /// Dictionary-based implementation of an Awtrix application message
-    /// that stores all properties as string key-value pairs without default values.
-    /// Numbers are always formatted with the invariant culture. Array-valued keys are stored as
-    /// comma-separated strings ("1,2,3"; gradient "255,0,0;0,255,0") and emitted as JSON arrays by <see cref="ToJson"/>.
+    /// An AWTRIX NG pushed-app or notification payload (https://blueforcer.github.io/awtrix-ng/reference/payload/).
+    /// Keys are NG names; values are stored typed by the setters so <see cref="ToJson()"/> is a plain serialize.
+    /// Only keys that were set are sent: NG rejects unknown keys and treats absent keys as defaults.
     /// </summary>
-    public class AwtrixAppMessage : Dictionary<string, string>
+    public class AwtrixAppMessage : Dictionary<string, object?>
     {
         private const string TextKey = "text";
-        private const string GradientKey = "gradient";
 
-        private static readonly HashSet<string> IntArrayKeys = new(StringComparer.Ordinal)
+        internal static readonly JsonSerializerOptions JsonOptions = new()
         {
-            "line", "bar", "progressC", "progressBC"
+            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+            Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) },
         };
 
-        private string Get(string key)
+        public AwtrixAppMessage() : base(StringComparer.Ordinal)
         {
-            if (this.TryGetValue(key, out var value))
+        }
+
+        /// <summary>The plain text, or null when unset or when the text is a fragment array.</summary>
+        public string? Text => TryGetValue(TextKey, out var value) && value is string s ? s : null;
+
+        public AwtrixAppMessage SetText(string value) => Put(TextKey, value);
+
+        public AwtrixAppMessage SetText(IEnumerable<TextFragment> fragments) => Put(TextKey, fragments.ToArray());
+
+        public AwtrixAppMessage SetTextCase(TextCase value) => Put("textCase", value);
+
+        public AwtrixAppMessage SetHold(bool value = true) => Put("hold", value);
+
+        public AwtrixAppMessage SetStack(bool value = true) => Put("stack", value);
+
+        public AwtrixAppMessage SetTextOffsetX(int value) => Put("textOffsetX", value);
+
+        public AwtrixAppMessage SetTextCenter(bool value) => Put("textCenter", value);
+
+        /// <param name="value">A colour, or the literal "palette" to colour text from the palette.</param>
+        public AwtrixAppMessage SetTextColor(string value)
+            => Put("textColor", string.Equals(value, "palette", StringComparison.OrdinalIgnoreCase) ? "palette" : AwtrixColour.Parse(value));
+
+        public AwtrixAppMessage SetBackgroundColor(string value) => Put("backgroundColor", AwtrixColour.Parse(value));
+
+        public AwtrixAppMessage SetPalette(string name) => Put("palette", name);
+
+        public AwtrixAppMessage SetPalette(int[][] colours)
+        {
+            if (colours != null && colours.Length > 0)
             {
-                return value;
-            }
-            return null;
-        }
-
-        public string Text => Get(TextKey);
-
-
-
-        public AwtrixAppMessage SetText(string value)
-        {
-            this[TextKey] = value;
-            return this;
-        }
-
-        public AwtrixAppMessage SetTextCase(int value) => SetInt("textCase", value);
-
-        public AwtrixAppMessage SetTopText(bool value)
-        {
-            return Set("topText", value);
-        }
-
-
-        public AwtrixAppMessage SetHold(bool value = true)
-        {
-            return Set("hold", value);
-        }
-
-        public AwtrixAppMessage SetStack(bool value = true)
-        {
-            return Set("stack", value);
-        }
-
-
-        public AwtrixAppMessage SetTextOffset(int value) => SetInt("textOffset", value);
-
-        public AwtrixAppMessage SetCenter(bool value)
-        {
-            return Set("center", value);
-        }
-        public AwtrixAppMessage SetColor(string value)
-        {
-            this["color"] = value;
-            return this;
-        }
-
-        public AwtrixAppMessage SetGradient(int[][] value)
-        {
-            if (value != null && value.Length > 0)
-            {
-                this[GradientKey] = string.Join(';', value.Select(JoinInts));
+                Put("palette", colours);
             }
             return this;
         }
 
-        public AwtrixAppMessage SetBlinkText(double value)
+        public AwtrixAppMessage SetPaletteBlend(bool value) => Put("paletteBlend", value);
+
+        public AwtrixAppMessage SetTextBlinkMs(int value) => Put("textBlinkMs", value);
+
+        public AwtrixAppMessage SetTextFadeMs(int value) => Put("textFadeMs", value);
+
+        public AwtrixAppMessage SetIcon(string value) => Put("icon", value);
+
+        public AwtrixAppMessage SetIconMode(IconMode value) => Put("iconMode", value);
+
+        public AwtrixAppMessage SetDurationMs(int value) => Put("durationMs", value);
+
+        public AwtrixAppMessage SetDuration(TimeSpan value) => SetDurationMs(Convert.ToInt32(value.TotalMilliseconds));
+
+        public AwtrixAppMessage SetLifetimeMs(int value) => Put("lifetimeMs", value);
+
+        public AwtrixAppMessage SetLifetime(TimeSpan value) => SetLifetimeMs(Convert.ToInt32(value.TotalMilliseconds));
+
+        public AwtrixAppMessage SetLifetimeExpiry(LifetimeExpiry value) => Put("lifetimeExpiry", value);
+
+        public AwtrixAppMessage SetLineChart(int[] value) => Put("lineChart", value);
+
+        public AwtrixAppMessage SetBarChart(int[] value) => Put("barChart", value);
+
+        public AwtrixAppMessage SetChartAutoscale(bool value) => Put("chartAutoscale", value);
+
+        public AwtrixAppMessage SetOverlay(string value) => Put("overlay", value);
+
+        public AwtrixAppMessage SetProgress(int value) => Put("progress", value);
+
+        public AwtrixAppMessage SetProgressColor(string value) => Put("progressColor", AwtrixColour.Parse(value));
+
+        public AwtrixAppMessage SetProgressTrackColor(string value) => Put("progressTrackColor", AwtrixColour.Parse(value));
+
+        public AwtrixAppMessage SetScrollSpeed(int value) => Put("scroll", new Dictionary<string, object> { ["speed"] = value });
+
+        public AwtrixAppMessage SetEffect(string value) => Put("effect", value);
+
+        public AwtrixAppMessage SetEffectSpeed(double value) => Put("effectSpeed", value);
+
+        private AwtrixAppMessage Put(string key, object? value)
         {
-            this["blinkText"] = value.ToString(CultureInfo.InvariantCulture);
+            this[key] = value;
             return this;
         }
 
-        public AwtrixAppMessage SetFadeText(double value)
-        {
-            this["fadeText"] = value.ToString(CultureInfo.InvariantCulture);
-            return this;
-        }
-
-        public AwtrixAppMessage SetBackground(string value)
-        {
-            this["background"] = value;
-            return this;
-        }
-
-
-        public AwtrixAppMessage SetRainbow(bool value = true)
-        {
-            return Set("rainbow", value);
-        }
-
-        public AwtrixAppMessage SetIcon(string value)
-        {
-            this["icon"] = value;
-            return this;
-        }
-
-        public AwtrixAppMessage SetPushIcon(int value) => SetInt("pushIcon", value);
-
-        public AwtrixAppMessage SetDuration(int value)
-        {
-            SetDuration(TimeSpan.FromSeconds(value));
-            return this;
-        }
-
-        public AwtrixAppMessage SetDuration(TimeSpan value) => SetInt("duration", Convert.ToInt32(value.TotalSeconds));
-
-        public AwtrixAppMessage SetLine(int[] value)
-        {
-            this["line"] = JoinInts(value);
-            return this;
-        }
-
-        public AwtrixAppMessage SetLifetime(int value) => SetInt("lifetime", value);
-
-        public AwtrixAppMessage SetLifetimeMode(int value) => SetInt("lifetimeMode", value);
-
-        public AwtrixAppMessage SetBar(int[] value)
-        {
-            this["bar"] = JoinInts(value);
-            return this;
-        }
-
-        public AwtrixAppMessage SetAutoscale(bool value) => Set("autoscale", value);
-
-        public AwtrixAppMessage SetOverlay(string value)
-        {
-            this["overlay"] = value;
-            return this;
-        }
-
-        public AwtrixAppMessage SetProgress(int value) => SetInt("progress", value);
-
-        public AwtrixAppMessage SetProgressC(int[] value)
-        {
-            this["progressC"] = JoinInts(value);
-            return this;
-        }
-
-        public AwtrixAppMessage SetProgressBC(int[] value)
-        {
-            this["progressBC"] = JoinInts(value);
-            return this;
-        }
-
-        public AwtrixAppMessage SetScrollSpeed(int value) => SetInt("scrollSpeed", value);
-
-        public AwtrixAppMessage SetEffect(string value)
-        {
-            this["effect"] = value;
-            return this;
-        }
-
-        public AwtrixAppMessage SetEffectSpeed(int value) => SetInt("effectSpeed", value);
-
-        public AwtrixAppMessage SetEffectPalette(string value)
-        {
-            this["effectPalette"] = value;
-            return this;
-        }
-
-        public AwtrixAppMessage SetEffectBlend(bool value) => Set("effectBlend", value);
-
-
-        private AwtrixAppMessage Set(string key, bool value)
-        {
-            this[key] = value.ToString().ToLower();
-            return this;
-        }
-
-        private AwtrixAppMessage SetInt(string key, int value)
-        {
-            this[key] = value.ToString(CultureInfo.InvariantCulture);
-            return this;
-        }
-
-        private static string JoinInts(int[] values)
-        {
-            return string.Join(',', values.Select(v => v.ToString(CultureInfo.InvariantCulture)));
-        }
-
-        /// <summary>
-        /// Parse "1,2,3" (whitespace around items allowed) into integers using the invariant culture.
-        /// </summary>
+        /// <summary>Parse "1,2,3" (whitespace around items allowed) into integers using the invariant culture.</summary>
         internal static bool TryParseIntArray(string? value, out int[] result)
         {
             result = Array.Empty<int>();
@@ -218,9 +128,7 @@ namespace AwtrixSharpWeb.Domain
             return true;
         }
 
-        /// <summary>
-        /// Parse "255,0,0;0,255,0" into rows of integers using the invariant culture.
-        /// </summary>
+        /// <summary>Parse "255,0,0;0,255,0" into rows of integers using the invariant culture.</summary>
         internal static bool TryParseIntMatrix(string? value, out int[][] result)
         {
             result = Array.Empty<int[]>();
@@ -250,54 +158,22 @@ namespace AwtrixSharpWeb.Domain
 
         public override string ToString()
         {
-            return string.Join(
-                "; ",
-                this.OrderBy(kvp => kvp.Key == TextKey ? "" : kvp.Key, StringComparer.Ordinal)       // always text first
-                    .Select(kvp => $"{kvp.Key}={kvp.Value}")
-            );
+            return string.Join("; ", Ordered(Array.Empty<string>()).Select(kvp => $"{kvp.Key}={(kvp.Value is string s ? s : JsonSerializer.Serialize(kvp.Value, JsonOptions))}"));
         }
 
         public string ToJson() => ToJson(Array.Empty<string>());
 
+        /// <summary>Serializes every key except <paramref name="excludedKeys"/>; text first, then keys sorted ordinally.</summary>
         public string ToJson(params string[] excludedKeys)
         {
-            var dictionaryToSerialize = new Dictionary<string, object>(this.Count);
-
-            foreach (var kvp in this)
-            {
-                if (excludedKeys.Contains(kvp.Key, StringComparer.Ordinal)) continue;
-                dictionaryToSerialize[kvp.Key] = ToJsonValue(kvp.Key, kvp.Value);
-            }
-
-            return JsonSerializer.Serialize(dictionaryToSerialize);
+            return JsonSerializer.Serialize(Ordered(excludedKeys).ToDictionary(kvp => kvp.Key, kvp => kvp.Value), JsonOptions);
         }
 
-        private static object ToJsonValue(string key, string value)
+        private IEnumerable<KeyValuePair<string, object?>> Ordered(string[] excludedKeys)
         {
-            // Text starting with "[" is an encoded JSON array of coloured text fragments
-            if (key == TextKey && value != null && value.StartsWith("["))
-            {
-                try
-                {
-                    return JsonSerializer.Deserialize<JsonElement>(value);
-                }
-                catch
-                {
-                    return value;
-                }
-            }
-
-            if (IntArrayKeys.Contains(key) && TryParseIntArray(value, out var array))
-            {
-                return array;
-            }
-
-            if (key == GradientKey && TryParseIntMatrix(value, out var matrix))
-            {
-                return matrix;
-            }
-
-            return value;
+            return this
+                .Where(kvp => !excludedKeys.Contains(kvp.Key, StringComparer.Ordinal))
+                .OrderBy(kvp => kvp.Key == TextKey ? "" : kvp.Key, StringComparer.Ordinal);
         }
     }
 }

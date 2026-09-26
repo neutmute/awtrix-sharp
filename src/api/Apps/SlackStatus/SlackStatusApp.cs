@@ -98,7 +98,7 @@ namespace AwtrixSharpWeb.Apps.SlackStatus
             {
                 // No mapping found, use default behavior
                 message.SetText(e.StatusText);
-                message.SetDuration(DefaultDurationSeconds);
+                message.SetDuration(TimeSpan.FromSeconds(DefaultDurationSeconds));
             }
 
             Logger.LogInformation("Slack status message: {Message}", message);

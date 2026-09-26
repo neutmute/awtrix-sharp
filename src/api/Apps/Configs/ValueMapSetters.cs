@@ -4,9 +4,9 @@ using System.Globalization;
 namespace AwtrixSharpWeb.Apps.Configs
 {
     /// <summary>
-    /// Static map from ValueMap key (case-insensitive, the setter name without "Set") to the
-    /// <see cref="AwtrixAppMessage"/> setter it drives. Values are parsed with the invariant culture.
-    /// A test asserts every public single-argument Set* method has an entry.
+    /// Static map from ValueMap key (case-insensitive, the NG payload name) to the <see cref="AwtrixAppMessage"/>
+    /// setter it drives. Values are parsed with the invariant culture. A test asserts every public
+    /// single-argument Set* method (except the TimeSpan conveniences) has an entry.
     /// </summary>
     internal static class ValueMapSetters
     {
@@ -14,35 +14,32 @@ namespace AwtrixSharpWeb.Apps.Configs
             new(StringComparer.OrdinalIgnoreCase)
             {
                 ["Text"] = Str((m, v) => m.SetText(v)),
-                ["TextCase"] = Int((m, v) => m.SetTextCase(v)),
-                ["TopText"] = Bool((m, v) => m.SetTopText(v)),
+                ["TextCase"] = EnumName<TextCase>((m, v) => m.SetTextCase(v)),
                 ["Hold"] = Bool((m, v) => m.SetHold(v)),
                 ["Stack"] = Bool((m, v) => m.SetStack(v)),
-                ["TextOffset"] = Int((m, v) => m.SetTextOffset(v)),
-                ["Center"] = Bool((m, v) => m.SetCenter(v)),
-                ["Color"] = Str((m, v) => m.SetColor(v)),
-                ["Gradient"] = IntMatrix((m, v) => m.SetGradient(v)),
-                ["BlinkText"] = Dbl((m, v) => m.SetBlinkText(v)),
-                ["FadeText"] = Dbl((m, v) => m.SetFadeText(v)),
-                ["Background"] = Str((m, v) => m.SetBackground(v)),
-                ["Rainbow"] = Bool((m, v) => m.SetRainbow(v)),
+                ["TextOffsetX"] = Int((m, v) => m.SetTextOffsetX(v)),
+                ["TextCenter"] = Bool((m, v) => m.SetTextCenter(v)),
+                ["TextColor"] = Colour((m, v) => m.SetTextColor(v)),
+                ["BackgroundColor"] = Colour((m, v) => m.SetBackgroundColor(v)),
+                ["Palette"] = Palette,
+                ["PaletteBlend"] = Bool((m, v) => m.SetPaletteBlend(v)),
+                ["TextBlinkMs"] = Int((m, v) => m.SetTextBlinkMs(v)),
+                ["TextFadeMs"] = Int((m, v) => m.SetTextFadeMs(v)),
                 ["Icon"] = Str((m, v) => m.SetIcon(v)),
-                ["PushIcon"] = Int((m, v) => m.SetPushIcon(v)),
-                ["Duration"] = Int((m, v) => m.SetDuration(v)),
-                ["Line"] = IntArray((m, v) => m.SetLine(v)),
-                ["Lifetime"] = Int((m, v) => m.SetLifetime(v)),
-                ["LifetimeMode"] = Int((m, v) => m.SetLifetimeMode(v)),
-                ["Bar"] = IntArray((m, v) => m.SetBar(v)),
-                ["Autoscale"] = Bool((m, v) => m.SetAutoscale(v)),
+                ["IconMode"] = EnumName<IconMode>((m, v) => m.SetIconMode(v)),
+                ["DurationMs"] = Int((m, v) => m.SetDurationMs(v)),
+                ["LifetimeMs"] = Int((m, v) => m.SetLifetimeMs(v)),
+                ["LifetimeExpiry"] = EnumName<LifetimeExpiry>((m, v) => m.SetLifetimeExpiry(v)),
+                ["LineChart"] = IntArray((m, v) => m.SetLineChart(v)),
+                ["BarChart"] = IntArray((m, v) => m.SetBarChart(v)),
+                ["ChartAutoscale"] = Bool((m, v) => m.SetChartAutoscale(v)),
                 ["Overlay"] = Str((m, v) => m.SetOverlay(v)),
                 ["Progress"] = Int((m, v) => m.SetProgress(v)),
-                ["ProgressC"] = IntArray((m, v) => m.SetProgressC(v)),
-                ["ProgressBC"] = IntArray((m, v) => m.SetProgressBC(v)),
+                ["ProgressColor"] = Colour((m, v) => m.SetProgressColor(v)),
+                ["ProgressTrackColor"] = Colour((m, v) => m.SetProgressTrackColor(v)),
                 ["ScrollSpeed"] = Int((m, v) => m.SetScrollSpeed(v)),
                 ["Effect"] = Str((m, v) => m.SetEffect(v)),
-                ["EffectSpeed"] = Int((m, v) => m.SetEffectSpeed(v)),
-                ["EffectPalette"] = Str((m, v) => m.SetEffectPalette(v)),
-                ["EffectBlend"] = Bool((m, v) => m.SetEffectBlend(v)),
+                ["EffectSpeed"] = Dbl((m, v) => m.SetEffectSpeed(v)),
             };
 
         public static IReadOnlyCollection<string> Keys => Setters.Keys;
@@ -57,6 +54,23 @@ namespace AwtrixSharpWeb.Apps.Configs
 
         public static bool IsValidValue(string key, string value) => TryApply(new AwtrixAppMessage(), key, value);
 
+        private static bool Palette(AwtrixAppMessage message, string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return false;
+            }
+            if (AwtrixAppMessage.TryParseIntMatrix(value, out var matrix))
+            {
+                message.SetPalette(matrix);
+            }
+            else
+            {
+                message.SetPalette(value.Trim());
+            }
+            return true;
+        }
+
         private static Func<AwtrixAppMessage, string, bool> Str(Action<AwtrixAppMessage, string> set) =>
             (message, value) =>
             {
@@ -65,6 +79,33 @@ namespace AwtrixSharpWeb.Apps.Configs
                     return false;
                 }
                 set(message, value);
+                return true;
+            };
+
+        private static Func<AwtrixAppMessage, string, bool> Colour(Action<AwtrixAppMessage, string> set) =>
+            (message, value) =>
+            {
+                try
+                {
+                    set(message, value);
+                    return true;
+                }
+                catch (ArgumentException)
+                {
+                    return false;
+                }
+            };
+
+        private static Func<AwtrixAppMessage, string, bool> EnumName<T>(Action<AwtrixAppMessage, T> set) where T : struct, System.Enum =>
+            (message, value) =>
+            {
+                // Names only ("pushOnce"), not the underlying numbers ("1"): those are AWTRIX 3 values
+                var trimmed = value?.Trim();
+                if (string.IsNullOrEmpty(trimmed) || char.IsDigit(trimmed[0]) || trimmed[0] == '-' || !System.Enum.TryParse<T>(trimmed, ignoreCase: true, out var parsed) || !System.Enum.IsDefined(parsed))
+                {
+                    return false;
+                }
+                set(message, parsed);
                 return true;
             };
 
@@ -106,17 +147,6 @@ namespace AwtrixSharpWeb.Apps.Configs
             (message, value) =>
             {
                 if (!AwtrixAppMessage.TryParseIntArray(value, out var parsed))
-                {
-                    return false;
-                }
-                set(message, parsed);
-                return true;
-            };
-
-        private static Func<AwtrixAppMessage, string, bool> IntMatrix(Action<AwtrixAppMessage, int[][]> set) =>
-            (message, value) =>
-            {
-                if (!AwtrixAppMessage.TryParseIntMatrix(value, out var parsed))
                 {
                     return false;
                 }

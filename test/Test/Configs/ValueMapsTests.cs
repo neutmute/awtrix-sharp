@@ -70,7 +70,7 @@ namespace Test.Configs
             var valueMap = new ValueMap
             {
                 { "ValueMatcher", "busy" },
-                { "Center", "true" },
+                { "TextCenter", "true" },
                 { "EffectSpeed", "50" },
                 { "ScrollSpeed", "100" }
             };
@@ -78,9 +78,9 @@ namespace Test.Configs
 
             valueMap.Decorate(message, _mockLogger.Object);
 
-            Assert.Equal("true", message["center"]);
-            Assert.Equal("50", message["effectSpeed"]);
-            Assert.Equal("100", message["scrollSpeed"]);
+            Assert.Equal(true, message["textCenter"]);
+            Assert.Equal(50.0, message["effectSpeed"]);
+            Assert.Equal(100, ((Dictionary<string, object>)message["scroll"]!)["speed"]);
             Assert.False(message.ContainsKey("ValueMatcher"));
         }
 
@@ -88,8 +88,8 @@ namespace Test.Configs
         public void Deserialize_AppsettingsShape_ProducesValueMaps()
         {
             const string json = @"[
-                { ""ValueMatcher"": ""busy"", ""Icon"": ""12345"", ""Color"": ""255,0,0"", ""Text"": ""I am busy"" },
-                { ""ValueMatcher"": ""meeting"", ""Icon"": ""54321"", ""Color"": ""0,0,255"", ""Duration"": ""60"" }
+                { ""ValueMatcher"": ""busy"", ""Icon"": ""12345"", ""TextColor"": ""255,0,0"", ""Text"": ""I am busy"" },
+                { ""ValueMatcher"": ""meeting"", ""Icon"": ""54321"", ""TextColor"": ""0,0,255"", ""DurationMs"": ""60000"" }
             ]";
 
             var valueMaps = JsonSerializer.Deserialize<List<ValueMap>>(json);
@@ -100,7 +100,7 @@ namespace Test.Configs
             Assert.Equal("12345", valueMaps[0]["Icon"]);
             Assert.Equal("I am busy", valueMaps[0]["Text"]);
             Assert.Equal("meeting", valueMaps[1].ValueMatcher);
-            Assert.Equal("60", valueMaps[1]["Duration"]);
+            Assert.Equal("60000", valueMaps[1]["DurationMs"]);
         }
 
         [Fact]
@@ -123,7 +123,7 @@ namespace Test.Configs
         [Fact]
         public void DeserializeMatchAndDecorate_EndToEnd()
         {
-            const string json = @"[{""ValueMatcher"":""busy"",""Icon"":""12345"",""Color"":""255,0,0"",""Text"":""Busy Status"",""Center"":""true"",""Duration"":""45""}]";
+            const string json = @"[{""ValueMatcher"":""busy"",""Icon"":""12345"",""TextColor"":""255,0,0"",""Text"":""Busy Status"",""TextCenter"":""true"",""DurationMs"":""45000""}]";
             var config = new AppConfig { ValueMaps = JsonSerializer.Deserialize<List<ValueMap>>(json)! };
             var message = new AwtrixAppMessage();
 
@@ -133,9 +133,9 @@ namespace Test.Configs
 
             Assert.Equal("Busy Status", message.Text);
             Assert.Equal("12345", message["icon"]);
-            Assert.Equal("255,0,0", message["color"]);
-            Assert.Equal("true", message["center"]);
-            Assert.Equal("45", message["duration"]);
+            Assert.Equal(new[] { 255, 0, 0 }, message["textColor"]);
+            Assert.Equal(true, message["textCenter"]);
+            Assert.Equal(45000, message["durationMs"]);
         }
     }
 }

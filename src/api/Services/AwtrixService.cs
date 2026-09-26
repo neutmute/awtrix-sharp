@@ -73,7 +73,7 @@ namespace AwtrixSharpWeb.Services
                 return Task.FromResult(false);
             }
 
-            if (String.IsNullOrWhiteSpace(message.Text))
+            if (!message.ContainsKey("text") || (message["text"] is string s && string.IsNullOrWhiteSpace(s)))
             {
                 return Dismiss(awtrixAddress);
             }
