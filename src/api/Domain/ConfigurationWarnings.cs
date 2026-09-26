@@ -32,6 +32,11 @@ namespace AwtrixSharpWeb.Domain
                              "(Slack:AppToken or AWTRIXSHARP_SLACK__APPTOKEN); Slack status will not be shown");
             }
 
+            foreach (var device in (awtrix.Devices ?? Array.Empty<DeviceConfig>()).Where(d => d != null && !string.IsNullOrWhiteSpace(d.Firmware)))
+            {
+                warnings.Add($"Device {device.BaseTopic}: the Firmware setting is obsolete (every device is AWTRIX NG); remove it, see docs/config-migration.md");
+            }
+
             return warnings;
         }
     }

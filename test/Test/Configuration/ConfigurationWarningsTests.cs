@@ -54,5 +54,20 @@ namespace Test.Configuration
 
             Assert.Empty(warnings);
         }
+
+        [Fact]
+        public void Device_WithObsoleteFirmwareKey_Warns()
+        {
+            // Review Focus 4: an unconverted config must start and warn, not fail
+            var config = ConfigWith("DiurnalApp");
+            config.Devices![0].Firmware = "NG";
+
+            var warnings = ConfigurationWarnings.Get(config, new TransportOpenDataConfig(), new SlackSettings());
+
+            var warning = Assert.Single(warnings);
+            Assert.Contains("awtrix/clock1", warning);
+            Assert.Contains("Firmware", warning);
+            Assert.Contains("docs/config-migration.md", warning);
+        }
     }
 }

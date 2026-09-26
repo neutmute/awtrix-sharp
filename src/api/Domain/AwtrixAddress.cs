@@ -4,7 +4,7 @@ namespace AwtrixSharpWeb.Domain
     public class AwtrixAddress
     {
         /// <summary>
-        /// eg: "awtrix/clock1" (MQTT) or "http://192.168.1.50/api" (HTTP)
+        /// eg: "awtrix/clock1" (MQTT) or "http://192.168.1.50" (HTTP, device root, no /api suffix)
         /// </summary>
         public string BaseTopic { get; set; }
 
