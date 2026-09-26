@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Project Does
 
-AwtrixSharp is a .NET 10 ASP.NET Core background service that controls [Awtrix 3](https://blueforcer.github.io/awtrix3) smart clock devices. It supports multiple clocks simultaneously via MQTT or HTTP, with pluggable "apps" that push display content on a schedule.
+AwtrixSharp is a .NET 10 ASP.NET Core background service that controls [AWTRIX NG](https://blueforcer.github.io/awtrix-ng/) smart clock devices. It supports multiple clocks simultaneously via MQTT or HTTP, with pluggable "apps" that push display content on a schedule.
 
 ## Build & Test Commands
 
@@ -68,7 +68,7 @@ appsettings.json → Conductor → App Factory → AwtrixApp instances
 
 ### ValueMaps
 
-Every app config can include a `ValueMaps[]` array. Each entry has a `ValueMatcher` (regex) plus display overrides (`Icon`, `Color`, `Text`, etc.). When an app produces a value, it is tested against matchers in order, and the first match wins. This is the primary extension point for customising display without writing new apps.
+Every app config can include a `ValueMaps[]` array. Each entry has a `ValueMatcher` (regex) plus display overrides (`Icon`, `TextColor`, `Text`, etc.). When an app produces a value, it is tested against matchers in order, and the first match wins. This is the primary extension point for customising display without writing new apps.
 
 ### Two Publisher Transports
 

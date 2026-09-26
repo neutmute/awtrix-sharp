@@ -46,6 +46,10 @@ NG colours are `#RRGGBB`, `#RGB` or `r,g,b`. Bare `RRGGBB` is invalid: add the `
 | `Overlay`, `Progress`, `Effect`, `EffectSpeed`, `ScrollSpeed` | same | as-is |
 | `ProgressC`, `ProgressBC` | `ProgressColor`, `ProgressTrackColor` | `r,g,b` as-is |
 | `EffectBlend` | `PaletteBlend` | as-is |
+| `ValueMatcher` | `ValueMatcher` | as-is |
+| anything else | none | drop and report |
+
+Palette precedence when several sources are present in one map: `Gradient` > `Rainbow` > `EffectPalette`.
 
 A `Palette` that came from `Rainbow` or `Gradient` must be accompanied by `"TextColor": "palette"`,
 otherwise NG keeps the text in its plain colour.

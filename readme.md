@@ -2,7 +2,7 @@
 
 [![Docker](https://github.com/neutmute/awtrix-sharp/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/neutmute/awtrix-sharp/actions/workflows/docker-publish.yml)
 
-A configurable dotnet controller for [Awtrix 3](https://blueforcer.github.io/awtrix3/#/) devices.
+A configurable dotnet controller for [AWTRIX NG](https://blueforcer.github.io/awtrix-ng/) devices.
 
 One instance of this app can control multiple clocks in your household.
 
@@ -129,7 +129,7 @@ Render the time AND an MQTT value (eg: temperature) without having to swap betwe
 
 ### `SlackStatusApp`
 
-When you change your status in Slack, render it to the Awtrix 3. 
+When you change your status in Slack, render it to the clock. 
 Put the clock on your desk, set yourself to `Busy` and let people know you are in the zone.
 
 ![image](./docs/gifs/awtrix-slack.png)
@@ -226,7 +226,7 @@ To test against the NG simulator without a clock, see [docs/simulator.md](docs/s
 
 1. Create your `docker-compose.yaml`
 2. Create `./data/awtrix/appsettings.json`
-3. Set the `basetopic` to be either an mqtt route - eg `awtrix/clock1` or a http url like `http://192.168.10.20/api`.
+3. Set the `basetopic` to be either an mqtt route - eg `awtrix/clock1` or a http url like `http://192.168.10.20` - the device root, with no `/api` suffix.
 
 ### Example docker compose
 
