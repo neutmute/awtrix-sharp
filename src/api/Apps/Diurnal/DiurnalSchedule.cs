@@ -16,7 +16,7 @@ namespace AwtrixSharpWeb.Apps.Diurnal
     {
         private const string TimeFormat = "hhmm";
         private const string BrightnessSetting = "brightness";
-        private const string GlobalTextColorSetting = "globaltextcolor";
+        private const string TextColorSetting = "textcolor";
 
         private readonly List<DiurnalEntry> _entries;
 
@@ -100,12 +100,19 @@ namespace AwtrixSharpWeb.Apps.Diurnal
                         }
                         break;
 
-                    case GlobalTextColorSetting:
-                        settings.SetGlobalTextColor(settingValue);
+                    case TextColorSetting:
+                        if (AwtrixColour.TryParse(settingValue, out _))
+                        {
+                            settings.SetTextColor(settingValue);
+                        }
+                        else
+                        {
+                            logger.LogWarning("Diurnal TextColor '{Value}' at {TimeKey} ignored: expected #RRGGBB, #RGB or r,g,b (see docs/config-migration.md)", settingValue, timeKey);
+                        }
                         break;
 
                     default:
-                        logger.LogWarning("Diurnal setting '{SettingName}' at {TimeKey} ignored: unknown setting (expected Brightness or GlobalTextColor)", name, timeKey);
+                        logger.LogWarning("Diurnal setting '{SettingName}' at {TimeKey} ignored: unknown setting (expected Brightness or TextColor; see docs/config-migration.md)", name, timeKey);
                         break;
                 }
             }

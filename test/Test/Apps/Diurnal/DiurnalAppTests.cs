@@ -21,8 +21,8 @@ namespace Test.Apps.Diurnal
         private static readonly (string Time, string Value)[] Shipped =
         {
             ("0600", "Brightness=8"),
-            ("0700", "GlobalTextColor=#FFFFFF"),
-            ("1900", "GlobalTextColor=#FF0000"),
+            ("0700", "TextColor=#FFFFFF"),
+            ("1900", "TextColor=#FF0000"),
             ("2100", "Brightness=1"),
         };
 
@@ -119,13 +119,13 @@ namespace Test.Apps.Diurnal
         [Fact]
         public async Task InitAsync_MixedValidAndInvalidSettings_AppliesValidPart()
         {
-            var app = CreateApp(At(22, 0), ("2100", "Brightness=dim;GlobalTextColor=#00FF00"));
+            var app = CreateApp(At(22, 0), ("2100", "Brightness=dim;TextColor=#00FF00"));
 
             await app.InitAsync();
 
             var settings = Assert.Single(_applied);
-            Assert.False(settings.ContainsKey("BRI"));
-            Assert.Equal("#00FF00", settings["TCOL"]);
+            Assert.False(settings.ContainsKey("brightness"));
+            Assert.Equal("#00FF00", settings["textColor"]);
         }
 
         [Fact]
@@ -141,13 +141,13 @@ namespace Test.Apps.Diurnal
             Assert.Empty(_applied);
 
             RaiseMinute(7, 0);
-            Assert.Equal("5", Assert.Single(Assert.Single(_applied), kv => kv.Key == "BRI").Value);
+            Assert.Equal(5, Assert.Single(Assert.Single(_applied), kv => kv.Key == "brightness").Value);
         }
 
         [Fact]
         public async Task MinuteTick_OutOfRangeBrightness_DoesNotThrowOrPublish()
         {
-            await StartApp(At(20, 59), ("2100", "Brightness=300"), ("2200", "GlobalTextColor=#112233"));
+            await StartApp(At(20, 59), ("2100", "Brightness=300"), ("2200", "TextColor=#112233"));
             _timer.VerifyAdd(t => t.MinuteChanged += It.IsAny<EventHandler<ClockTickEventArgs>>(), Times.Once);
 
             var ex = Record.Exception(() => RaiseMinute(21, 0));
@@ -157,8 +157,8 @@ namespace Test.Apps.Diurnal
 
             RaiseMinute(22, 0);
             var settings = Assert.Single(_applied);
-            Assert.Equal("#112233", settings["TCOL"]);
-            Assert.False(settings.ContainsKey("BRI"));
+            Assert.Equal("#112233", settings["textColor"]);
+            Assert.False(settings.ContainsKey("brightness"));
         }
 
         // ---------- Startup state (CR-20) ----------
@@ -171,8 +171,8 @@ namespace Test.Apps.Diurnal
             await app.InitAsync();
 
             var settings = Assert.Single(_applied);
-            Assert.Equal("8", settings["BRI"]);
-            Assert.Equal("#FFFFFF", settings["TCOL"]);
+            Assert.Equal(8, settings["brightness"]);
+            Assert.Equal("#FFFFFF", settings["textColor"]);
             _awtrix.Verify(a => a.Set(_address, It.IsAny<AwtrixSettings>()), Times.Once);
         }
 
@@ -184,8 +184,8 @@ namespace Test.Apps.Diurnal
             await app.InitAsync();
 
             var settings = Assert.Single(_applied);
-            Assert.Equal("1", settings["BRI"]);
-            Assert.Equal("#FF0000", settings["TCOL"]);
+            Assert.Equal(1, settings["brightness"]);
+            Assert.Equal("#FF0000", settings["textColor"]);
         }
 
         [Fact]
@@ -209,30 +209,30 @@ namespace Test.Apps.Diurnal
 
             RaiseMinute(6, 0);
 
-            Assert.Equal("8", Assert.Single(_applied)["BRI"]);
+            Assert.Equal(8, Assert.Single(_applied)["brightness"]);
             _awtrix.Verify(a => a.Set(_address, It.IsAny<AwtrixSettings>()), Times.Exactly(2)); // startup + tick
         }
 
         [Fact]
-        public async Task MinuteTick_MatchingColorEntry_AppliesGlobalTextColor()
+        public async Task MinuteTick_MatchingColorEntry_AppliesTextColor()
         {
-            await StartApp(At(21, 59), ("2200", "GlobalTextColor=#112233"));
+            await StartApp(At(21, 59), ("2200", "TextColor=#112233"));
 
             RaiseMinute(22, 0);
 
-            Assert.Equal("#112233", Assert.Single(_applied)["TCOL"]);
+            Assert.Equal("#112233", Assert.Single(_applied)["textColor"]);
         }
 
         [Fact]
         public async Task MinuteTick_CompoundEntry_AppliesBothSettingsTogether()
         {
-            await StartApp(At(6, 59), ("0700", "Brightness=5;GlobalTextColor=#FFFFFF"));
+            await StartApp(At(6, 59), ("0700", "Brightness=5;TextColor=#FFFFFF"));
 
             RaiseMinute(7, 0);
 
             var settings = Assert.Single(_applied);
-            Assert.Equal("5", settings["BRI"]);
-            Assert.Equal("#FFFFFF", settings["TCOL"]);
+            Assert.Equal(5, settings["brightness"]);
+            Assert.Equal("#FFFFFF", settings["textColor"]);
         }
 
         [Fact]
@@ -252,7 +252,7 @@ namespace Test.Apps.Diurnal
 
             RaiseMinute(6, 0, second: 7);
 
-            Assert.Equal("8", Assert.Single(_applied)["BRI"]);
+            Assert.Equal(8, Assert.Single(_applied)["brightness"]);
         }
 
         [Fact]
@@ -309,7 +309,7 @@ namespace Test.Apps.Diurnal
             {
                 // Only the restore has reached the transport; the 21:00 tick waits behind it
                 Assert.Single(applied);
-                Assert.Equal("8", applied[0]["BRI"]);
+                Assert.Equal(8, applied[0]["brightness"]);
             }
 
             restoreGate.SetResult(true);
@@ -318,7 +318,7 @@ namespace Test.Apps.Diurnal
             lock (applied)
             {
                 Assert.Equal(2, applied.Count);
-                Assert.Equal("1", applied[1]["BRI"]); // night brightness wins
+                Assert.Equal(1, applied[1]["brightness"]); // night brightness wins
             }
         }
 
@@ -360,7 +360,7 @@ namespace Test.Apps.Diurnal
             RaiseMinute(21, 1); // coalesced tick: 21:00 never arrived
 
             var settings = Assert.Single(_applied);
-            Assert.Equal("1", Assert.Single(settings, kv => kv.Key == "BRI").Value);
+            Assert.Equal(1, Assert.Single(settings, kv => kv.Key == "brightness").Value);
             Assert.Single(settings);
         }
 
@@ -371,7 +371,7 @@ namespace Test.Apps.Diurnal
 
             RaiseMinute(0, 1, dayOffset: 1);
 
-            Assert.Equal("3", Assert.Single(_applied)["BRI"]);
+            Assert.Equal(3, Assert.Single(_applied)["brightness"]);
         }
 
         [Fact]
@@ -383,7 +383,7 @@ namespace Test.Apps.Diurnal
             Assert.Empty(_applied);
 
             RaiseMinute(2, 30);
-            Assert.Equal("2", Assert.Single(_applied)["BRI"]);
+            Assert.Equal(2, Assert.Single(_applied)["brightness"]);
         }
 
         [Fact]
@@ -393,7 +393,7 @@ namespace Test.Apps.Diurnal
 
             RaiseMinute(7, 0, dayOffset: 3); // host suspended for days
 
-            Assert.Equal("8", Assert.Single(_applied)["BRI"]);
+            Assert.Equal(8, Assert.Single(_applied)["brightness"]);
         }
     }
 }

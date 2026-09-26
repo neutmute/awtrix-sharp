@@ -132,16 +132,16 @@ namespace Test.Controllers
         }
 
         [Fact]
-        public async Task SetGlobalTextColor_PublishesSettingsToEachDevice()
+        public async Task SetTextColor_PublishesSettingsToEachDevice()
         {
             var device = new DeviceConfig { BaseTopic = "awtrix/clock1" };
             var (controller, _, mqtt) = CreateController(new AwtrixConfig { Devices = new[] { device } });
 
-            var result = await controller.SetGlobalTextColor("#123456");
+            var result = await controller.SetTextColor("#123456");
 
             Assert.IsType<OkResult>(result);
             Assert.Equal("awtrix/clock1/cmd/settings", mqtt.LastUrl);
-            Assert.Equal("{\"TCOL\":\"#123456\"}", mqtt.LastPayload);
+            Assert.Equal("{\"textColor\":\"#123456\"}", mqtt.LastPayload);
         }
     }
 }

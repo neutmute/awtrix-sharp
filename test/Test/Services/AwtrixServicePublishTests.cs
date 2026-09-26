@@ -110,7 +110,7 @@ namespace Test.Services
 
             Assert.True(result);
             Assert.Equal("awtrix/clock1/cmd/settings", mqtt.LastUrl);
-            Assert.Equal("{\"BRI\":\"128\"}", mqtt.LastPayload);
+            Assert.Equal("{\"brightness\":128}", mqtt.LastPayload);
         }
 
         [Fact]

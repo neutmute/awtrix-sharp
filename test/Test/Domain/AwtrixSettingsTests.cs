@@ -5,71 +5,34 @@ namespace Test.Domain
     public class AwtrixSettingsTests
     {
         [Fact]
-        public void SetGlobalTextColor_SetsTcolKey()
+        public void SetTextColor_StoresParsedColour()
         {
-            var settings = new AwtrixSettings().SetGlobalTextColor("#00FF00");
-
-            Assert.Equal("#00FF00", settings["TCOL"]);
+            Assert.Equal("#FFFFFF", new AwtrixSettings().SetTextColor("#FFFFFF")["textColor"]);
+            Assert.Equal(new[] { 1, 2, 3 }, new AwtrixSettings().SetTextColor("1,2,3")["textColor"]);
         }
 
         [Fact]
-        public void SetBrightness_SetsBriKeyAsString()
-        {
-            var settings = new AwtrixSettings().SetBrightness(200);
+        public void SetTextColor_BareHex_Throws() => Assert.Throws<ArgumentException>(() => new AwtrixSettings().SetTextColor("FFFFFF"));
 
-            Assert.Equal("200", settings["BRI"]);
+        [Fact]
+        public void SetBrightness_StoresInt() => Assert.Equal(200, new AwtrixSettings().SetBrightness(200)["brightness"]);
+
+        [Fact]
+        public void ToJson_SortsKeys()
+        {
+            Assert.Equal("{\"brightness\":50,\"textColor\":\"#FFFFFF\"}", new AwtrixSettings().SetTextColor("#FFFFFF").SetBrightness(50).ToJson());
         }
 
         [Fact]
-        public void FluentChain_AllowsSettingMultipleValues()
-        {
-            var settings = new AwtrixSettings()
-                .SetGlobalTextColor("#FFFFFF")
-                .SetBrightness(50);
-
-            Assert.Equal("#FFFFFF", settings["TCOL"]);
-            Assert.Equal("50", settings["BRI"]);
-        }
-
-        [Fact]
-        public void ToJson_SerializesAllKeys()
-        {
-            var settings = new AwtrixSettings()
-                .SetGlobalTextColor("#FFFFFF")
-                .SetBrightness(50);
-
-            var json = settings.ToJson();
-
-            Assert.Equal("{\"TCOL\":\"#FFFFFF\",\"BRI\":\"50\"}", json);
-        }
-
-        [Fact]
-        public void ToJson_EmptySettings_ReturnsEmptyObject()
-        {
-            var settings = new AwtrixSettings();
-
-            Assert.Equal("{}", settings.ToJson());
-        }
+        public void ToJson_EmptySettings_ReturnsEmptyObject() => Assert.Equal("{}", new AwtrixSettings().ToJson());
 
         [Fact]
         public void ToString_JoinsKeyValuePairsWithSemicolon()
         {
-            var settings = new AwtrixSettings()
-                .SetGlobalTextColor("#FFFFFF")
-                .SetBrightness(50);
-
-            var result = settings.ToString();
-
-            Assert.Equal("TCOL=#FFFFFF;BRI=50", result);
+            Assert.Equal("brightness=50;textColor=#FFFFFF", new AwtrixSettings().SetTextColor("#FFFFFF").SetBrightness(50).ToString());
         }
 
         [Fact]
-        public void ToString_WhenEmpty_ReturnsEmptyString()
-        {
-            // Previously threw InvalidOperationException (Aggregate on empty) inside a tick handler (CR-01).
-            var settings = new AwtrixSettings();
-
-            Assert.Equal(string.Empty, settings.ToString());
-        }
+        public void ToString_WhenEmpty_ReturnsEmptyString() => Assert.Equal("", new AwtrixSettings().ToString());
     }
 }

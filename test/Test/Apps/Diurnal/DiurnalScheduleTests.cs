@@ -13,14 +13,18 @@ namespace Test.Apps.Diurnal
         private static readonly Dictionary<string, string> Shipped = new()
         {
             ["0600"] = "Brightness=8",
-            ["0700"] = "GlobalTextColor=#FFFFFF",
-            ["1900"] = "GlobalTextColor=#FF0000",
+            ["0700"] = "TextColor=#FFFFFF",
+            ["1900"] = "TextColor=#FF0000",
             ["2100"] = "Brightness=1",
         };
+
+        private readonly Mock<ILogger> _logger = new();
 
         private static DateTime T(int hour, int minute, int dayOffset = 0) => Day.AddDays(dayOffset).Add(new TimeSpan(hour, minute, 0));
 
         private static DiurnalSchedule Parse(Dictionary<string, string> config) => DiurnalSchedule.Parse(config, NullLogger.Instance);
+
+        private DiurnalSchedule ParseWithLogger(Dictionary<string, string> config) => DiurnalSchedule.Parse(config, _logger.Object);
 
         private static void VerifyWarningLogged(Mock<ILogger> logger)
         {
@@ -33,6 +37,17 @@ namespace Test.Apps.Diurnal
                 Times.AtLeastOnce);
         }
 
+        private void VerifyWarningLogged(string messageContains)
+        {
+            _logger.Verify(l => l.Log(
+                    LogLevel.Warning,
+                    It.IsAny<EventId>(),
+                    It.Is<It.IsAnyType>((state, _) => state!.ToString()!.Contains(messageContains, StringComparison.Ordinal)),
+                    It.IsAny<Exception?>(),
+                    It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
+                Times.AtLeastOnce);
+        }
+
         // ---------- Parse (CR-21) ----------
 
         [Fact]
@@ -42,12 +57,12 @@ namespace Test.Apps.Diurnal
             {
                 ["2100"] = "Brightness=1",
                 ["0600"] = "Brightness=8",
-                ["0700"] = "GlobalTextColor=#FFFFFF",
+                ["0700"] = "TextColor=#FFFFFF",
             });
 
             Assert.Equal(new[] { new TimeSpan(6, 0, 0), new TimeSpan(7, 0, 0), new TimeSpan(21, 0, 0) }, sut.Entries.Select(e => e.Time));
-            Assert.Equal("8", sut.Entries[0].Settings["BRI"]);
-            Assert.Equal("#FFFFFF", sut.Entries[1].Settings["TCOL"]);
+            Assert.Equal(8, sut.Entries[0].Settings["brightness"]);
+            Assert.Equal("#FFFFFF", sut.Entries[1].Settings["textColor"]);
         }
 
         [Theory]
@@ -70,18 +85,18 @@ namespace Test.Apps.Diurnal
         /// leading sign and leading zeros. Those forms must keep working (invariant culture).
         /// </summary>
         [Theory]
-        [InlineData("Brightness=+8", "8")]
-        [InlineData("Brightness=-0", "0")]
-        [InlineData("Brightness=008", "8")]
-        [InlineData("Brightness=+255", "255")]
-        public void Parse_BrightnessFormsAcceptedBeforeWs5_AreStillAccepted(string value, string expected)
+        [InlineData("Brightness=+8", 8)]
+        [InlineData("Brightness=-0", 0)]
+        [InlineData("Brightness=008", 8)]
+        [InlineData("Brightness=+255", 255)]
+        public void Parse_BrightnessFormsAcceptedBeforeWs5_AreStillAccepted(string value, int expected)
         {
             var logger = new Mock<ILogger>();
 
             var sut = DiurnalSchedule.Parse(new Dictionary<string, string> { ["2100"] = value }, logger.Object);
 
             var entry = Assert.Single(sut.Entries);
-            Assert.Equal(expected, entry.Settings["BRI"]);
+            Assert.Equal(expected, entry.Settings["brightness"]);
             logger.Verify(l => l.Log(
                     LogLevel.Warning,
                     It.IsAny<EventId>(),
@@ -94,11 +109,11 @@ namespace Test.Apps.Diurnal
         [Fact]
         public void Parse_MixedValidAndInvalidSettings_KeepsValidPart()
         {
-            var sut = Parse(new Dictionary<string, string> { ["2100"] = "Brightness=dim;GlobalTextColor=#00FF00" });
+            var sut = Parse(new Dictionary<string, string> { ["2100"] = "Brightness=dim;TextColor=#00FF00" });
 
             var entry = Assert.Single(sut.Entries);
-            Assert.False(entry.Settings.ContainsKey("BRI"));
-            Assert.Equal("#00FF00", entry.Settings["TCOL"]);
+            Assert.False(entry.Settings.ContainsKey("brightness"));
+            Assert.Equal("#00FF00", entry.Settings["textColor"]);
         }
 
         [Fact]
@@ -110,6 +125,24 @@ namespace Test.Apps.Diurnal
 
             Assert.True(sut.IsEmpty);
             VerifyWarningLogged(logger);
+        }
+
+        [Fact]
+        public void Parse_GlobalTextColor_IsUnknown_AndWarnsWithMigrationHint()
+        {
+            var schedule = ParseWithLogger(new Dictionary<string, string> { ["0700"] = "GlobalTextColor=#FFFFFF" });
+
+            Assert.True(schedule.IsEmpty);
+            VerifyWarningLogged("docs/config-migration.md");
+        }
+
+        [Fact]
+        public void Parse_BareHexTextColor_IsDroppedAndWarns()
+        {
+            var schedule = ParseWithLogger(new Dictionary<string, string> { ["0700"] = "TextColor=FFFFFF" });
+
+            Assert.True(schedule.IsEmpty);
+            VerifyWarningLogged("TextColor");
         }
 
         [Theory]
@@ -130,11 +163,11 @@ namespace Test.Apps.Diurnal
         [Fact]
         public void Parse_SettingNamesAreCaseInsensitive()
         {
-            var sut = Parse(new Dictionary<string, string> { ["0600"] = "BRIGHTNESS=5; globaltextcolor=#123456" });
+            var sut = Parse(new Dictionary<string, string> { ["0600"] = "BRIGHTNESS=5; textcolor=#123456" });
 
             var entry = Assert.Single(sut.Entries);
-            Assert.Equal("5", entry.Settings["BRI"]);
-            Assert.Equal("#123456", entry.Settings["TCOL"]);
+            Assert.Equal(5, entry.Settings["brightness"]);
+            Assert.Equal("#123456", entry.Settings["textColor"]);
         }
 
         [Fact]
@@ -150,8 +183,8 @@ namespace Test.Apps.Diurnal
         {
             var state = Parse(Shipped).StateAt(T(3, 0));
 
-            Assert.Equal("1", state["BRI"]);
-            Assert.Equal("#FF0000", state["TCOL"]);
+            Assert.Equal(1, state["brightness"]);
+            Assert.Equal("#FF0000", state["textColor"]);
         }
 
         [Fact]
@@ -159,8 +192,8 @@ namespace Test.Apps.Diurnal
         {
             var state = Parse(Shipped).StateAt(T(6, 30));
 
-            Assert.Equal("8", state["BRI"]);
-            Assert.Equal("#FF0000", state["TCOL"]);
+            Assert.Equal(8, state["brightness"]);
+            Assert.Equal("#FF0000", state["textColor"]);
         }
 
         [Fact]
@@ -168,8 +201,8 @@ namespace Test.Apps.Diurnal
         {
             var state = Parse(Shipped).StateAt(T(7, 0).AddSeconds(42));
 
-            Assert.Equal("8", state["BRI"]);
-            Assert.Equal("#FFFFFF", state["TCOL"]);
+            Assert.Equal(8, state["brightness"]);
+            Assert.Equal("#FFFFFF", state["textColor"]);
         }
 
         [Fact]
@@ -186,8 +219,8 @@ namespace Test.Apps.Diurnal
             var due = Parse(Shipped).DueBetween(T(20, 59), T(21, 1));
 
             var setting = Assert.Single(due);
-            Assert.Equal("BRI", setting.Key);
-            Assert.Equal("1", setting.Value);
+            Assert.Equal("brightness", setting.Key);
+            Assert.Equal(1, setting.Value);
         }
 
         [Fact]
@@ -197,7 +230,7 @@ namespace Test.Apps.Diurnal
 
             var due = sut.DueBetween(T(23, 59), T(0, 1, dayOffset: 1));
 
-            Assert.Equal("3", due["BRI"]);
+            Assert.Equal(3, due["brightness"]);
         }
 
         [Fact]
@@ -206,7 +239,7 @@ namespace Test.Apps.Diurnal
             var sut = Parse(Shipped);
 
             Assert.Empty(sut.DueBetween(T(6, 0), T(6, 59)));
-            Assert.Equal("#FFFFFF", sut.DueBetween(T(6, 59), T(7, 0))["TCOL"]);
+            Assert.Equal("#FFFFFF", sut.DueBetween(T(6, 59), T(7, 0))["textColor"]);
         }
 
         [Fact]
@@ -214,7 +247,7 @@ namespace Test.Apps.Diurnal
         {
             var due = Parse(Shipped).DueBetween(T(5, 59).AddSeconds(30), T(6, 0).AddSeconds(7));
 
-            Assert.Equal("8", due["BRI"]);
+            Assert.Equal(8, due["brightness"]);
         }
 
         [Fact]
@@ -229,11 +262,11 @@ namespace Test.Apps.Diurnal
         [Fact]
         public void DueBetween_SameKeyTwiceInWindow_LaterEntryWins()
         {
-            // 0600 BRI=8 then 0700 TCOL white then 1900 TCOL red
+            // 0600 brightness=8 then 0700 textColor white then 1900 textColor red
             var due = Parse(Shipped).DueBetween(T(5, 0), T(20, 0));
 
-            Assert.Equal("8", due["BRI"]);
-            Assert.Equal("#FF0000", due["TCOL"]);
+            Assert.Equal(8, due["brightness"]);
+            Assert.Equal("#FF0000", due["textColor"]);
         }
 
         [Fact]
