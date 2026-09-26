@@ -68,8 +68,8 @@ their JSON.
 
 `TextCase`, `IconMode`, `LifetimeExpiry` are enums in `AwtrixSharpWeb.Domain`, serialized with a
 `JsonStringEnumConverter` using camelCase names. `TextFragment` is
-`public sealed record TextFragment(string Text, string? Color = null)`; its constructor validates
-`Color` with §1.1.
+`public sealed class TextFragment(string text, string? color = null)` exposing `string Text` and
+`object? Color` (the §1.1 parse result, so a bad colour throws from the constructor).
 
 `SetPalette(string)` and `SetTextColor("palette")` are independent. NG only colours text from the
 palette when `textColor` is `palette`, so callers (and configs) that want rainbow text set both.
