@@ -1,2 +1,149 @@
 @page "/ui"
+@using AwtrixSharpWeb.Apps.Configs
+@using AwtrixSharpWeb.Ui.Components
+@implements IDisposable
+@inject Conductor Conductor
+@inject IOptions<AwtrixConfig> Config
+@inject IAwtrixService Awtrix
+@inject PublishTrace Trace
+@inject DeviceStateMonitor Monitor
+
 <h1>Apps</h1>
+
+@foreach (var device in Config.Value.Devices)
+{
+    var state = Monitor.Get(device.BaseTopic);
+    var deviceUi = UiFor(device.BaseTopic, device);
+    <div class="card device">
+        <div class="card-head">
+            <strong>@device.BaseTopic</strong>
+            <span class="badge">@(device.IsHttp ? "HTTP" : "MQTT")</span>
+            <span class="muted">@DeviceSummary.Describe(state.DeviceJson, state.LastSeen)</span>
+        </div>
+        @if (state.DeviceJson != null)
+        {
+            <details><summary>device state</summary><pre>@DeviceSummary.Pretty(state.DeviceJson)</pre></details>
+        }
+
+        @foreach (var app in device.Apps)
+        {
+            var key = (device.BaseTopic, app.Type);
+            <div class="app-row">
+                <div class="actions">
+                    <strong>@app.Type</strong>
+                    <button class="run-now" @onclick="() => RunNow(device.BaseTopic, app.Type)">Run now</button>
+                    @if (_runResults.TryGetValue(key, out var result))
+                    {
+                        <span class="@(result == AppExecutionResult.Started ? "result ok" : "result bad")">@Describe(result)</span>
+                    }
+                </div>
+                <div class="kv">@string.Join("  ", app.Config.Select(kv => $"{kv.Key}={kv.Value}"))</div>
+                @foreach (var map in app.ValueMaps)
+                {
+                    <div class="kv">ValueMap @map.ValueMatcher → @string.Join(" ", map.Where(kv => kv.Key != ValueMap.MatcherKey).Select(kv => $"{kv.Key}={kv.Value}"))</div>
+                }
+                <PayloadView Record="Trace.LastForApp(device.BaseTopic, app.Type)" />
+            </div>
+        }
+
+        <div class="actions">
+            <button class="dismiss" @onclick="() => Dismiss(device)">Dismiss notification</button>
+            <input class="clear-name" @bind="deviceUi.ClearName" placeholder="app name" />
+            <button class="clear-app" @onclick="() => ClearApp(device, deviceUi)">Clear app</button>
+            @if (deviceUi.LastResult != null)
+            {
+                <span class="@(deviceUi.LastResult.Value ? "result ok" : "result bad")">@(deviceUi.LastResult.Value ? "delivered" : "not delivered")</span>
+            }
+            @if (deviceUi.Error != null)
+            {
+                <span class="error">@deviceUi.Error</span>
+            }
+        </div>
+    </div>
+}
+
+<details class="recent" open>
+    <summary>Recent sends (@Trace.Recent().Count)</summary>
+    @foreach (var record in Trace.Recent())
+    {
+        <div class="app-row">
+            <div class="muted">@record.BaseTopic @(record.AppName ?? "")</div>
+            <PayloadView Record="record" />
+        </div>
+    }
+</details>
+
+@code {
+    private sealed class DeviceUi
+    {
+        public string ClearName { get; set; } = "";
+        public bool? LastResult { get; set; }
+        public string? Error { get; set; }
+    }
+
+    private readonly Dictionary<(string, string), AppExecutionResult> _runResults = new();
+    private readonly Dictionary<string, DeviceUi> _deviceUi = new(StringComparer.Ordinal);
+
+    protected override void OnInitialized()
+    {
+        Trace.Changed += OnChanged;
+        Monitor.Changed += OnDeviceChanged;
+    }
+
+    private DeviceUi UiFor(string baseTopic, DeviceConfig device)
+    {
+        if (!_deviceUi.TryGetValue(baseTopic, out var ui))
+        {
+            ui = new DeviceUi { ClearName = device.Apps.FirstOrDefault()?.Name ?? "" };
+            _deviceUi[baseTopic] = ui;
+        }
+        return ui;
+    }
+
+    private void RunNow(string baseTopic, string appType)
+    {
+        _runResults[(baseTopic, appType)] = Conductor.ExecuteNow(baseTopic, appType);
+    }
+
+    private static string Describe(AppExecutionResult result) => result switch
+    {
+        AppExecutionResult.Started => "Started",
+        AppExecutionResult.NotFound => "Not running",
+        _ => "Error (see logs)",
+    };
+
+    private async Task Dismiss(DeviceConfig device)
+    {
+        await Run(device, () => Awtrix.Dismiss(device));
+    }
+
+    private async Task ClearApp(DeviceConfig device, DeviceUi ui)
+    {
+        await Run(device, () => Awtrix.AppClear(device, ui.ClearName));
+    }
+
+    private async Task Run(DeviceConfig device, Func<Task<bool>> action)
+    {
+        var ui = UiFor(device.BaseTopic, device);
+        ui.Error = null;
+        try
+        {
+            ui.LastResult = await action();
+        }
+        catch (Exception ex)
+        {
+            ui.LastResult = false;
+            ui.Error = ex.Message;
+        }
+    }
+
+    private void OnChanged() => _ = InvokeAsync(StateHasChanged);
+
+    private void OnDeviceChanged(string baseTopic) => _ = InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        Trace.Changed -= OnChanged;
+        Monitor.Changed -= OnDeviceChanged;
+    }
+}

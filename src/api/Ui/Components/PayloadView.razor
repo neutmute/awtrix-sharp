@@ -1,0 +1,20 @@
+@using AwtrixSharpWeb.Ui.Components
+@if (Record is null)
+{
+    <span class="muted">nothing sent yet</span>
+}
+else
+{
+    <div class="muted">
+        @Record.At.ToLocalTime().ToString("HH:mm:ss") · @Record.Operation · @Record.Request.Method @Record.Request.Address ·
+        <span class="@(Record.Delivered ? "result ok" : "result bad")">@(Record.Delivered ? "delivered" : "not delivered")</span>
+    </div>
+    @if (!string.IsNullOrEmpty(Record.Request.Payload))
+    {
+        <pre>@DeviceSummary.Pretty(Record.Request.Payload)</pre>
+    }
+}
+
+@code {
+    [Parameter] public PublishRecord? Record { get; set; }
+}
