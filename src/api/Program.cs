@@ -141,7 +141,13 @@ namespace AwtrixSharpWeb
             services.AddHttpClient(HttpPublisher.HttpClientName, client => client.Timeout = HttpPublisher.DefaultTimeout);
             services.AddSingleton<HttpPublisher>();
             services.AddSingleton<MqttPublisher>();
-            services.AddSingleton<IAwtrixService, AwtrixService>();
+            services.AddSingleton<PublishTrace>();
+            services.AddSingleton<IAwtrixService>(sp => new AwtrixService(
+                sp.GetRequiredService<HttpPublisher>(),
+                sp.GetRequiredService<MqttPublisher>(),
+                sp.GetRequiredService<ILogger<AwtrixService>>(),
+                sp.GetRequiredService<PublishTrace>(),
+                sp.GetRequiredService<TimeProvider>()));
 
             // Orchestration
             services.AddSingleton<TimerService>();

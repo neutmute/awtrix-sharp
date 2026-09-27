@@ -19,12 +19,16 @@ namespace AwtrixSharpWeb.Services
         private readonly HttpPublisher _httpPublisher;
         private readonly MqttPublisher _mqttPublisher;
         private readonly ILogger _logger;
+        private readonly PublishTrace? _trace;
+        private readonly TimeProvider _timeProvider;
 
-        public AwtrixService(HttpPublisher httpPublisher, MqttPublisher mqttPublisher, ILogger<AwtrixService>? logger = null)
+        public AwtrixService(HttpPublisher httpPublisher, MqttPublisher mqttPublisher, ILogger<AwtrixService>? logger = null, PublishTrace? trace = null, TimeProvider? timeProvider = null)
         {
             _httpPublisher = httpPublisher;
             _mqttPublisher = mqttPublisher;
             _logger = (ILogger?)logger ?? NullLogger.Instance;
+            _trace = trace;
+            _timeProvider = timeProvider ?? TimeProvider.System;
         }
 
         public Task<bool> Set(AwtrixAddress awtrixAddress, AwtrixSettings settings)
@@ -34,7 +38,7 @@ namespace AwtrixSharpWeb.Services
                 return Task.FromResult(false);
             }
 
-            return SafePublish(awtrixAddress, () => AwtrixEndpoints.Settings(awtrixAddress, settings.ToJson()));
+            return SafePublish(awtrixAddress, "Settings", null, () => AwtrixEndpoints.Settings(awtrixAddress, settings.ToJson()));
         }
 
         public Task<bool> PlayRtttl(AwtrixAddress awtrixAddress, string rtttl)
@@ -44,7 +48,7 @@ namespace AwtrixSharpWeb.Services
                 return Task.FromResult(false);
             }
 
-            return SafePublish(awtrixAddress, () => AwtrixEndpoints.PlayRtttl(awtrixAddress, rtttl));
+            return SafePublish(awtrixAddress, "Rtttl", null, () => AwtrixEndpoints.PlayRtttl(awtrixAddress, rtttl));
         }
 
         public Task<bool> AppUpdate(AwtrixAddress awtrixAddress, string appName, AwtrixAppMessage message)
@@ -54,7 +58,7 @@ namespace AwtrixSharpWeb.Services
                 return Task.FromResult(false);
             }
 
-            return SafePublish(awtrixAddress, () => AwtrixEndpoints.AppUpdate(awtrixAddress, appName, Serialize(message, NotificationOnlyKeys, awtrixAddress)));
+            return SafePublish(awtrixAddress, "AppUpdate", appName, () => AwtrixEndpoints.AppUpdate(awtrixAddress, appName, Serialize(message, NotificationOnlyKeys, awtrixAddress)));
         }
 
         public Task<bool> AppClear(AwtrixAddress awtrixAddress, string appName)
@@ -64,7 +68,7 @@ namespace AwtrixSharpWeb.Services
                 return Task.FromResult(false);
             }
 
-            return SafePublish(awtrixAddress, () => AwtrixEndpoints.AppClear(awtrixAddress, appName));
+            return SafePublish(awtrixAddress, "AppClear", appName, () => AwtrixEndpoints.AppClear(awtrixAddress, appName));
         }
 
         public Task<bool> Notify(AwtrixAddress awtrixAddress, AwtrixAppMessage message)
@@ -79,7 +83,7 @@ namespace AwtrixSharpWeb.Services
                 return Dismiss(awtrixAddress);
             }
 
-            return SafePublish(awtrixAddress, () => AwtrixEndpoints.Notify(awtrixAddress, Serialize(message, AppOnlyKeys, awtrixAddress)));
+            return SafePublish(awtrixAddress, "Notify", null, () => AwtrixEndpoints.Notify(awtrixAddress, Serialize(message, AppOnlyKeys, awtrixAddress)));
         }
 
         /// <summary>
@@ -117,7 +121,7 @@ namespace AwtrixSharpWeb.Services
                 return Task.FromResult(false);
             }
 
-            return SafePublish(awtrixAddress, () => AwtrixEndpoints.Dismiss(awtrixAddress));
+            return SafePublish(awtrixAddress, "Dismiss", null, () => AwtrixEndpoints.Dismiss(awtrixAddress));
         }
 
         /// <summary>No "text" key, a null/whitespace string, or a fragment array that is empty or whose fragments are all whitespace.</summary>
@@ -167,15 +171,17 @@ namespace AwtrixSharpWeb.Services
         /// Builds the request and hands it to the transport for its address. Publishers must not throw,
         /// but if one (or the request builder) does the failure is contained here.
         /// </summary>
-        private async Task<bool> SafePublish(AwtrixAddress address, Func<AwtrixRequest> build)
+        private async Task<bool> SafePublish(AwtrixAddress address, string operation, string? appName, Func<AwtrixRequest> build)
         {
             var baseTopic = address.BaseTopic;
+            AwtrixRequest? request = null;
+            var delivered = false;
             try
             {
-                var request = build();
+                request = build();
                 var publisher = ResolvePublisher(baseTopic);
                 _logger.LogDebug("{Publisher} {Method} {Address} payload: {Payload}", publisher.GetType().Name, request.Method, request.Address, request.Payload);
-                var delivered = await publisher.Publish(request);
+                delivered = await publisher.Publish(request);
                 if (!delivered)
                 {
                     _logger.LogDebug("Publish via {Publisher} for {BaseTopic} was not delivered", publisher.GetType().Name, baseTopic);
@@ -186,6 +192,13 @@ namespace AwtrixSharpWeb.Services
             {
                 _logger.LogWarning(ex, "Publisher threw for {BaseTopic}; treating as not delivered", baseTopic);
                 return false;
+            }
+            finally
+            {
+                if (_trace != null && request != null)
+                {
+                    _trace.Record(new PublishRecord(_timeProvider.GetUtcNow(), baseTopic, operation, appName, request, delivered));
+                }
             }
         }
 
