@@ -24,7 +24,12 @@ ARG BUILD_CONFIGURATION=Release
 ARG GIT_COMMIT
 ARG GIT_COMMIT_SHORT
 WORKDIR /src/api
-RUN dotnet publish awtrix-api.csproj -c $BUILD_CONFIGURATION --no-restore -o /app-api/publish /p:UseAppHost=false /p:GIT_COMMIT=$GIT_COMMIT /p:GIT_COMMIT_SHORT=$GIT_COMMIT_SHORT
+# Restore again here (no --no-restore): the SDK only resolves the Microsoft.AspNetCore.App.Internal.Assets
+# pack, which carries _framework/blazor.web.js for the Blazor test UI, when .razor files are present at
+# restore time. The earlier cached restore ran before the sources were copied, so it never saw them.
+RUN dotnet publish awtrix-api.csproj -c $BUILD_CONFIGURATION -o /app-api/publish /p:UseAppHost=false /p:GIT_COMMIT=$GIT_COMMIT /p:GIT_COMMIT_SHORT=$GIT_COMMIT_SHORT
+# Fail the image build loudly if the Blazor script is ever dropped from the publish output again
+RUN test -f /app-api/publish/wwwroot/_framework/blazor.web.js
 
 # This stage is used in production or when running from VS in regular mode (Default when not using the Debug configuration)
 FROM base AS final
