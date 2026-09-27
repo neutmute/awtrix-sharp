@@ -1,3 +1,5 @@
+﻿using System.Globalization;
+using System.Text.Json;
 using AwtrixSharpWeb.Domain;
 
 namespace AwtrixSharpWeb.Ui.Models
@@ -7,7 +9,9 @@ namespace AwtrixSharpWeb.Ui.Models
     /// <summary>
     /// The visuals playground form. Build() sets only the fields that differ from "unset" (blank strings,
     /// zero durations, effect speed 1.0, palette blend true) so the JSON stays minimal. Colours and palette
-    /// stops that fail to parse are reported by Validate() and skipped by Build().
+    /// stops that fail to parse are reported by Validate() and skipped by Build(). TryApplyJson() is the
+    /// reverse direction: hand-edited JSON is mapped back onto the fields, and keys the form has no field
+    /// for are kept in Extras so they still ride along in Build().
     /// </summary>
     public class VisualsForm
     {
@@ -42,13 +46,163 @@ namespace AwtrixSharpWeb.Ui.Models
         public string TransitionDirection { get; set; } = "";
         public int TransitionDurationMs { get; set; }
 
+        /// <summary>Payload keys the form has no field for (or could not interpret), sent verbatim by Build().</summary>
+        public Dictionary<string, JsonElement> Extras { get; } = new(StringComparer.Ordinal);
+
         public void Reset()
         {
             var fresh = new VisualsForm();
-            foreach (var property in typeof(VisualsForm).GetProperties())
+            foreach (var property in typeof(VisualsForm).GetProperties().Where(p => p.CanWrite))
             {
                 property.SetValue(this, property.GetValue(fresh));
             }
+            Extras.Clear();
+        }
+
+        /// <summary>
+        /// Maps a hand-edited payload onto the fields. Every field except Target and AppName is first
+        /// cleared to "unset", then each known key is applied; a known key with an unexpected shape, and
+        /// any unknown key, goes to Extras. Invalid JSON returns false and leaves the form untouched.
+        /// </summary>
+        public bool TryApplyJson(string? json, out string? error)
+        {
+            if (!AwtrixAppMessage.TryFromJson(json, out var message, out error))
+            {
+                return false;
+            }
+
+            ClearFields();
+            foreach (var (key, value) in message)
+            {
+                var element = value is JsonElement e ? e : JsonSerializer.SerializeToElement(value, AwtrixAppMessage.JsonOptions);
+                if (!TryApplyKey(key, element))
+                {
+                    Extras[key] = element;
+                }
+            }
+            return true;
+        }
+
+        private void ClearFields()
+        {
+            Text = ""; TextColor = ""; BackgroundColor = ""; TextCase = TextCase.Inherit; Icon = ""; IconMode = IconMode.Fixed; Font = "";
+            Effect = ""; EffectSpeed = 1.0; Palette = ""; PaletteStops = ""; PaletteBlend = true; Overlay = "";
+            DurationMs = 0; LifetimeMs = 0; Hold = false; TextBlinkMs = 0; TextFadeMs = 0;
+            ScrollMode = ""; ScrollSpeed = 0;
+            TransitionEffect = ""; TransitionDirection = ""; TransitionDurationMs = 0;
+            Extras.Clear();
+        }
+
+        private bool TryApplyKey(string key, JsonElement e)
+        {
+            switch (key)
+            {
+                case "text": return Str(e, v => Text = v);
+                case "textColor": return Colour(e, v => TextColor = v);
+                case "backgroundColor": return Colour(e, v => BackgroundColor = v);
+                case "textCase": return Enum(e, (TextCase v) => TextCase = v);
+                case "icon": return Str(e, v => Icon = v);
+                case "iconMode": return Enum(e, (IconMode v) => IconMode = v);
+                case "font": return Str(e, v => Font = v);
+                case "effect": return Str(e, v => Effect = v);
+                case "effectSpeed": return Dbl(e, v => EffectSpeed = v);
+                case "palette":
+                    if (e.ValueKind == JsonValueKind.String) { Palette = e.GetString() ?? ""; return true; }
+                    if (e.ValueKind == JsonValueKind.Array && TryRows(e, out var rows)) { PaletteStops = rows; return true; }
+                    return false;
+                case "paletteBlend": return Bool(e, v => PaletteBlend = v);
+                case "overlay": return Str(e, v => Overlay = v);
+                case "durationMs": return Int(e, v => DurationMs = v);
+                case "lifetimeMs": return Int(e, v => LifetimeMs = v);
+                case "hold": return Bool(e, v => Hold = v);
+                case "textBlinkMs": return Int(e, v => TextBlinkMs = v);
+                case "textFadeMs": return Int(e, v => TextFadeMs = v);
+                case "scroll":
+                    if (e.ValueKind == JsonValueKind.String) { ScrollMode = e.GetString() ?? ""; return true; }
+                    if (e.ValueKind != JsonValueKind.Object) return false;
+                    foreach (var p in e.EnumerateObject())
+                    {
+                        if (p.Name == "mode" && p.Value.ValueKind == JsonValueKind.String) ScrollMode = p.Value.GetString() ?? "";
+                        else if (p.Name == "speed" && p.Value.TryGetInt32(out var speed)) ScrollSpeed = speed;
+                        else return false; // other scroll keys: keep the whole object verbatim
+                    }
+                    return true;
+                case "transitionEffect": return Str(e, v => TransitionEffect = v);
+                case "transitionDirection": return Str(e, v => TransitionDirection = v);
+                case "transitionDurationMs": return Int(e, v => TransitionDurationMs = v);
+                default: return false;
+            }
+        }
+
+        private static bool Str(JsonElement e, Action<string> set)
+        {
+            if (e.ValueKind != JsonValueKind.String) return false;
+            set(e.GetString() ?? "");
+            return true;
+        }
+
+        private static bool Int(JsonElement e, Action<int> set)
+        {
+            if (e.ValueKind != JsonValueKind.Number || !e.TryGetInt32(out var v)) return false;
+            set(v);
+            return true;
+        }
+
+        private static bool Dbl(JsonElement e, Action<double> set)
+        {
+            if (e.ValueKind != JsonValueKind.Number || !e.TryGetDouble(out var v)) return false;
+            set(v);
+            return true;
+        }
+
+        private static bool Bool(JsonElement e, Action<bool> set)
+        {
+            if (e.ValueKind is not (JsonValueKind.True or JsonValueKind.False)) return false;
+            set(e.GetBoolean());
+            return true;
+        }
+
+        private static bool Enum<T>(JsonElement e, Action<T> set) where T : struct, System.Enum
+        {
+            if (e.ValueKind != JsonValueKind.String || !System.Enum.TryParse<T>(e.GetString(), ignoreCase: true, out var v)) return false;
+            set(v);
+            return true;
+        }
+
+        /// <summary>"#RRGGBB" stays as typed; [r,g,b] becomes "r,g,b" (the form's other accepted spelling).</summary>
+        private static bool Colour(JsonElement e, Action<string> set)
+        {
+            if (e.ValueKind == JsonValueKind.String) { set(e.GetString() ?? ""); return true; }
+            if (e.ValueKind == JsonValueKind.Array && TryRow(e, out var row)) { set(row); return true; }
+            return false;
+        }
+
+        private static bool TryRow(JsonElement e, out string row)
+        {
+            row = "";
+            var parts = new List<string>();
+            foreach (var item in e.EnumerateArray())
+            {
+                if (!item.TryGetInt32(out var n)) return false;
+                parts.Add(n.ToString(CultureInfo.InvariantCulture));
+            }
+            if (parts.Count != 3) return false;
+            row = string.Join(",", parts);
+            return true;
+        }
+
+        private static bool TryRows(JsonElement e, out string rows)
+        {
+            rows = "";
+            var list = new List<string>();
+            foreach (var item in e.EnumerateArray())
+            {
+                if (item.ValueKind != JsonValueKind.Array || !TryRow(item, out var row)) return false;
+                list.Add(row);
+            }
+            if (list.Count == 0) return false;
+            rows = string.Join(";", list);
+            return true;
         }
 
         public AwtrixAppMessage Build()
@@ -91,6 +245,14 @@ namespace AwtrixSharpWeb.Ui.Models
                 if (!string.IsNullOrWhiteSpace(TransitionEffect)) message.SetTransitionEffect(TransitionEffect.Trim());
                 if (!string.IsNullOrWhiteSpace(TransitionDirection)) message.SetTransitionDirection(TransitionDirection.Trim());
                 if (TransitionDurationMs > 0) message.SetTransitionDurationMs(TransitionDurationMs);
+            }
+
+            foreach (var (key, value) in Extras)
+            {
+                if (!message.ContainsKey(key))
+                {
+                    message[key] = value;
+                }
             }
 
             return message;

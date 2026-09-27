@@ -1,4 +1,4 @@
-using AwtrixSharpWeb.Domain;
+﻿using AwtrixSharpWeb.Domain;
 using AwtrixSharpWeb.Ui.Models;
 
 namespace Test.Ui
@@ -120,6 +120,134 @@ namespace Test.Ui
                 Assert.Empty(form.Validate());
                 Assert.NotEqual("{}", form.Build().ToJson());
             }
+        }
+    
+        [Fact]
+        public void TryApplyJson_MapsKnownKeys_IntoFields()
+        {
+            var form = new VisualsForm { Target = VisualsTarget.CustomApp };
+            var json = "{\"text\":\"hi\",\"textColor\":[255,0,0],\"backgroundColor\":\"#0000FF\",\"textCase\":\"upper\",\"icon\":\"1234\",\"iconMode\":\"push\",\"font\":\"large\","
+                     + "\"effect\":\"Plasma\",\"effectSpeed\":2.5,\"palette\":[[255,0,0],[0,0,255]],\"paletteBlend\":false,\"overlay\":\"snow\","
+                     + "\"durationMs\":1000,\"lifetimeMs\":60000,\"hold\":true,\"textBlinkMs\":300,\"textFadeMs\":400,\"scroll\":{\"mode\":\"bounce\",\"speed\":50},"
+                     + "\"transitionEffect\":\"Melt\",\"transitionDirection\":\"reverse\",\"transitionDurationMs\":800}";
+
+            Assert.True(form.TryApplyJson(json, out var error));
+
+            Assert.Null(error);
+            Assert.Equal("hi", form.Text);
+            Assert.Equal("255,0,0", form.TextColor);
+            Assert.Equal("#0000FF", form.BackgroundColor);
+            Assert.Equal(TextCase.Upper, form.TextCase);
+            Assert.Equal("1234", form.Icon);
+            Assert.Equal(IconMode.Push, form.IconMode);
+            Assert.Equal("large", form.Font);
+            Assert.Equal("Plasma", form.Effect);
+            Assert.Equal(2.5, form.EffectSpeed);
+            Assert.Equal("255,0,0;0,0,255", form.PaletteStops);
+            Assert.Equal("", form.Palette);
+            Assert.False(form.PaletteBlend);
+            Assert.Equal("snow", form.Overlay);
+            Assert.Equal(1000, form.DurationMs);
+            Assert.Equal(60000, form.LifetimeMs);
+            Assert.True(form.Hold);
+            Assert.Equal(300, form.TextBlinkMs);
+            Assert.Equal(400, form.TextFadeMs);
+            Assert.Equal("bounce", form.ScrollMode);
+            Assert.Equal(50, form.ScrollSpeed);
+            Assert.Equal("Melt", form.TransitionEffect);
+            Assert.Equal("reverse", form.TransitionDirection);
+            Assert.Equal(800, form.TransitionDurationMs);
+            Assert.Empty(form.Extras);
+            Assert.Equal(VisualsTarget.CustomApp, form.Target);
+        }
+
+        [Fact]
+        public void TryApplyJson_RoundTrips_ThroughBuild()
+        {
+            var form = new VisualsForm();
+            // Keys in ToJson order (text first, then ordinal) so the string comparison is exact.
+            var json = "{\"text\":\"hi\",\"durationMs\":7000,\"effect\":\"Plasma\",\"palette\":\"Lava\",\"scroll\":{\"mode\":\"wrap\"},\"textColor\":\"#00FF00\"}";
+
+            Assert.True(form.TryApplyJson(json, out _));
+
+            Assert.Equal(json, form.Build().ToJson());
+        }
+
+        [Fact]
+        public void TryApplyJson_UnknownKeys_AreKeptAsExtras_AndBuilt()
+        {
+            var form = new VisualsForm();
+
+            Assert.True(form.TryApplyJson("{\"text\":\"x\",\"foo\":1,\"draw\":[[\"pixel\",1,2,\"#FF0000\"]]}", out _));
+            form.Effect = "Snake";
+
+            var json = form.Build().ToJson();
+            Assert.Equal(new[] { "draw", "foo" }, form.Extras.Keys.OrderBy(k => k));
+            Assert.Contains("\"foo\":1", json);
+            Assert.Contains("\"draw\":[[\"pixel\",1,2,\"#FF0000\"]]", json);
+            Assert.Contains("\"effect\":\"Snake\"", json);
+        }
+
+        [Fact]
+        public void TryApplyJson_ClearsFieldsNotInJson_ButKeepsTargetAndAppName()
+        {
+            var form = new VisualsForm { Target = VisualsTarget.CustomApp, AppName = "demo", Effect = "Plasma", Hold = true };
+
+            Assert.True(form.TryApplyJson("{\"text\":\"only\"}", out _));
+
+            Assert.Equal("", form.Effect);
+            Assert.False(form.Hold);
+            Assert.Equal(0, form.DurationMs);
+            Assert.Equal("", form.TextColor);
+            Assert.Equal("only", form.Text);
+            Assert.Equal(VisualsTarget.CustomApp, form.Target);
+            Assert.Equal("demo", form.AppName);
+        }
+
+        [Fact]
+        public void TryApplyJson_WrongShapeForKnownKey_IsKeptAsExtra()
+        {
+            var form = new VisualsForm();
+
+            Assert.True(form.TryApplyJson("{\"durationMs\":\"soon\",\"scroll\":\"bounce\"}", out _));
+
+            Assert.Equal(0, form.DurationMs);
+            Assert.Equal("bounce", form.ScrollMode);
+            Assert.True(form.Extras.ContainsKey("durationMs"));
+            Assert.Contains("\"durationMs\":\"soon\"", form.Build().ToJson());
+        }
+
+        [Fact]
+        public void TryApplyJson_BlankText_IsKept()
+        {
+            var form = new VisualsForm();
+
+            Assert.True(form.TryApplyJson("{\"text\":\"\"}", out _));
+
+            Assert.Equal("", form.Text);
+            Assert.Equal("{}", form.Build().ToJson());
+        }
+
+        [Fact]
+        public void TryApplyJson_InvalidJson_ReportsError_AndLeavesFormAlone()
+        {
+            var form = new VisualsForm { Effect = "Plasma" };
+
+            Assert.False(form.TryApplyJson("{\"text\":", out var error));
+
+            Assert.Contains("JSON", error!, StringComparison.OrdinalIgnoreCase);
+            Assert.Equal("Plasma", form.Effect);
+        }
+
+        [Fact]
+        public void Reset_ClearsExtras()
+        {
+            var form = new VisualsForm();
+            form.TryApplyJson("{\"foo\":1}", out _);
+
+            form.Reset();
+
+            Assert.Empty(form.Extras);
         }
     }
 }

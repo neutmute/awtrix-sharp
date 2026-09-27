@@ -72,33 +72,54 @@ namespace Test.Ui
         }
 
         [Fact]
-        public void ManualJson_DisablesForm_AndBadJsonDisablesSend()
+        public void JsonEdit_UpdatesForm_AndKeepsUnknownKeys_AcrossFormEdits()
         {
             var cut = RenderComponent<VisualsPlayground>();
 
-            cut.Find("textarea.json").Input("{\"text\":\"manual\",\"effect\":\"Snake\"}");
+            cut.Find("textarea.json").Input("{\"text\":\"manual\",\"effect\":\"Snake\",\"foo\":1}");
 
-            Assert.True(cut.Find("select.effect").HasAttribute("disabled"));
-            cut.Find("button.send").Click();
-            _awtrix.Verify(a => a.Notify(It.IsAny<AwtrixAddress>(), It.Is<AwtrixAppMessage>(m => m.Text == "manual")), Times.Once);
-
-            cut.Find("textarea.json").Input("{\"text\":");
-            Assert.True(cut.Find("button.send").HasAttribute("disabled"));
-            Assert.Contains("Invalid JSON", cut.Find(".error").TextContent);
-
-            cut.Find("button.back-to-form").Click();
             Assert.False(cut.Find("select.effect").HasAttribute("disabled"));
+            Assert.Equal("Snake", cut.Find("select.effect").GetAttribute("value"));
+            Assert.Equal("manual", cut.Find("input.text").GetAttribute("value"));
+            cut.Find("button.send").Click();
+            _awtrix.Verify(a => a.Notify(It.IsAny<AwtrixAddress>(), It.Is<AwtrixAppMessage>(m => m.Text == "manual" && m.ContainsKey("foo"))), Times.Once);
+
+            cut.Find("input.text-color").Change("#00FF00");
+
+            var json = cut.Find("textarea.json").GetAttribute("value") ?? cut.Find("textarea.json").TextContent;
+            Assert.Contains("\"foo\": 1", json);
+            Assert.Contains("\"effect\": \"Snake\"", json);
+            Assert.Contains("\"textColor\": \"#00FF00\"", json);
         }
 
         [Fact]
-        public void ManualJson_BlankText_IsSent()
+        public void JsonEdit_BadJson_DisablesSendOnly_UntilFixed()
+        {
+            var cut = RenderComponent<VisualsPlayground>();
+
+            cut.Find("textarea.json").Input("{\"text\":");
+
+            Assert.True(cut.Find("button.send").HasAttribute("disabled"));
+            Assert.Contains("Invalid JSON", cut.Find(".error").TextContent);
+            Assert.False(cut.Find("select.effect").HasAttribute("disabled"));
+            Assert.Empty(cut.FindAll("button.back-to-form"));
+
+            cut.Find("textarea.json").Input("{\"text\":\"ok\"}");
+
+            Assert.False(cut.Find("button.send").HasAttribute("disabled"));
+            Assert.Empty(cut.FindAll(".error"));
+        }
+
+        [Fact]
+        public void JsonEdit_BlankText_IsSent()
         {
             var cut = RenderComponent<VisualsPlayground>();
 
             cut.Find("textarea.json").Input("{\"text\":\"\"}");
             cut.Find("button.send").Click();
 
-            _awtrix.Verify(a => a.Notify(It.IsAny<AwtrixAddress>(), It.Is<AwtrixAppMessage>(m => m.Text == "")), Times.Once);
+            // A blank text is sent through the normal path, where the service turns it into a Dismiss.
+            _awtrix.Verify(a => a.Notify(It.IsAny<AwtrixAddress>(), It.Is<AwtrixAppMessage>(m => m.Text == null || m.Text == "")), Times.Once);
         }
 
         [Fact]
@@ -142,7 +163,7 @@ namespace Test.Ui
         }
 
         [Fact]
-        public void ManualJson_SwitchingToCustomApp_StillSendsManualJson()
+        public void JsonEdit_SwitchingToCustomApp_KeepsEditedJson()
         {
             var cut = RenderComponent<VisualsPlayground>();
 
@@ -156,7 +177,7 @@ namespace Test.Ui
         }
 
         [Fact]
-        public void ManualJson_CustomAppWithBlankName_DisablesSend_AndShowsError()
+        public void JsonEdit_CustomAppWithBlankName_DisablesSend_AndShowsError()
         {
             var cut = RenderComponent<VisualsPlayground>();
 
