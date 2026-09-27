@@ -278,6 +278,9 @@ A Swagger API supports testing and development
 
 ![image](./docs/gifs/swagger.jpg)
 
+A test UI lives at `/ui` (apps per clock, run-now, last payloads) and `/ui/visuals` (AWTRIX NG effect
+playground). See `docs/ui.md`.
+
 ### Powershell Script
 
 Configure your env vars with appropriate secrets for development
