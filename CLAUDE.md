@@ -57,6 +57,8 @@ appsettings.json → Conductor → App Factory → AwtrixApp instances
 | `AwtrixAppMessage` | `src/api/Domain/AwtrixAppMessage.cs` | Fluent builder for NG payloads (extends `Dictionary<string,object?>`) |
 | `MqttConnector` | `src/api/HostedServices/MqttConnector.cs` | Maintains MQTT broker connection (MQTTnet 5) |
 | `SlackConnector` | `src/api/HostedServices/SlackConnector.cs` | Slack Socket Mode listener |
+| `DeviceStateMonitor` | `src/api/HostedServices/DeviceStateMonitor.cs` | Caches `{baseTopic}/state/*` payloads (capabilities, settings, device) per MQTT clock |
+| `PublishTrace` | `src/api/Services/PublishTrace.cs` | In-memory ring buffer of every request `AwtrixService` sent; feeds the UI |
 
 ### Built-in Apps
 
@@ -75,6 +77,12 @@ Every app config can include a `ValueMaps[]` array. Each entry has a `ValueMatch
 - **MQTT** (`MqttPublisher`) and **HTTP** (`HttpPublisher`) are dumb transports: they send an `AwtrixRequest(Address, Method, Payload)`.
 - `AwtrixAddress.BaseTopic` (starts with `http` or not) selects the transport. `AwtrixEndpoints` (`src/api/Services/AwtrixEndpoints.cs`) is the single AWTRIX NG addressing table; `AwtrixAppMessage` / `AwtrixSettings` are NG payloads with typed values, so there is no translation layer. Config vocabulary is NG's; `docs/config-migration.md` and the `awtrix3-config-migration` skill convert AWTRIX 3 configs. See `docs/superpowers/specs/2026-09-26-ng-native-design.md`.
 - Never run the app in the Development environment (user secrets point at the real broker/clock). The Simulator environment targets only the NG simulator (`docs/simulator.md`); start it with `dotnet run --project src/api --launch-profile Simulator` (setting `ASPNETCORE_ENVIRONMENT` alone is not enough, because the default launch profile overrides it with Development).
+
+### Test UI
+
+Blazor Server pages under `src/api/Ui` (`/ui`, `/ui/visuals`), open like Swagger, calling the DI services
+directly. `Ui/Models/VisualsForm` builds the playground payload and is unit-tested without bUnit; the
+pages have bUnit tests under `test/Test/Ui`. See `docs/ui.md`.
 
 ### TransportOpenData Library
 
