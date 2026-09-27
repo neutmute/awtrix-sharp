@@ -1,4 +1,4 @@
-using AwtrixSharpWeb.Domain;
+﻿using AwtrixSharpWeb.Domain;
 using AwtrixSharpWeb.HostedServices;
 using AwtrixSharpWeb.Interfaces;
 using AwtrixSharpWeb.Services;
@@ -42,7 +42,7 @@ namespace Test.Ui
         {
             var cut = RenderComponent<VisualsPlayground>();
 
-            cut.Find("input.effect").Change("Plasma");
+            cut.Find("select.effect").Change("Plasma");
 
             Assert.Contains("\"effect\": \"Plasma\"", cut.Find("textarea.json").GetAttribute("value") ?? cut.Find("textarea.json").TextContent);
         }
@@ -51,7 +51,7 @@ namespace Test.Ui
         public void Send_Notify_CallsService_WithBuiltMessage()
         {
             var cut = RenderComponent<VisualsPlayground>();
-            cut.Find("input.effect").Change("Matrix");
+            cut.Find("select.effect").Change("Matrix");
 
             cut.Find("button.send").Click();
 
@@ -78,7 +78,7 @@ namespace Test.Ui
 
             cut.Find("textarea.json").Input("{\"text\":\"manual\",\"effect\":\"Snake\"}");
 
-            Assert.True(cut.Find("input.effect").HasAttribute("disabled"));
+            Assert.True(cut.Find("select.effect").HasAttribute("disabled"));
             cut.Find("button.send").Click();
             _awtrix.Verify(a => a.Notify(It.IsAny<AwtrixAddress>(), It.Is<AwtrixAppMessage>(m => m.Text == "manual")), Times.Once);
 
@@ -87,7 +87,7 @@ namespace Test.Ui
             Assert.Contains("Invalid JSON", cut.Find(".error").TextContent);
 
             cut.Find("button.back-to-form").Click();
-            Assert.False(cut.Find("input.effect").HasAttribute("disabled"));
+            Assert.False(cut.Find("select.effect").HasAttribute("disabled"));
         }
 
         [Fact]
@@ -112,12 +112,12 @@ namespace Test.Ui
             cut.WaitForAssertion(() =>
             {
                 Assert.Contains("lists from device", cut.Find(".caps-source").TextContent);
-                Assert.Single(cut.FindAll("#effects option"));
+                Assert.Equal(2, cut.FindAll("select.effect option").Count); // (none) + OnlyOne
             });
 
             cut.Find("select.device").Change("http://localhost:8080");
             Assert.Contains("built-in lists", cut.Find(".caps-source").TextContent);
-            Assert.Equal(NgVisuals.Effects.Length, cut.FindAll("#effects option").Count);
+            Assert.Equal(NgVisuals.Effects.Length + 1, cut.FindAll("select.effect option").Count);
         }
 
         [Fact]
@@ -127,7 +127,7 @@ namespace Test.Ui
 
             cut.Find("button.preset").Click();
 
-            Assert.Equal("Plasma", cut.Find("input.effect").GetAttribute("value"));
+            Assert.Equal("Plasma", cut.Find("select.effect").GetAttribute("value"));
         }
 
         [Fact]

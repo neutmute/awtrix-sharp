@@ -25,7 +25,7 @@ returns. Send as a notification or as a custom app update under a name you choos
 Dropdown lists come from the clock: `DeviceStateMonitor` subscribes to `{baseTopic}/state/capabilities`,
 `{baseTopic}/state/settings` and `{baseTopic}/state/device` for every MQTT device. Until a capabilities
 payload arrives (or for HTTP devices, which are not polled) the built-in lists in `NgVisuals` are used
-and the page says so. Every list also accepts a typed value.
+and the page says so. The dropdowns list everything the clock reports; to try a value that is not in a list, edit the JSON panel directly.
 
 ## Local check
 

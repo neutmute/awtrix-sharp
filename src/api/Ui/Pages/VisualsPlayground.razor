@@ -1,4 +1,4 @@
-@page "/ui/visuals"
+﻿@page "/ui/visuals"
 @using AwtrixSharpWeb.Ui.Components
 @using AwtrixSharpWeb.Ui.Models
 @implements IDisposable
@@ -38,13 +38,6 @@
     var caps = Monitor.Get(_baseTopic ?? string.Empty).Capabilities;
     var disabled = _manual;
 }
-<datalist id="effects">@foreach (var v in caps.Effects) { <option value="@v" /> }</datalist>
-<datalist id="palettes">@foreach (var v in caps.Palettes) { <option value="@v" /> }</datalist>
-<datalist id="overlays">@foreach (var v in caps.Overlays) { <option value="@v" /> }</datalist>
-<datalist id="transitions">@foreach (var v in caps.Transitions) { <option value="@v" /> }</datalist>
-<datalist id="directions">@foreach (var v in NgVisuals.TransitionDirections) { <option value="@v" /> }</datalist>
-<datalist id="fonts">@foreach (var v in NgVisuals.Fonts) { <option value="@v" /> }</datalist>
-<datalist id="scrollModes">@foreach (var v in NgVisuals.ScrollModes) { <option value="@v" /> }</datalist>
 
 <div class="two-col">
     <div>
@@ -64,17 +57,17 @@
                 <select disabled="@disabled" @bind="_form.IconMode" @bind:after="FormChanged">
                     @foreach (var v in Enum.GetValues<IconMode>()) { <option value="@v">@v</option> }
                 </select></div>
-            <div class="field"><label>Font</label><input class="font" list="fonts" disabled="@disabled" @bind="_form.Font" @bind:after="FormChanged" /></div>
+            <div class="field"><label>Font</label><ChoiceSelect Class="font" Options="NgVisuals.Fonts" Disabled="disabled" @bind-Value="_form.Font" @bind-Value:after="FormChanged" /></div>
         </fieldset>
 
         <fieldset disabled="@disabled">
             <legend>Effect</legend>
-            <div class="field"><label>Effect</label><input class="effect" list="effects" disabled="@disabled" @bind="_form.Effect" @bind:after="FormChanged" /></div>
+            <div class="field"><label>Effect</label><ChoiceSelect Class="effect" Options="caps.Effects" Disabled="disabled" @bind-Value="_form.Effect" @bind-Value:after="FormChanged" /></div>
             <div class="field"><label>Effect speed (@_form.EffectSpeed.ToString("0.0"))</label><input class="effect-speed" type="range" min="0.1" max="10" step="0.1" disabled="@disabled" @bind="_form.EffectSpeed" @bind:after="FormChanged" /></div>
-            <div class="field"><label>Palette</label><input class="palette" list="palettes" disabled="@disabled" @bind="_form.Palette" @bind:after="FormChanged" /></div>
+            <div class="field"><label>Palette</label><ChoiceSelect Class="palette" Options="caps.Palettes" Disabled="disabled" @bind-Value="_form.Palette" @bind-Value:after="FormChanged" /></div>
             <div class="field"><label>Palette stops</label><input class="palette-stops" disabled="@disabled" @bind="_form.PaletteStops" @bind:after="FormChanged" placeholder="255,0,0;0,0,255 (overrides name)" /></div>
             <div class="field"><label>Palette blend</label><input type="checkbox" disabled="@disabled" @bind="_form.PaletteBlend" @bind:after="FormChanged" /></div>
-            <div class="field"><label>Overlay</label><input class="overlay" list="overlays" disabled="@disabled" @bind="_form.Overlay" @bind:after="FormChanged" /></div>
+            <div class="field"><label>Overlay</label><ChoiceSelect Class="overlay" Options="caps.Overlays" Disabled="disabled" @bind-Value="_form.Overlay" @bind-Value:after="FormChanged" /></div>
         </fieldset>
 
         <fieldset disabled="@disabled">
@@ -88,7 +81,7 @@
 
         <fieldset disabled="@disabled">
             <legend>Scroll</legend>
-            <div class="field"><label>Mode</label><input class="scroll-mode" list="scrollModes" disabled="@disabled" @bind="_form.ScrollMode" @bind:after="FormChanged" /></div>
+            <div class="field"><label>Mode</label><ChoiceSelect Class="scroll-mode" Options="NgVisuals.ScrollModes" Disabled="disabled" @bind-Value="_form.ScrollMode" @bind-Value:after="FormChanged" /></div>
             <div class="field"><label>Speed px/s</label><input type="number" disabled="@disabled" @bind="_form.ScrollSpeed" @bind:after="FormChanged" /></div>
         </fieldset>
 
@@ -96,8 +89,8 @@
         {
             <fieldset disabled="@disabled">
                 <legend>Transition (custom app)</legend>
-                <div class="field"><label>Effect</label><input class="transition" list="transitions" disabled="@disabled" @bind="_form.TransitionEffect" @bind:after="FormChanged" /></div>
-                <div class="field"><label>Direction</label><input list="directions" disabled="@disabled" @bind="_form.TransitionDirection" @bind:after="FormChanged" /></div>
+                <div class="field"><label>Effect</label><ChoiceSelect Class="transition" Options="caps.Transitions" Disabled="disabled" @bind-Value="_form.TransitionEffect" @bind-Value:after="FormChanged" /></div>
+                <div class="field"><label>Direction</label><ChoiceSelect Class="transition-direction" Options="NgVisuals.TransitionDirections" Disabled="disabled" @bind-Value="_form.TransitionDirection" @bind-Value:after="FormChanged" /></div>
                 <div class="field"><label>Duration ms</label><input type="number" disabled="@disabled" @bind="_form.TransitionDurationMs" @bind:after="FormChanged" /></div>
             </fieldset>
         }
