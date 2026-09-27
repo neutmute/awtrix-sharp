@@ -1,4 +1,4 @@
-using AwtrixSharpWeb.Domain;
+﻿using AwtrixSharpWeb.Domain;
 using AwtrixSharpWeb.HostedServices;
 using AwtrixSharpWeb.Interfaces;
 using AwtrixSharpWeb.Middleware;
@@ -30,10 +30,11 @@ namespace AwtrixSharpWeb
 
             // .NET 10's WebApplication.CreateBuilder only enables static web assets (which is how
             // Microsoft.AspNetCore.App.Internal.Assets serves _framework/blazor.web.js) in the
-            // Development environment. The Simulator environment also hosts the Blazor test UI, so it
-            // needs the same static web assets wired up or the page prerenders but never becomes
-            // interactive (blazor.web.js 404s).
-            if (builder.Environment.IsEnvironment(SimulatorEnvironmentName))
+            // Development environment. Any other environment run from source (Simulator, or an ad-hoc
+            // local environment) also hosts the Blazor test UI, so it needs the same static web assets
+            // wired up or the page prerenders but never becomes interactive (blazor.web.js 404s).
+            // Production runs from a publish output, where the assets are physically in wwwroot.
+            if (!builder.Environment.IsProduction())
             {
                 builder.WebHost.UseStaticWebAssets();
             }
