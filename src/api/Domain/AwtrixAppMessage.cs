@@ -26,7 +26,12 @@ namespace AwtrixSharpWeb.Domain
         }
 
         /// <summary>The plain text, or null when unset or when the text is a fragment array.</summary>
-        public string? Text => TryGetValue(TextKey, out var value) && value is string s ? s : null;
+        public string? Text => TryGetValue(TextKey, out var value) switch
+        {
+            true when value is string s => s,
+            true when value is JsonElement { ValueKind: JsonValueKind.String } e => e.GetString(),
+            _ => null,
+        };
 
         public AwtrixAppMessage SetText(string? value) => Put(TextKey, value);
 
@@ -98,6 +103,65 @@ namespace AwtrixSharpWeb.Domain
         public AwtrixAppMessage SetEffect(string? value) => Put("effect", value);
 
         public AwtrixAppMessage SetEffectSpeed(double value) => Put("effectSpeed", value);
+
+        public AwtrixAppMessage SetFont(string? value) => Put("font", value);
+
+        /// <summary>NG "scroll" object. Null parts are omitted; both null removes the key.</summary>
+        public AwtrixAppMessage SetScroll(string? mode, int? speed)
+        {
+            var scroll = new Dictionary<string, object>();
+            if (!string.IsNullOrWhiteSpace(mode))
+            {
+                scroll["mode"] = mode;
+            }
+            if (speed.HasValue)
+            {
+                scroll["speed"] = speed.Value;
+            }
+            return Put("scroll", scroll.Count == 0 ? null : scroll);
+        }
+
+        public AwtrixAppMessage SetTransitionEffect(string? value) => Put("transitionEffect", value);
+
+        public AwtrixAppMessage SetTransitionDirection(string? value) => Put("transitionDirection", value);
+
+        public AwtrixAppMessage SetTransitionDurationMs(int value) => Put("transitionDurationMs", value);
+
+        /// <summary>
+        /// Parses a JSON object into a message whose values are JsonElements (the serializer writes them back
+        /// verbatim), so hand-edited JSON follows the same send path as built messages. Non-objects and parse
+        /// failures return false with a human-readable error.
+        /// </summary>
+        public static bool TryFromJson(string? json, out AwtrixAppMessage message, out string? error)
+        {
+            message = new AwtrixAppMessage();
+            error = null;
+            if (string.IsNullOrWhiteSpace(json))
+            {
+                error = "JSON is empty";
+                return false;
+            }
+
+            try
+            {
+                using var doc = JsonDocument.Parse(json);
+                if (doc.RootElement.ValueKind != JsonValueKind.Object)
+                {
+                    error = "JSON must be an object";
+                    return false;
+                }
+                foreach (var property in doc.RootElement.EnumerateObject())
+                {
+                    message[property.Name] = property.Value.Clone();
+                }
+                return true;
+            }
+            catch (JsonException ex)
+            {
+                error = $"Invalid JSON: {ex.Message}";
+                return false;
+            }
+        }
 
         /// <summary>A null value removes the key rather than storing it: System.Text.Json's WhenWritingNull
         /// does not suppress null dictionary values, so a stored null would still serialize as e.g. "text":null.</summary>

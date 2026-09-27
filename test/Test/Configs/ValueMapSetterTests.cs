@@ -33,7 +33,7 @@ namespace Test.Configs
                 .Distinct()
                 .ToList();
 
-            Assert.Equal(27, setterNames.Count);
+            Assert.Equal(31, setterNames.Count);
             foreach (var name in setterNames)
             {
                 Assert.True(ValueMapSetters.IsKnown(name), $"ValueMap key '{name}' has no setter table entry");

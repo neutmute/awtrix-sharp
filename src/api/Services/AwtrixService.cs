@@ -1,6 +1,7 @@
 using AwtrixSharpWeb.Domain;
 using Microsoft.Extensions.Logging.Abstractions;
 using System.Linq;
+using System.Text.Json;
 
 namespace AwtrixSharpWeb.Services
 {
@@ -135,6 +136,7 @@ namespace AwtrixSharpWeb.Services
             return value switch
             {
                 string s => string.IsNullOrWhiteSpace(s),
+                JsonElement { ValueKind: JsonValueKind.String } e => string.IsNullOrWhiteSpace(e.GetString()),
                 TextFragment[] fragments => fragments.Length == 0 || fragments.All(f => string.IsNullOrWhiteSpace(f.Text)),
                 _ => false,
             };

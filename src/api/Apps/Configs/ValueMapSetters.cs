@@ -40,6 +40,10 @@ namespace AwtrixSharpWeb.Apps.Configs
                 ["ScrollSpeed"] = Int((m, v) => m.SetScrollSpeed(v)),
                 ["Effect"] = Str((m, v) => m.SetEffect(v)),
                 ["EffectSpeed"] = Dbl((m, v) => m.SetEffectSpeed(v)),
+                ["Font"] = Str((m, v) => m.SetFont(v)),
+                ["TransitionEffect"] = Str((m, v) => m.SetTransitionEffect(v)),
+                ["TransitionDirection"] = Str((m, v) => m.SetTransitionDirection(v)),
+                ["TransitionDurationMs"] = Int((m, v) => m.SetTransitionDurationMs(v)),
             };
 
         public static IReadOnlyCollection<string> Keys => Setters.Keys;
