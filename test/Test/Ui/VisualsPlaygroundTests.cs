@@ -1,0 +1,144 @@
+using AwtrixSharpWeb.Domain;
+using AwtrixSharpWeb.HostedServices;
+using AwtrixSharpWeb.Interfaces;
+using AwtrixSharpWeb.Services;
+using AwtrixSharpWeb.Ui.Pages;
+using Bunit;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
+using Moq;
+using Test.Apps.MqttRender;
+
+namespace Test.Ui
+{
+    public class VisualsPlaygroundTests : TestContext
+    {
+        private readonly Mock<IAwtrixService> _awtrix = new();
+        private readonly Mock<IMqttConnector> _mqtt = new();
+        private readonly DeviceStateMonitor _monitor;
+
+        public VisualsPlaygroundTests()
+        {
+            var config = new AwtrixConfig
+            {
+                Devices = new[] { new DeviceConfig { BaseTopic = "awtrix/clock1" }, new DeviceConfig { BaseTopic = "http://localhost:8080" } },
+            };
+            _mqtt.Setup(m => m.Subscribe(It.IsAny<string>())).Returns(Task.CompletedTask);
+            _monitor = new DeviceStateMonitor(_mqtt.Object, Options.Create(config), NullLogger<DeviceStateMonitor>.Instance);
+            _monitor.StartAsync(CancellationToken.None).GetAwaiter().GetResult();
+            _awtrix.Setup(a => a.Notify(It.IsAny<AwtrixAddress>(), It.IsAny<AwtrixAppMessage>())).ReturnsAsync(true);
+            _awtrix.Setup(a => a.AppUpdate(It.IsAny<AwtrixAddress>(), It.IsAny<string>(), It.IsAny<AwtrixAppMessage>())).ReturnsAsync(true);
+
+            Services.AddSingleton(Options.Create(config));
+            Services.AddSingleton(_awtrix.Object);
+            Services.AddSingleton(_mqtt.Object);
+            Services.AddSingleton(new PublishTrace());
+            Services.AddSingleton(_monitor);
+        }
+
+        [Fact]
+        public void JsonPreview_FollowsForm()
+        {
+            var cut = RenderComponent<VisualsPlayground>();
+
+            cut.Find("input.effect").Change("Plasma");
+
+            Assert.Contains("\"effect\": \"Plasma\"", cut.Find("textarea.json").GetAttribute("value") ?? cut.Find("textarea.json").TextContent);
+        }
+
+        [Fact]
+        public void Send_Notify_CallsService_WithBuiltMessage()
+        {
+            var cut = RenderComponent<VisualsPlayground>();
+            cut.Find("input.effect").Change("Matrix");
+
+            cut.Find("button.send").Click();
+
+            _awtrix.Verify(a => a.Notify(It.Is<AwtrixAddress>(x => x.BaseTopic == "awtrix/clock1"), It.Is<AwtrixAppMessage>(m => (string)m["effect"]! == "Matrix")), Times.Once);
+            cut.WaitForAssertion(() => Assert.Contains("delivered", cut.Find(".send-result").TextContent));
+        }
+
+        [Fact]
+        public void Send_CustomApp_CallsAppUpdate_WithName()
+        {
+            var cut = RenderComponent<VisualsPlayground>();
+            cut.Find("input.target-app").Change(true);
+            cut.Find("input.app-name").Change("demo");
+
+            cut.Find("button.send").Click();
+
+            _awtrix.Verify(a => a.AppUpdate(It.IsAny<AwtrixAddress>(), "demo", It.IsAny<AwtrixAppMessage>()), Times.Once);
+        }
+
+        [Fact]
+        public void ManualJson_DisablesForm_AndBadJsonDisablesSend()
+        {
+            var cut = RenderComponent<VisualsPlayground>();
+
+            cut.Find("textarea.json").Input("{\"text\":\"manual\",\"effect\":\"Snake\"}");
+
+            Assert.True(cut.Find("input.effect").HasAttribute("disabled"));
+            cut.Find("button.send").Click();
+            _awtrix.Verify(a => a.Notify(It.IsAny<AwtrixAddress>(), It.Is<AwtrixAppMessage>(m => m.Text == "manual")), Times.Once);
+
+            cut.Find("textarea.json").Input("{\"text\":");
+            Assert.True(cut.Find("button.send").HasAttribute("disabled"));
+            Assert.Contains("Invalid JSON", cut.Find(".error").TextContent);
+
+            cut.Find("button.back-to-form").Click();
+            Assert.False(cut.Find("input.effect").HasAttribute("disabled"));
+        }
+
+        [Fact]
+        public void ManualJson_BlankText_IsSent()
+        {
+            var cut = RenderComponent<VisualsPlayground>();
+
+            cut.Find("textarea.json").Input("{\"text\":\"\"}");
+            cut.Find("button.send").Click();
+
+            _awtrix.Verify(a => a.Notify(It.IsAny<AwtrixAddress>(), It.Is<AwtrixAppMessage>(m => m.Text == "")), Times.Once);
+        }
+
+        [Fact]
+        public void Datalists_ComeFromDevice_WhenReceived_ElseBuiltIn()
+        {
+            var cut = RenderComponent<VisualsPlayground>();
+            Assert.Contains("built-in lists", cut.Find(".caps-source").TextContent);
+
+            _mqtt.Raise(m => m.MessageReceived += null, new object[] { MqttTestHelpers.CreateReceivedArgs("awtrix/clock1/state/capabilities", "{\"effects\":[\"OnlyOne\"]}") });
+
+            cut.WaitForAssertion(() =>
+            {
+                Assert.Contains("lists from device", cut.Find(".caps-source").TextContent);
+                Assert.Single(cut.FindAll("#effects option"));
+            });
+
+            cut.Find("select.device").Change("http://localhost:8080");
+            Assert.Contains("built-in lists", cut.Find(".caps-source").TextContent);
+            Assert.Equal(NgVisuals.Effects.Length, cut.FindAll("#effects option").Count);
+        }
+
+        [Fact]
+        public void Preset_LoadsForm()
+        {
+            var cut = RenderComponent<VisualsPlayground>();
+
+            cut.Find("button.preset").Click();
+
+            Assert.Equal("Plasma", cut.Find("input.effect").GetAttribute("value"));
+        }
+
+        [Fact]
+        public void ValidationError_DisablesSend()
+        {
+            var cut = RenderComponent<VisualsPlayground>();
+
+            cut.Find("input.text-color").Change("purple");
+
+            Assert.True(cut.Find("button.send").HasAttribute("disabled"));
+            Assert.Contains("Text colour", cut.Find(".error").TextContent);
+        }
+    }
+}

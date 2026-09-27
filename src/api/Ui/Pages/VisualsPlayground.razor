@@ -1,2 +1,239 @@
 @page "/ui/visuals"
+@using AwtrixSharpWeb.Ui.Components
+@using AwtrixSharpWeb.Ui.Models
+@implements IDisposable
+@inject IOptions<AwtrixConfig> Config
+@inject IAwtrixService Awtrix
+@inject PublishTrace Trace
+@inject DeviceStateMonitor Monitor
+
 <h1>Visuals</h1>
+
+<div class="actions">
+    <label>Device</label>
+    <select class="device" @bind="_baseTopic">
+        @foreach (var device in Config.Value.Devices)
+        {
+            <option value="@device.BaseTopic">@device.BaseTopic</option>
+        }
+    </select>
+    <label><input type="radio" class="target-notify" name="target" checked="@(_form.Target == VisualsTarget.Notify)" @onchange="() => SetTarget(VisualsTarget.Notify)" /> Notify</label>
+    <label><input type="radio" class="target-app" name="target" checked="@(_form.Target == VisualsTarget.CustomApp)" @onchange="() => SetTarget(VisualsTarget.CustomApp)" /> Custom app</label>
+    @if (_form.Target == VisualsTarget.CustomApp)
+    {
+        <input class="app-name" @bind="_form.AppName" @bind:after="FormChanged" placeholder="app name" />
+    }
+    <span class="muted">Presets:</span>
+    @foreach (var preset in VisualsPresets.All)
+    {
+        <button class="preset" @onclick="() => LoadPreset(preset)">@preset.Name</button>
+    }
+</div>
+
+@{
+    var caps = Monitor.Get(_baseTopic ?? string.Empty).Capabilities;
+    var disabled = _manual;
+}
+<datalist id="effects">@foreach (var v in caps.Effects) { <option value="@v" /> }</datalist>
+<datalist id="palettes">@foreach (var v in caps.Palettes) { <option value="@v" /> }</datalist>
+<datalist id="overlays">@foreach (var v in caps.Overlays) { <option value="@v" /> }</datalist>
+<datalist id="transitions">@foreach (var v in caps.Transitions) { <option value="@v" /> }</datalist>
+<datalist id="directions">@foreach (var v in NgVisuals.TransitionDirections) { <option value="@v" /> }</datalist>
+<datalist id="fonts">@foreach (var v in NgVisuals.Fonts) { <option value="@v" /> }</datalist>
+<datalist id="scrollModes">@foreach (var v in NgVisuals.ScrollModes) { <option value="@v" /> }</datalist>
+
+<div class="two-col">
+    <div>
+        <p class="caps-source muted">@(caps.Source == CapabilitiesSource.Device ? "lists from device" : "built-in lists (no capabilities received)")</p>
+
+        <fieldset disabled="@disabled">
+            <legend>Text</legend>
+            <div class="field"><label>Text</label><input class="text" disabled="@disabled" @bind="_form.Text" @bind:after="FormChanged" /></div>
+            <div class="field"><label>Text colour</label><input class="text-color" disabled="@disabled" @bind="_form.TextColor" @bind:after="FormChanged" /></div>
+            <div class="field"><label>Background</label><input class="background-color" disabled="@disabled" @bind="_form.BackgroundColor" @bind:after="FormChanged" placeholder="#RRGGBB or r,g,b" /></div>
+            <div class="field"><label>Text case</label>
+                <select disabled="@disabled" @bind="_form.TextCase" @bind:after="FormChanged">
+                    @foreach (var v in Enum.GetValues<TextCase>()) { <option value="@v">@v</option> }
+                </select></div>
+            <div class="field"><label>Icon</label><input class="icon" disabled="@disabled" @bind="_form.Icon" @bind:after="FormChanged" /></div>
+            <div class="field"><label>Icon mode</label>
+                <select disabled="@disabled" @bind="_form.IconMode" @bind:after="FormChanged">
+                    @foreach (var v in Enum.GetValues<IconMode>()) { <option value="@v">@v</option> }
+                </select></div>
+            <div class="field"><label>Font</label><input class="font" list="fonts" disabled="@disabled" @bind="_form.Font" @bind:after="FormChanged" /></div>
+        </fieldset>
+
+        <fieldset disabled="@disabled">
+            <legend>Effect</legend>
+            <div class="field"><label>Effect</label><input class="effect" list="effects" disabled="@disabled" @bind="_form.Effect" @bind:after="FormChanged" /></div>
+            <div class="field"><label>Effect speed (@_form.EffectSpeed.ToString("0.0"))</label><input class="effect-speed" type="range" min="0.1" max="10" step="0.1" disabled="@disabled" @bind="_form.EffectSpeed" @bind:after="FormChanged" /></div>
+            <div class="field"><label>Palette</label><input class="palette" list="palettes" disabled="@disabled" @bind="_form.Palette" @bind:after="FormChanged" /></div>
+            <div class="field"><label>Palette stops</label><input class="palette-stops" disabled="@disabled" @bind="_form.PaletteStops" @bind:after="FormChanged" placeholder="255,0,0;0,0,255 (overrides name)" /></div>
+            <div class="field"><label>Palette blend</label><input type="checkbox" disabled="@disabled" @bind="_form.PaletteBlend" @bind:after="FormChanged" /></div>
+            <div class="field"><label>Overlay</label><input class="overlay" list="overlays" disabled="@disabled" @bind="_form.Overlay" @bind:after="FormChanged" /></div>
+        </fieldset>
+
+        <fieldset disabled="@disabled">
+            <legend>Timing</legend>
+            <div class="field"><label>Duration ms</label><input type="number" disabled="@disabled" @bind="_form.DurationMs" @bind:after="FormChanged" /></div>
+            <div class="field"><label>Lifetime ms</label><input type="number" disabled="@disabled" @bind="_form.LifetimeMs" @bind:after="FormChanged" /></div>
+            <div class="field"><label>Hold</label><input type="checkbox" disabled="@disabled" @bind="_form.Hold" @bind:after="FormChanged" /></div>
+            <div class="field"><label>Blink ms</label><input type="number" disabled="@disabled" @bind="_form.TextBlinkMs" @bind:after="FormChanged" /></div>
+            <div class="field"><label>Fade ms</label><input type="number" disabled="@disabled" @bind="_form.TextFadeMs" @bind:after="FormChanged" /></div>
+        </fieldset>
+
+        <fieldset disabled="@disabled">
+            <legend>Scroll</legend>
+            <div class="field"><label>Mode</label><input class="scroll-mode" list="scrollModes" disabled="@disabled" @bind="_form.ScrollMode" @bind:after="FormChanged" /></div>
+            <div class="field"><label>Speed px/s</label><input type="number" disabled="@disabled" @bind="_form.ScrollSpeed" @bind:after="FormChanged" /></div>
+        </fieldset>
+
+        @if (_form.Target == VisualsTarget.CustomApp)
+        {
+            <fieldset disabled="@disabled">
+                <legend>Transition (custom app)</legend>
+                <div class="field"><label>Effect</label><input class="transition" list="transitions" disabled="@disabled" @bind="_form.TransitionEffect" @bind:after="FormChanged" /></div>
+                <div class="field"><label>Direction</label><input list="directions" disabled="@disabled" @bind="_form.TransitionDirection" @bind:after="FormChanged" /></div>
+                <div class="field"><label>Duration ms</label><input type="number" disabled="@disabled" @bind="_form.TransitionDurationMs" @bind:after="FormChanged" /></div>
+            </fieldset>
+        }
+    </div>
+
+    <div>
+        <div class="actions">
+            <strong>@(_manual ? "JSON (manual)" : "JSON (from form)")</strong>
+            @if (_manual)
+            {
+                <button class="back-to-form" @onclick="BackToForm">Back to form</button>
+            }
+        </div>
+        <textarea class="json" value="@_json" @oninput="JsonEdited"></textarea>
+        @foreach (var error in _errors)
+        {
+            <div class="error">@error</div>
+        }
+        <div class="actions">
+            <button class="send" disabled="@(!CanSend)" @onclick="Send">Send</button>
+            <button class="dismiss" @onclick="Dismiss">Dismiss</button>
+            @if (_form.Target == VisualsTarget.CustomApp)
+            {
+                <button class="clear-app" @onclick="ClearApp">Clear this app</button>
+            }
+            @if (_sendResult != null)
+            {
+                <span class="send-result @(_sendResult.Value ? "result ok" : "result bad")">@(_sendResult.Value ? "delivered" : "not delivered (see logs)") @_sendAddress</span>
+            }
+        </div>
+
+        @{
+            var state = Monitor.Get(_baseTopic ?? string.Empty);
+        }
+        <details>
+            <summary>Device state @(state.LastSeen.HasValue ? $"(received {state.LastSeen.Value.ToLocalTime():HH:mm:ss})" : "(nothing received)")</summary>
+            <h2>settings</h2>
+            <pre>@(DeviceSummary.Pretty(state.SettingsJson) is { Length: > 0 } s ? s : "none")</pre>
+            <h2>device</h2>
+            <pre>@(DeviceSummary.Pretty(state.DeviceJson) is { Length: > 0 } d ? d : "none")</pre>
+        </details>
+    </div>
+</div>
+
+@code {
+    private readonly VisualsForm _form = new();
+    private string? _baseTopic;
+    private string _json = "";
+    private bool _manual;
+    private AwtrixAppMessage? _manualMessage;
+    private List<string> _errors = new();
+    private bool? _sendResult;
+    private string? _sendAddress;
+
+    private bool CanSend => _errors.Count == 0 && (!_manual || _manualMessage != null);
+
+    protected override void OnInitialized()
+    {
+        _baseTopic = Config.Value.Devices.FirstOrDefault()?.BaseTopic;
+        Monitor.Changed += OnDeviceChanged;
+        FormChanged();
+    }
+
+    private void SetTarget(VisualsTarget target)
+    {
+        _form.Target = target;
+        FormChanged();
+    }
+
+    private void FormChanged()
+    {
+        _errors = _form.Validate().ToList();
+        _json = DeviceSummary.Pretty(_form.Build().ToJson());
+    }
+
+    private void JsonEdited(ChangeEventArgs e)
+    {
+        _manual = true;
+        _json = e.Value?.ToString() ?? "";
+        if (AwtrixAppMessage.TryFromJson(_json, out var message, out var error))
+        {
+            _manualMessage = message;
+            _errors = new List<string>();
+        }
+        else
+        {
+            _manualMessage = null;
+            _errors = new List<string> { error ?? "Invalid JSON" };
+        }
+    }
+
+    private void BackToForm()
+    {
+        _manual = false;
+        _manualMessage = null;
+        FormChanged();
+    }
+
+    private void LoadPreset(VisualsPresets.Preset preset)
+    {
+        var target = _form.Target;
+        var appName = _form.AppName;
+        _form.Reset();
+        _form.Target = target;
+        _form.AppName = appName;
+        preset.Apply(_form);
+        BackToForm();
+    }
+
+    private AwtrixAddress Address => new() { BaseTopic = _baseTopic ?? string.Empty };
+
+    private async Task Send()
+    {
+        var message = _manual ? _manualMessage : _form.Build();
+        if (message == null)
+        {
+            return;
+        }
+        await Run(() => _form.Target == VisualsTarget.CustomApp ? Awtrix.AppUpdate(Address, _form.AppName, message) : Awtrix.Notify(Address, message));
+    }
+
+    private Task Dismiss() => Run(() => Awtrix.Dismiss(Address));
+
+    private Task ClearApp() => Run(() => Awtrix.AppClear(Address, _form.AppName));
+
+    private async Task Run(Func<Task<bool>> action)
+    {
+        try
+        {
+            _sendResult = await action();
+            _sendAddress = Trace.Recent().FirstOrDefault()?.Request.Address;
+        }
+        catch (Exception ex)
+        {
+            _sendResult = false;
+            _sendAddress = ex.Message;
+        }
+    }
+
+    private void OnDeviceChanged(string baseTopic) => _ = InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Monitor.Changed -= OnDeviceChanged;
+}
