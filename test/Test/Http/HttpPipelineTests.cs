@@ -1,7 +1,13 @@
+using AwtrixSharpWeb.Domain;
+using AwtrixSharpWeb.HostedServices;
+using AwtrixSharpWeb.Interfaces;
 using AwtrixSharpWeb.Middleware;
+using AwtrixSharpWeb.Services;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Moq;
 using System.Net;
 
 namespace Test.Http
@@ -16,7 +22,9 @@ namespace Test.Http
         {
             // CreateBuilder loads appsettings.json from the content root while it is constructed, before the
             // Sources.Clear() below. The test output folder's appsettings.json is "{}", so it can be the content root:
-            // no temporary folder is created (or leaked).
+            // no temporary folder is created (or leaked). Static web assets aren't wired up in Production (that's
+            // publish-time behaviour), so UseStaticFiles serves the wwwroot the Test.csproj item group below copies
+            // next to the test output, the same way the real app serves its own physically-published wwwroot.
             var builder = WebApplication.CreateBuilder(new WebApplicationOptions
             {
                 EnvironmentName = environment,
@@ -27,6 +35,14 @@ namespace Test.Http
             builder.Configuration.AddInMemoryCollection(settings ?? new Dictionary<string, string?>());
 
             AwtrixSharpWeb.Program.AddHttpSurface(builder.Services, builder.Configuration);
+
+            builder.Services.AddSingleton(new Mock<IMqttConnector>().Object);
+            builder.Services.AddSingleton(new Mock<IAwtrixService>().Object);
+            builder.Services.AddSingleton<PublishTrace>();
+            builder.Services.AddSingleton(TimeProvider.System);
+            builder.Services.Configure<AwtrixConfig>(_ => { });
+            builder.Services.AddSingleton<DeviceStateMonitor>();
+            builder.Services.AddSingleton(sp => Test.HostedServices.ConductorTestHelper.Create());
 
             var app = builder.Build();
             AwtrixSharpWeb.Program.ConfigureHttpPipeline(app);
@@ -149,6 +165,28 @@ namespace Test.Http
 
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
             Assert.Contains(ApiKeyMiddleware.HeaderName, body);
+        }
+
+        [Fact]
+        public async Task Ui_IsServed_WithoutApiKey_WhenKeyConfigured()
+        {
+            await using var app = await StartAsync("Production", new() { ["Api:Key"] = "s3cret" });
+
+            var response = await app.GetTestClient().GetAsync("/ui");
+            var body = await response.Content.ReadAsStringAsync();
+
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            Assert.Contains("blazor.web.js", body);
+        }
+
+        [Fact]
+        public async Task UiStylesheet_IsServed()
+        {
+            await using var app = await StartAsync("Production");
+
+            var response = await app.GetTestClient().GetAsync("/ui/site.css");
+
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         }
 
         [Theory]

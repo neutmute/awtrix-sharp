@@ -14,6 +14,16 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- HttpPipelineTests hosts Program.AddHttpSurface/ConfigureHttpPipeline with ContentRootPath = the test
+         output folder. Static web assets aren't wired up in Production (that's publish-time behaviour), so
+         UseStaticFiles needs a physical wwwroot next to the test output, mirroring src/api/wwwroot. -->
+    <None Include="..\..\src\api\wwwroot\**" Link="wwwroot\%(RecursiveDir)%(Filename)%(Extension)">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="bunit" Version="1.40.0" />
     <PackageReference Include="coverlet.collector" Version="6.0.2" />
     <PackageReference Include="Microsoft.AspNetCore.TestHost" Version="10.0.0" />
     <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" Version="10.0.0" />

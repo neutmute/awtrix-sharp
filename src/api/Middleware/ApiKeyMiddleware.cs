@@ -7,8 +7,10 @@ namespace AwtrixSharpWeb.Middleware
 {
     /// <summary>
     /// When Api:Key is set, every request reaching this middleware must carry the key in the X-Api-Key header.
-    /// Swagger is registered earlier in the pipeline, so its UI and JSON stay reachable. Read per request via
-    /// IOptionsMonitor so an appsettings reload applies without restart.
+    /// Swagger is registered earlier in the pipeline, so its UI and JSON stay reachable. The test UI (/ui) and its
+    /// Blazor circuit/framework assets (/_blazor, /_framework) are open the same way, by path (see
+    /// <see cref="IsOpenPath"/>). Read per request via IOptionsMonitor so an appsettings reload applies without
+    /// restart.
     /// </summary>
     public class ApiKeyMiddleware
     {
@@ -29,7 +31,7 @@ namespace AwtrixSharpWeb.Middleware
         {
             var expected = _settings.CurrentValue.Key;
 
-            if (string.IsNullOrWhiteSpace(expected) || IsMatch(context.Request.Headers[HeaderName].ToString(), expected))
+            if (string.IsNullOrWhiteSpace(expected) || IsOpenPath(context.Request.Path) || IsMatch(context.Request.Headers[HeaderName].ToString(), expected))
             {
                 await _next(context);
                 return;
@@ -47,6 +49,15 @@ namespace AwtrixSharpWeb.Middleware
                     title: "Missing or invalid API key",
                     detail: $"Send the configured API key in the {HeaderName} header.")
                 .ExecuteAsync(context);
+        }
+
+        /// <summary>Paths served without a key: the test UI and the Blazor circuit/framework assets (open like Swagger).</summary>
+        internal static bool IsOpenPath(PathString path)
+        {
+            return path.Equals("/ui", StringComparison.OrdinalIgnoreCase)
+                || path.StartsWithSegments("/ui", StringComparison.OrdinalIgnoreCase)
+                || path.StartsWithSegments("/_blazor", StringComparison.OrdinalIgnoreCase)
+                || path.StartsWithSegments("/_framework", StringComparison.OrdinalIgnoreCase);
         }
 
         /// <summary>

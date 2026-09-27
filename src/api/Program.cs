@@ -52,6 +52,7 @@ namespace AwtrixSharpWeb
         public static void AddHttpSurface(IServiceCollection services, IConfiguration configuration)
         {
             services.AddControllers();
+            services.AddRazorComponents().AddInteractiveServerComponents();
             services.AddProblemDetails();
             services.Configure<ApiSettings>(configuration.GetSection(ApiSettings.SectionName));
             RegisterSwagger(services, configuration);
@@ -78,9 +79,14 @@ namespace AwtrixSharpWeb
                 app.UseSwaggerUI();
             }
 
+            // The test UI is open like Swagger; ApiKeyMiddleware also skips /ui, /_blazor and /_framework by path.
+            app.UseStaticFiles();
+            app.UseAntiforgery();
+
             app.UseMiddleware<ApiKeyMiddleware>();
 
             app.MapControllers();
+            app.MapRazorComponents<Ui.App>().AddInteractiveServerRenderMode();
         }
 
         /// <summary>
