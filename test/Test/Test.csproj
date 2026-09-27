@@ -37,4 +37,10 @@
     </None>
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="TestData\*.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>
