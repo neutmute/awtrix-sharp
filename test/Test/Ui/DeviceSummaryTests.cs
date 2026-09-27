@@ -16,8 +16,9 @@ namespace Test.Ui
         public void Describe_FallsBackToLastSeen()
         {
             var at = new DateTimeOffset(2026, 9, 27, 3, 4, 5, TimeSpan.Zero);
+            var expected = $"state received {at.ToLocalTime():HH:mm:ss}";
 
-            Assert.Equal("state received 03:04:05", DeviceSummary.Describe("{\"foo\":1}", at));
+            Assert.Equal(expected, DeviceSummary.Describe("{\"foo\":1}", at));
         }
 
         [Fact]
