@@ -19,8 +19,8 @@ traffic from every app, including cron-fired ones.
 Compose an AWTRIX NG payload with the visual features from
 https://blueforcer.github.io/awtrix-ng/reference/visuals/ : effect, effect speed, palette (name or
 `r,g,b;r,g,b` stops), overlay, colours, icon, font, timing, scroll, and (for a custom app) transition.
-The JSON on the right is what will be sent. Editing it switches to manual mode; **Back to form**
-returns. Send as a notification or as a custom app update under a name you choose.
+The JSON on the right is what will be sent, and it is two-way: editing the JSON updates the form
+fields, and keys the form has no field for are kept and sent as typed. Invalid JSON only disables Send. Send as a notification or as a custom app update under a name you choose.
 
 Dropdown lists come from the clock: `DeviceStateMonitor` subscribes to `{baseTopic}/state/capabilities`,
 `{baseTopic}/state/settings` and `{baseTopic}/state/device` for every MQTT device. Until a capabilities
