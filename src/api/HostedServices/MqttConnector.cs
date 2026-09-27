@@ -68,6 +68,8 @@ namespace AwtrixSharpWeb.HostedServices
         /// <summary>The current background reconnect loop (completed when none is running). For tests and shutdown.</summary>
         internal Task ReconnectTask => Volatile.Read(ref _reconnectTask);
 
+        public bool IsConnected => !IsDisposed && _client.IsConnected;
+
         private bool IsDisposed => Volatile.Read(ref _disposed) != 0;
 
         internal static MqttClientOptions BuildClientOptions(MqttSettings settings)

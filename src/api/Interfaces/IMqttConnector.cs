@@ -23,5 +23,8 @@ namespace AwtrixSharpWeb.Interfaces
         /// including while disconnected. Failed publishes are not queued.
         /// </summary>
         Task<bool> PublishAsync(string topic, string payload);
+
+        /// <summary>True while the underlying client reports a live broker session. False once disposed.</summary>
+        bool IsConnected { get; }
     }
 }

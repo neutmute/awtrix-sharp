@@ -134,6 +134,7 @@ namespace AwtrixSharpWeb
             // Connectors
             services.AddSingleton<MqttConnector>();
             services.AddSingleton<IMqttConnector>(sp => sp.GetRequiredService<MqttConnector>());
+            services.AddSingleton<DeviceStateMonitor>();
             services.AddSingleton<SlackConnector>();
             services.AddSingleton<ISlackConnector>(sp => sp.GetRequiredService<SlackConnector>());
 
@@ -156,6 +157,7 @@ namespace AwtrixSharpWeb
 
             // Hosted services start in this order and stop in reverse
             services.AddHostedService(sp => sp.GetRequiredService<MqttConnector>());
+            services.AddHostedService(sp => sp.GetRequiredService<DeviceStateMonitor>());
             services.AddHostedService(sp => sp.GetRequiredService<SlackConnector>());
             services.AddHostedService(sp => sp.GetRequiredService<Conductor>());
             services.AddHostedService(sp => sp.GetRequiredService<TimerService>());

@@ -76,7 +76,7 @@ namespace Test
         }
 
         [Fact]
-        public void RegistersFourHostedServicesInStartupOrder()
+        public void RegistersFiveHostedServicesInStartupOrder()
         {
             using var provider = BuildProvider();
 
@@ -84,6 +84,7 @@ namespace Test
 
             Assert.Collection(hosted,
                 h => Assert.IsType<MqttConnector>(h),
+                h => Assert.IsType<DeviceStateMonitor>(h),
                 h => Assert.IsType<SlackConnector>(h),
                 h => Assert.IsType<Conductor>(h),
                 h => Assert.IsType<TimerService>(h));
