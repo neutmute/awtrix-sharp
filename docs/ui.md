@@ -1,7 +1,10 @@
 # Test UI
 
 The service hosts a small Blazor Server UI at `/ui` (same container as the API, no extra build). It is
-open like Swagger: `ApiKeyMiddleware` skips `/ui`, `/_blazor` and `/_framework`.
+open like Swagger: `ApiKeyMiddleware` skips `/ui`, `/_blazor` and `/_framework`. Unlike Swagger, whose
+"Try it out" calls still require the API key when one is configured, `/ui` performs Notify, AppUpdate,
+AppClear, Dismiss and Run now without any key — so configuring `Api:Key` does not protect the clocks
+while `/ui` is reachable. Restrict network access to the container if that matters.
 
 ## Apps (`/ui`)
 
@@ -28,3 +31,7 @@ and the page says so. Every list also accepts a typed value.
 
 `dotnet run --project src/api --launch-profile Simulator` then open http://localhost:5115/ui. The
 simulator device is HTTP, so it uses built-in lists.
+
+The Simulator environment also enables static web assets (`builder.WebHost.UseStaticWebAssets()` in
+`Program.cs`), so `_framework/blazor.web.js` is served straight from the build output and the page
+becomes interactive without a `dotnet publish` first.

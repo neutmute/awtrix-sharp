@@ -140,5 +140,42 @@ namespace Test.Ui
             Assert.True(cut.Find("button.send").HasAttribute("disabled"));
             Assert.Contains("Text colour", cut.Find(".error").TextContent);
         }
+
+        [Fact]
+        public void ManualJson_SwitchingToCustomApp_StillSendsManualJson()
+        {
+            var cut = RenderComponent<VisualsPlayground>();
+
+            cut.Find("textarea.json").Input("{\"text\":\"manual\"}");
+            cut.Find("input.target-app").Change(true);
+            cut.Find("button.send").Click();
+
+            _awtrix.Verify(a => a.AppUpdate(It.IsAny<AwtrixAddress>(), It.IsAny<string>(), It.Is<AwtrixAppMessage>(m => m.Text == "manual")), Times.Once);
+            var textarea = cut.Find("textarea.json");
+            Assert.Contains("manual", textarea.GetAttribute("value") ?? textarea.TextContent);
+        }
+
+        [Fact]
+        public void ManualJson_CustomAppWithBlankName_DisablesSend_AndShowsError()
+        {
+            var cut = RenderComponent<VisualsPlayground>();
+
+            cut.Find("textarea.json").Input("{\"text\":\"manual\"}");
+            cut.Find("input.target-app").Change(true);
+            cut.Find("input.app-name").Change("");
+
+            Assert.True(cut.Find("button.send").HasAttribute("disabled"));
+            Assert.Contains("App name is required", cut.Find(".error").TextContent);
+        }
+
+        [Fact]
+        public void NoDevicesConfigured_DisablesSend()
+        {
+            Services.AddSingleton(Options.Create(new AwtrixConfig()));
+
+            var cut = RenderComponent<VisualsPlayground>();
+
+            Assert.True(cut.Find("button.send").HasAttribute("disabled"));
+        }
     }
 }

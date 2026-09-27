@@ -17,6 +17,10 @@
             <option value="@device.BaseTopic">@device.BaseTopic</option>
         }
     </select>
+    @if (string.IsNullOrEmpty(_baseTopic))
+    {
+        <span class="muted no-devices">no devices configured</span>
+    }
     <label><input type="radio" class="target-notify" name="target" checked="@(_form.Target == VisualsTarget.Notify)" @onchange="() => SetTarget(VisualsTarget.Notify)" /> Notify</label>
     <label><input type="radio" class="target-app" name="target" checked="@(_form.Target == VisualsTarget.CustomApp)" @onchange="() => SetTarget(VisualsTarget.CustomApp)" /> Custom app</label>
     @if (_form.Target == VisualsTarget.CustomApp)
@@ -114,10 +118,10 @@
         }
         <div class="actions">
             <button class="send" disabled="@(!CanSend)" @onclick="Send">Send</button>
-            <button class="dismiss" @onclick="Dismiss">Dismiss</button>
+            <button class="dismiss" disabled="@NoDevice" @onclick="Dismiss">Dismiss</button>
             @if (_form.Target == VisualsTarget.CustomApp)
             {
-                <button class="clear-app" @onclick="ClearApp">Clear this app</button>
+                <button class="clear-app" disabled="@NoDevice" @onclick="ClearApp">Clear this app</button>
             }
             @if (_sendResult != null)
             {
@@ -144,11 +148,13 @@
     private string _json = "";
     private bool _manual;
     private AwtrixAppMessage? _manualMessage;
+    private string? _manualError;
     private List<string> _errors = new();
     private bool? _sendResult;
     private string? _sendAddress;
 
-    private bool CanSend => _errors.Count == 0 && (!_manual || _manualMessage != null);
+    private bool NoDevice => string.IsNullOrEmpty(_baseTopic);
+    private bool CanSend => _errors.Count == 0 && (!_manual || _manualMessage != null) && !NoDevice;
 
     protected override void OnInitialized()
     {
@@ -165,6 +171,15 @@
 
     private void FormChanged()
     {
+        if (_manual)
+        {
+            // Manual JSON mode: the textarea is the source of truth. Re-evaluate only the errors that
+            // depend on the rest of the form (the custom-app name), never regenerate _json or discard
+            // the already-parsed manual message.
+            _errors = ManualErrors();
+            return;
+        }
+
         _errors = _form.Validate().ToList();
         _json = DeviceSummary.Pretty(_form.Build().ToJson());
     }
@@ -176,19 +191,39 @@
         if (AwtrixAppMessage.TryFromJson(_json, out var message, out var error))
         {
             _manualMessage = message;
-            _errors = new List<string>();
+            _manualError = null;
         }
         else
         {
             _manualMessage = null;
-            _errors = new List<string> { error ?? "Invalid JSON" };
+            _manualError = error ?? "Invalid JSON";
         }
+        _errors = ManualErrors();
+    }
+
+    /// <summary>
+    /// Manual-mode errors: the JSON parse error (if any) plus the custom-app name check, which
+    /// otherwise a manual JSON payload with an empty app name would skip entirely.
+    /// </summary>
+    private List<string> ManualErrors()
+    {
+        var errors = new List<string>();
+        if (_manualError != null)
+        {
+            errors.Add(_manualError);
+        }
+        if (_form.Target == VisualsTarget.CustomApp && string.IsNullOrWhiteSpace(_form.AppName))
+        {
+            errors.Add("App name is required for a custom app");
+        }
+        return errors;
     }
 
     private void BackToForm()
     {
         _manual = false;
         _manualMessage = null;
+        _manualError = null;
         FormChanged();
     }
 

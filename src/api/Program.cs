@@ -4,6 +4,7 @@ using AwtrixSharpWeb.Interfaces;
 using AwtrixSharpWeb.Middleware;
 using AwtrixSharpWeb.Services;
 using AwtrixSharpWeb.Services.TripPlanner;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration.EnvironmentVariables;
 using Microsoft.Extensions.Configuration.Json;
 using Microsoft.Extensions.Options;
@@ -26,6 +27,16 @@ namespace AwtrixSharpWeb
         {
             var builder = WebApplication.CreateBuilder(args);
             var configuration = builder.Configuration;
+
+            // .NET 10's WebApplication.CreateBuilder only enables static web assets (which is how
+            // Microsoft.AspNetCore.App.Internal.Assets serves _framework/blazor.web.js) in the
+            // Development environment. The Simulator environment also hosts the Blazor test UI, so it
+            // needs the same static web assets wired up or the page prerenders but never becomes
+            // interactive (blazor.web.js 404s).
+            if (builder.Environment.IsEnvironment(SimulatorEnvironmentName))
+            {
+                builder.WebHost.UseStaticWebAssets();
+            }
 
             var services = builder.Services;
 
