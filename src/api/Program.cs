@@ -5,6 +5,7 @@ using AwtrixSharpWeb.Middleware;
 using AwtrixSharpWeb.Services;
 using AwtrixSharpWeb.Services.TripPlanner;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Configuration.EnvironmentVariables;
 using Microsoft.Extensions.Configuration.Json;
 using Microsoft.Extensions.Options;
@@ -67,7 +68,39 @@ namespace AwtrixSharpWeb
             services.AddRazorComponents().AddInteractiveServerComponents();
             services.AddProblemDetails();
             services.Configure<ApiSettings>(configuration.GetSection(ApiSettings.SectionName));
+            RegisterDataProtection(services, configuration);
             RegisterSwagger(services, configuration);
+        }
+
+        /// <summary>
+        /// DataProtection:KeysPath (AWTRIXSHARP_DATAPROTECTION__KEYSPATH): a folder to persist the data-protection
+        /// key ring in, so antiforgery and Blazor circuit tokens survive container restarts. Unset keeps the
+        /// framework default (ephemeral in a container). A folder that cannot be created or written falls back to
+        /// the default with a startup warning rather than failing every protected operation at runtime.
+        /// </summary>
+        private static void RegisterDataProtection(IServiceCollection services, IConfiguration configuration)
+        {
+            var builder = services.AddDataProtection().SetApplicationName("awtrix-sharp");
+            var keysPath = configuration["DataProtection:KeysPath"];
+            if (string.IsNullOrWhiteSpace(keysPath))
+            {
+                return;
+            }
+
+            try
+            {
+                var directory = Directory.CreateDirectory(keysPath);
+                var probe = Path.Combine(directory.FullName, ".write-probe-" + Guid.NewGuid().ToString("N"));
+                File.WriteAllText(probe, string.Empty);
+                File.Delete(probe);
+                builder.PersistKeysToFileSystem(directory);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or ArgumentException)
+            {
+                services.AddSingleton(new StartupWarning(
+                    $"DataProtection:KeysPath '{keysPath}' is not a writable folder ({ex.Message}); keys stay ephemeral and " +
+                    "antiforgery/circuit tokens will not survive a restart"));
+            }
         }
 
         /// <summary>
@@ -384,6 +417,11 @@ namespace AwtrixSharpWeb
                 app.Services.GetRequiredService<IOptions<AwtrixConfig>>().Value,
                 app.Services.GetRequiredService<IOptions<TransportOpenDataConfig>>().Value,
                 app.Services.GetRequiredService<IOptions<SlackSettings>>().Value);
+
+            foreach (var startupWarning in app.Services.GetServices<StartupWarning>())
+            {
+                logger.LogWarning("{Warning}", startupWarning.Message);
+            }
 
             foreach (var warning in warnings)
             {

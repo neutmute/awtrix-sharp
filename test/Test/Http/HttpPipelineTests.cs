@@ -1,4 +1,4 @@
-using AwtrixSharpWeb.Domain;
+﻿using AwtrixSharpWeb.Domain;
 using AwtrixSharpWeb.HostedServices;
 using AwtrixSharpWeb.Interfaces;
 using AwtrixSharpWeb.Middleware;
@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.AspNetCore.DataProtection;
 using Moq;
 using System.Net;
 
@@ -187,6 +188,57 @@ namespace Test.Http
             var response = await app.GetTestClient().GetAsync("/ui/site.css");
 
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        }
+
+        [Fact]
+        public async Task Root_ServesTheAppTestPanel_WithoutApiKey_WhenKeyConfigured()
+        {
+            await using var app = await StartAsync("Production", new() { ["Api:Key"] = "s3cret" });
+
+            var response = await app.GetTestClient().GetAsync("/");
+            var body = await response.Content.ReadAsStringAsync();
+
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            Assert.Contains("blazor.web.js", body);
+            Assert.Contains("<h1>Apps</h1>", body);
+        }
+
+        [Fact]
+        public async Task DataProtection_KeysPath_PersistsKeyRingToThatFolder()
+        {
+            var dir = Path.Combine(Path.GetTempPath(), "awtrix-dp-" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                await using var app = await StartAsync("Production", new() { ["DataProtection:KeysPath"] = dir });
+
+                app.Services.GetRequiredService<IDataProtectionProvider>().CreateProtector("test").Protect("x");
+
+                Assert.NotEmpty(Directory.GetFiles(dir, "key-*.xml"));
+            }
+            finally
+            {
+                if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
+            }
+        }
+
+        [Fact]
+        public async Task DataProtection_KeysPath_NotWritable_FallsBackWithWarning()
+        {
+            var file = Path.GetTempFileName(); // a file where a folder is expected: CreateDirectory throws
+            try
+            {
+                await using var app = await StartAsync("Production", new() { ["DataProtection:KeysPath"] = file });
+
+                var protectedValue = app.Services.GetRequiredService<IDataProtectionProvider>().CreateProtector("test").Protect("x");
+                var warning = Assert.Single(app.Services.GetServices<StartupWarning>());
+
+                Assert.False(string.IsNullOrEmpty(protectedValue));
+                Assert.Contains("not a writable folder", warning.Message);
+            }
+            finally
+            {
+                File.Delete(file);
+            }
         }
 
         [Fact]

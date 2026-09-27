@@ -80,7 +80,7 @@ Every app config can include a `ValueMaps[]` array. Each entry has a `ValueMatch
 
 ### Test UI
 
-Blazor Server pages under `src/api/Ui` (`/ui`, `/ui/visuals`), open like Swagger, calling the DI services
+Blazor Server pages under `src/api/Ui` (`/` and `/ui`, `/ui/visuals`), open like Swagger, calling the DI services
 directly. `Ui/Models/VisualsForm` builds the playground payload and is unit-tested without bUnit; the
 pages have bUnit tests under `test/Test/Ui`. See `docs/ui.md`.
 

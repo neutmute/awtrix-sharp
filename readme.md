@@ -278,7 +278,7 @@ A Swagger API supports testing and development
 
 ![image](./docs/gifs/swagger.jpg)
 
-A test UI lives at `/ui` (apps per clock, run-now, last payloads) and `/ui/visuals` (AWTRIX NG effect
+A test UI lives at `/` (apps per clock, run-now, last payloads) and `/ui/visuals` (AWTRIX NG effect
 playground). See `docs/ui.md`. Unlike Swagger, whose UI is open but whose API calls still need the key,
 `/ui` performs Notify, AppUpdate, AppClear, Dismiss and Run now without any key, so configuring `Api:Key`
 does not protect the clocks while `/ui` is reachable; restrict network access to the container if that

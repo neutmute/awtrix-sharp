@@ -1,4 +1,4 @@
-using AwtrixSharpWeb.Domain;
+﻿using AwtrixSharpWeb.Domain;
 using Microsoft.Extensions.Options;
 using System.Security.Cryptography;
 using System.Text;
@@ -54,7 +54,8 @@ namespace AwtrixSharpWeb.Middleware
         /// <summary>Paths served without a key: the test UI and the Blazor circuit/framework assets (open like Swagger).</summary>
         internal static bool IsOpenPath(PathString path)
         {
-            return path.Equals("/ui", StringComparison.OrdinalIgnoreCase)
+            return !path.HasValue
+                || path.Equals("/", StringComparison.Ordinal)
                 || path.StartsWithSegments("/ui", StringComparison.OrdinalIgnoreCase)
                 || path.StartsWithSegments("/_blazor", StringComparison.OrdinalIgnoreCase)
                 || path.StartsWithSegments("/_framework", StringComparison.OrdinalIgnoreCase);

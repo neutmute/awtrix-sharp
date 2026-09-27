@@ -1,4 +1,4 @@
-using AwtrixSharpWeb.Middleware;
+﻿using AwtrixSharpWeb.Middleware;
 using Microsoft.AspNetCore.Http;
 
 namespace Test.Middleware
@@ -14,7 +14,8 @@ namespace Test.Middleware
         [InlineData("/_framework/blazor.web.js", true)]
         [InlineData("/uix", false)]
         [InlineData("/diagnostics", false)]
-        [InlineData("/", false)]
+        [InlineData("/", true)]
+        [InlineData("/diagnostics/", false)]
         [InlineData("/mqtt/publish", false)]
         public void IsOpenPath(string path, bool expected)
         {

@@ -1,7 +1,7 @@
 # Test UI
 
-The service hosts a small Blazor Server UI at `/ui` (same container as the API, no extra build). It is
-open like Swagger: `ApiKeyMiddleware` skips `/ui`, `/_blazor` and `/_framework`. Unlike Swagger, whose
+The service hosts a small Blazor Server UI at `/` (also `/ui`) in the same container as the API, with no
+extra build. It is open like Swagger: `ApiKeyMiddleware` skips `/ui`, `/_blazor` and `/_framework`. Unlike Swagger, whose
 "Try it out" calls still require the API key when one is configured, `/ui` performs Notify, AppUpdate,
 AppClear, Dismiss and Run now without any key — so configuring `Api:Key` does not protect the clocks
 while `/ui` is reachable. Restrict network access to the container if that matters.
@@ -26,6 +26,21 @@ Dropdown lists come from the clock: `DeviceStateMonitor` subscribes to `{baseTop
 `{baseTopic}/state/settings` and `{baseTopic}/state/device` for every MQTT device. Until a capabilities
 payload arrives (or for HTTP devices, which are not polled) the built-in lists in `NgVisuals` are used
 and the page says so. The dropdowns list everything the clock reports; to try a value that is not in a list, edit the JSON panel directly.
+
+## Persisting data-protection keys
+
+Blazor's circuit and antiforgery tokens are protected with the ASP.NET Core data-protection key ring,
+which is ephemeral inside a container. After a restart, a browser still holding the old cookie logs one
+`AntiforgeryValidationException ... key was not found in the key ring` on its first request; it is
+harmless and clears itself. To avoid it, persist the keys in a mounted folder that the container user
+(uid 1654 in the official image) can write:
+
+```
+AWTRIXSHARP_DATAPROTECTION__KEYSPATH=/keys
+docker run ... -e AWTRIXSHARP_DATAPROTECTION__KEYSPATH=/keys -v /srv/awtrix/keys:/keys ...
+```
+
+If the folder cannot be created or written the service logs a startup warning and keeps the default.
 
 ## Local check
 
