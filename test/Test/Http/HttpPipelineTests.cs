@@ -189,6 +189,16 @@ namespace Test.Http
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         }
 
+        [Fact]
+        public async Task UiStylesheet_IsServed_WithoutApiKey_WhenKeyConfigured()
+        {
+            await using var app = await StartAsync("Production", new() { ["Api:Key"] = "s3cret" });
+
+            var response = await app.GetTestClient().GetAsync("/ui/site.css");
+
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        }
+
         [Theory]
         [InlineData("s3cret", "s3cret", true)]
         [InlineData(" s3cret ", "s3cret", true)]
