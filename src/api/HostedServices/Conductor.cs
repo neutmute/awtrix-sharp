@@ -66,6 +66,17 @@ namespace AwtrixSharpWeb.HostedServices
         internal TimeSpan AppDisposeTimeout { get; set; } = DefaultAppDisposeTimeout;
 
         /// <summary>
+        /// How long the startup notification stays on each device.
+        /// </summary>
+        internal static readonly TimeSpan StartupNotificationDuration = TimeSpan.FromSeconds(4);
+
+        /// <summary>
+        /// Text of the notification sent to every configured device once startup completes. Internal and settable so
+        /// tests can assert on a known value (the build's commit is not available under test).
+        /// </summary>
+        internal string StartupNotificationText { get; set; } = BuildInfo.Description;
+
+        /// <summary>
         /// An app keyed by the device it drives and its configured Type.
         /// </summary>
         private sealed record RegisteredApp(AwtrixAddress? Device, string Type, IAwtrixApp App)
@@ -126,6 +137,39 @@ namespace AwtrixSharpWeb.HostedServices
             }
 
             _logger.LogInformation("Conductor started {Running} of {Created} app(s)", running.Count, created.Count);
+
+            await NotifyStartupAsync();
+        }
+
+        /// <summary>
+        /// Announces this build on every configured device. Best effort: a device or broker problem is logged and never fails startup.
+        /// </summary>
+        private async Task NotifyStartupAsync()
+        {
+            var devices = (_awtrixConfig.Devices ?? Array.Empty<DeviceConfig>())
+                .Where(device => device != null && !string.IsNullOrWhiteSpace(device.BaseTopic))
+                .ToList();
+            if (devices.Count == 0)
+            {
+                return;
+            }
+
+            var message = new AwtrixAppMessage()
+                .SetText(StartupNotificationText)
+                .SetDuration(StartupNotificationDuration);
+
+            await Task.WhenAll(devices.Select(async device =>
+            {
+                try
+                {
+                    await _awtrixService.Notify(device, message);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Startup notification to {Device} failed", device.BaseTopic);
+                }
+            }));
+            _logger.LogInformation("Sent startup notification '{Text}' to {Count} device(s)", StartupNotificationText, devices.Count);
         }
 
         private List<RegisteredApp> CreateApps()

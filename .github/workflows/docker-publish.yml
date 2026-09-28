@@ -57,9 +57,19 @@ jobs:
         with:
           cosign-release: 'v2.2.4'
 
-      - name: Compute short SHA
+      # Version: a v*.*.* tag wins; otherwise MAJOR.MINOR from the env below plus the workflow run number,
+      # which GitHub increments on every run. Baked into the assembly (startup log / notification) and used as an image tag.
+      - name: Compute version and short SHA
         id: vars
-        run: echo "SHORT_SHA=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+        env:
+          VERSION_PREFIX: "1.0"
+        run: |
+          echo "SHORT_SHA=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            echo "VERSION=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "VERSION=${VERSION_PREFIX}.${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+          fi
 
       # Set up BuildKit Docker container builder to be able to build
       # multi-platform images and export cache
@@ -84,6 +94,15 @@ jobs:
         uses: docker/metadata-action@96383f45573cb7f253c731d3b3ab81c87ef81934 # v5.0.0
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=schedule
+            type=ref,event=branch
+            type=ref,event=tag
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=${{ steps.vars.outputs.VERSION }},enable={{is_default_branch}}
+            type=raw,value=latest,enable={{is_default_branch}}
 
       # Build and push Docker image with Buildx (don't push on PR)
       # https://github.com/docker/build-push-action
@@ -100,6 +119,7 @@ jobs:
           build-args: |
             GIT_COMMIT=${{ github.sha }}
             GIT_COMMIT_SHORT=${{ steps.vars.outputs.SHORT_SHA }}
+            VERSION=${{ steps.vars.outputs.VERSION }}
 
       # Sign the resulting Docker image digest except on PRs.
       # This will only write to the public Rekor transparency log when the Docker
