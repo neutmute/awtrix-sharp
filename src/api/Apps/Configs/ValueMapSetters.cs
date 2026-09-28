@@ -38,6 +38,7 @@ namespace AwtrixSharpWeb.Apps.Configs
                 ["ProgressColor"] = Colour((m, v) => m.SetProgressColor(v)),
                 ["ProgressTrackColor"] = Colour((m, v) => m.SetProgressTrackColor(v)),
                 ["ScrollSpeed"] = Int((m, v) => m.SetScrollSpeed(v)),
+                ["ScrollMode"] = Str((m, v) => m.SetScrollMode(v)),
                 ["Effect"] = Str((m, v) => m.SetEffect(v)),
                 ["EffectSpeed"] = Dbl((m, v) => m.SetEffectSpeed(v)),
                 ["Font"] = Str((m, v) => m.SetFont(v)),

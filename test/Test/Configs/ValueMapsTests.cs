@@ -85,6 +85,53 @@ namespace Test.Configs
         }
 
         [Fact]
+        public void Decorate_ScrollMode_SetsNestedScrollMode()
+        {
+            var valueMap = new ValueMap { { "ValueMatcher", "meeting" }, { "ScrollMode", "loop" } };
+            var message = new AwtrixAppMessage();
+
+            valueMap.Decorate(message, _mockLogger.Object);
+
+            Assert.Equal("{\"scroll\":{\"mode\":\"loop\"}}", message.ToJson());
+        }
+
+        [Fact]
+        public void Decorate_ScrollModeAndScrollSpeed_MergeIntoOneScrollObject()
+        {
+            var valueMap = new ValueMap
+            {
+                { "ValueMatcher", "meeting" },
+                { "ScrollSpeed", "100" },
+                { "ScrollMode", "loop" }
+            };
+            var message = new AwtrixAppMessage();
+
+            valueMap.Decorate(message, _mockLogger.Object);
+
+            var scroll = Assert.IsType<Dictionary<string, object>>(message["scroll"]);
+            Assert.Equal("loop", scroll["mode"]);
+            Assert.Equal(100, scroll["speed"]);
+        }
+
+        [Fact]
+        public void Decorate_ScrollSpeedAfterScrollMode_KeepsMode()
+        {
+            var valueMap = new ValueMap
+            {
+                { "ValueMatcher", "meeting" },
+                { "ScrollMode", "loop" },
+                { "ScrollSpeed", "100" }
+            };
+            var message = new AwtrixAppMessage();
+
+            valueMap.Decorate(message, _mockLogger.Object);
+
+            var scroll = Assert.IsType<Dictionary<string, object>>(message["scroll"]);
+            Assert.Equal("loop", scroll["mode"]);
+            Assert.Equal(100, scroll["speed"]);
+        }
+
+        [Fact]
         public void Deserialize_AppsettingsShape_ProducesValueMaps()
         {
             const string json = @"[

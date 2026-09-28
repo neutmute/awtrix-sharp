@@ -51,6 +51,7 @@ Accepted NG forms: `#RRGGBB`, `#RGB`, `r,g,b`. Bare `RRGGBB` → prefix `#`. Any
 | `Line`, `Bar` | `LineChart`, `BarChart` | as-is |
 | `Autoscale` | `ChartAutoscale` | as-is |
 | `Overlay`, `Progress`, `Effect`, `EffectSpeed`, `ScrollSpeed` | same | as-is |
+| none | `ScrollMode` | NG-only: `static`, `wrap`, `loop` or `bounce`; merges with `ScrollSpeed` into the `scroll` object |
 | `ProgressC`, `ProgressBC` | `ProgressColor`, `ProgressTrackColor` | as-is (`r,g,b`) |
 | `EffectBlend` | `PaletteBlend` | as-is |
 | `ValueMatcher` | `ValueMatcher` | as-is |
