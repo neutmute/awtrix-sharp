@@ -98,7 +98,27 @@ namespace AwtrixSharpWeb.Domain
 
         public AwtrixAppMessage SetProgressTrackColor(string value) => Put("progressTrackColor", AwtrixColour.Parse(value));
 
-        public AwtrixAppMessage SetScrollSpeed(int value) => Put("scroll", new Dictionary<string, object> { ["speed"] = value });
+        /// <summary>Sets NG "scroll.speed", keeping any "scroll.mode" already present.</summary>
+        public AwtrixAppMessage SetScrollSpeed(int value) => MergeScroll("speed", value);
+
+        /// <summary>Sets NG "scroll.mode" (static, wrap, loop, bounce), keeping any "scroll.speed" already present.</summary>
+        public AwtrixAppMessage SetScrollMode(string? value) => MergeScroll("mode", string.IsNullOrWhiteSpace(value) ? null : value);
+
+        private AwtrixAppMessage MergeScroll(string part, object? value)
+        {
+            var scroll = TryGetValue("scroll", out var existing) && existing is Dictionary<string, object> dict
+                ? new Dictionary<string, object>(dict)
+                : new Dictionary<string, object>();
+            if (value is null)
+            {
+                scroll.Remove(part);
+            }
+            else
+            {
+                scroll[part] = value;
+            }
+            return Put("scroll", scroll.Count == 0 ? null : scroll);
+        }
 
         public AwtrixAppMessage SetEffect(string? value) => Put("effect", value);
 

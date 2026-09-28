@@ -44,6 +44,7 @@ NG colours are `#RRGGBB`, `#RGB` or `r,g,b`. Bare `RRGGBB` is invalid: add the `
 | `Line`, `Bar` | `LineChart`, `BarChart` | as-is |
 | `Autoscale` | `ChartAutoscale` | as-is |
 | `Overlay`, `Progress`, `Effect`, `EffectSpeed`, `ScrollSpeed` | same | as-is |
+| none | `ScrollMode` | NG-only: `static`, `wrap`, `loop` or `bounce`; merges with `ScrollSpeed` into the `scroll` object |
 | `ProgressC`, `ProgressBC` | `ProgressColor`, `ProgressTrackColor` | `r,g,b` as-is |
 | `EffectBlend` | `PaletteBlend` | as-is |
 | `ValueMatcher` | `ValueMatcher` | as-is |
