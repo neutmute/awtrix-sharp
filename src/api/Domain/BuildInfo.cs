@@ -15,12 +15,12 @@ namespace AwtrixSharpWeb.Domain
             .GetCustomAttributes<AssemblyMetadataAttribute>()
             .FirstOrDefault(a => a.Key == "GitCommitShort" && !string.IsNullOrWhiteSpace(a.Value))?.Value;
 
-        /// <summary>Assembly version, e.g. "1.0.42.0" from the CI run number.</summary>
-        public static string Version { get; } = Assembly.GetName().Version?.ToString() ?? "0.0.0.0";
+        /// <summary>Major.Minor.Build, e.g. "1.0.42" where Build is the CI run number.</summary>
+        public static string Version { get; } = Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
 
-        /// <summary>"Awtrix Sharp {commit}", or "Awtrix Sharp v{version}" when no commit was baked in.</summary>
+        /// <summary>"Awtrix-Sharp {version} {commit}", or just "Awtrix-Sharp {version}" when no commit was baked in.</summary>
         public static string Describe(string? commitShort) =>
-            string.IsNullOrWhiteSpace(commitShort) ? $"Awtrix Sharp v{Version}" : $"Awtrix Sharp {commitShort}";
+            string.IsNullOrWhiteSpace(commitShort) ? $"Awtrix-Sharp {Version}" : $"Awtrix-Sharp {Version} {commitShort}";
 
         public static string Description => Describe(CommitShort);
     }

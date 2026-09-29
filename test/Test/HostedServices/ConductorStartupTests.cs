@@ -83,7 +83,8 @@ namespace Test.HostedServices
                 new AwtrixConfig { Devices = new[] { Device("awtrix/clock1"), Device(HttpDevice) } },
                 awtrixService: awtrix.Object,
                 clock: new MockClock(HalfPastMidnight));
-            conductor.StartupNotificationText = "Awtrix Sharp abc1234";
+            conductor.StartupNotificationText = "Awtrix-Sharp 1.0.53 abc1234";
+            const string expected = "{\"text\":\"Awtrix-Sharp 1.0.53 abc1234\",\"durationMs\":10000,\"effect\":\"PlasmaCloud\",\"palette\":\"Ocean\",\"scroll\":{\"mode\":\"bounce\"},\"textColor\":\"#FFFFFF\"}";
 
             await conductor.StartAsync(CancellationToken.None);
 
@@ -91,7 +92,7 @@ namespace Test.HostedServices
             {
                 awtrix.Verify(a => a.Notify(
                     It.Is<AwtrixAddress>(addr => addr.BaseTopic == baseTopic),
-                    It.Is<AwtrixAppMessage>(m => (string?)m["text"] == "Awtrix Sharp abc1234" && (int)m["durationMs"]! == 4000)), Times.Once);
+                    It.Is<AwtrixAppMessage>(m => m.ToJson() == expected)), Times.Once);
             }
             awtrix.Verify(a => a.Notify(It.IsAny<AwtrixAddress>(), It.IsAny<AwtrixAppMessage>()), Times.Exactly(2));
         }

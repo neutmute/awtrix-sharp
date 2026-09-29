@@ -68,7 +68,7 @@ namespace AwtrixSharpWeb.HostedServices
         /// <summary>
         /// How long the startup notification stays on each device.
         /// </summary>
-        internal static readonly TimeSpan StartupNotificationDuration = TimeSpan.FromSeconds(4);
+        internal static readonly TimeSpan StartupNotificationDuration = TimeSpan.FromSeconds(10);
 
         /// <summary>
         /// Text of the notification sent to every configured device once startup completes. Internal and settable so
@@ -156,7 +156,11 @@ namespace AwtrixSharpWeb.HostedServices
 
             var message = new AwtrixAppMessage()
                 .SetText(StartupNotificationText)
-                .SetDuration(StartupNotificationDuration);
+                .SetDuration(StartupNotificationDuration)
+                .SetEffect("PlasmaCloud")
+                .SetPalette("Ocean")
+                .SetScrollMode("bounce")
+                .SetTextColor("#FFFFFF");
 
             await Task.WhenAll(devices.Select(async device =>
             {
