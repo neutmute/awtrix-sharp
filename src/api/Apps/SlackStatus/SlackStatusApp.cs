@@ -82,7 +82,10 @@ namespace AwtrixSharpWeb.Apps.SlackStatus
 
         private async Task ShowStatusAsync(SlackUserStatusChangedEventArgs e)
         {
-            Logger.LogInformation("SlackApp: {SlackStatus}", e);
+            // The exact strings the ValueMatchers run against (text first, then emoji); quoted so whitespace shows.
+            Logger.LogInformation(
+                "Slack status changed on {BaseTopic}: StatusText='{StatusText}' StatusEmoji='{StatusEmoji}'",
+                AwtrixAddress.BaseTopic, e.StatusText, e.StatusEmoji);
 
             if (string.IsNullOrEmpty(e.StatusText))
             {
@@ -97,6 +100,7 @@ namespace AwtrixSharpWeb.Apps.SlackStatus
             if (!DecorateIfMatch(e.StatusText, message) && !DecorateIfMatch(e.StatusEmoji, message))
             {
                 // No mapping found, use default behavior
+                Logger.LogInformation("No ValueMap matched StatusText or StatusEmoji; showing the status text");
                 message.SetText(e.StatusText);
                 message.SetDuration(TimeSpan.FromSeconds(DefaultDurationSeconds));
             }
@@ -118,7 +122,7 @@ namespace AwtrixSharpWeb.Apps.SlackStatus
                 return false;
             }
 
-            Logger.LogInformation("ValueMap matched for '{Value}'", value);
+            Logger.LogInformation("ValueMatcher '{ValueMatcher}' matched '{Value}'", valueMap.ValueMatcher, value);
             valueMap.Decorate(message, Logger);
             return true;
         }
