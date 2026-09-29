@@ -4,6 +4,7 @@ using AwtrixSharpWeb.Domain;
 using AwtrixSharpWeb.HostedServices;
 using AwtrixSharpWeb.Interfaces;
 using AwtrixSharpWeb.Services;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 
@@ -31,11 +32,14 @@ namespace Test.Apps.SlackStatus
         }
 
         protected SlackStatusApp CreateApp(string trackingUserId, params ValueMap[] valueMaps)
+            => CreateApp(NullLogger.Instance, trackingUserId, valueMaps);
+
+        protected SlackStatusApp CreateApp(ILogger logger, string trackingUserId, params ValueMap[] valueMaps)
         {
             var config = new SlackStatusAppConfig { Type = AppName };
             config.Config[SlackStatusApp.UserIdConfigKey] = trackingUserId;
             config.ValueMaps = valueMaps.ToList();
-            return new SlackStatusApp(NullLogger.Instance, config, _address, _awtrix.Object, _slack.Object);
+            return new SlackStatusApp(logger, config, _address, _awtrix.Object, _slack.Object);
         }
     }
 
@@ -129,6 +133,19 @@ namespace Test.Apps.SlackStatus
             var message = Assert.Single(_published);
             Assert.Equal("Busy", message.Text);
             Assert.Equal("38789", message["icon"]);
+        }
+
+        [Fact]
+        public async Task UserStatusChanged_LogsTheValuesTheMatchersRunOn()
+        {
+            var logger = new ListLogger();
+            var calendar = new ValueMap { { "ValueMatcher", ":spiral_calendar_pad:" }, { "Icon", "1234" } };
+            await CreateApp(logger, "U123", calendar).InitAsync();
+
+            Raise(new SlackUserStatusChangedEventArgs { UserId = "U123", StatusText = "Planning ", StatusEmoji = ":spiral_calendar_pad:" });
+
+            Assert.Contains(logger.Messages, m => m.Contains("StatusText='Planning ' StatusEmoji=':spiral_calendar_pad:'"));
+            Assert.Contains(logger.Messages, m => m.Contains("ValueMatcher ':spiral_calendar_pad:' matched ':spiral_calendar_pad:'"));
         }
 
         [Fact]
@@ -301,5 +318,17 @@ namespace Test.Apps.SlackStatus
                 Assert.Null(ex);
                 Assert.Empty(_awtrix.Invocations);
             });
+    }
+
+    internal sealed class ListLogger : ILogger
+    {
+        public List<string> Messages { get; } = new();
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+            => Messages.Add(formatter(state, exception));
     }
 }
