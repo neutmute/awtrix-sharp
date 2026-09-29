@@ -229,7 +229,8 @@ To test against the NG simulator without a clock, see [docs/simulator.md](docs/s
 
 1. Create your `docker-compose.yaml`
 2. Create `./data/awtrix/appsettings.json`
-3. Set the `basetopic` to be either an mqtt route - eg `awtrix/clock1` or a http url like `http://192.168.10.20` - the device root, with no `/api` suffix.
+3. Create `./data/awtrix/dataprotection-keys`, writable by the container's non-root user (UID 1654): `mkdir -p ./data/awtrix/dataprotection-keys && sudo chown 1654:1654 ./data/awtrix/dataprotection-keys`. This keeps the test UI's antiforgery/circuit keys across restarts; skip it (and the matching volume and `AWTRIXSHARP_DATAPROTECTION__KEYSPATH`) if you don't mind them resetting.
+4. Set the `basetopic` to be either an mqtt route - eg `awtrix/clock1` or a http url like `http://192.168.10.20` - the device root, with no `/api` suffix.
 
 ### Example docker compose
 
@@ -258,9 +259,11 @@ services:
       - 80:8080
     volumes:
       - ./data/awtrix/appsettings.json:/app-api/appsettings.json
+      - ./data/awtrix/dataprotection-keys:/data/dataprotection-keys
     environment:
       TZ: "Australia/Sydney"
       ASPNETCORE_ENVIRONMENT: "Production"
+      AWTRIXSHARP_DATAPROTECTION__KEYSPATH: "/data/dataprotection-keys"
       AWTRIXSHARP_MQTT__HOST: "mosquitto"
       AWTRIXSHARP_MQTT__USERNAME: "xxxxxxxxxxxxxxx"
       AWTRIXSHARP_MQTT__PASSWORD: "xxxxxxxxxxxxxxx"
