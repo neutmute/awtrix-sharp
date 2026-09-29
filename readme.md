@@ -24,6 +24,7 @@ Uses [TransportNSW Trip Planner API](https://opendata.transport.nsw.gov.au/data/
 - The clock on the left starts white
 - The red number on the right is the minutes past the hour until you need to get up or leave
 - The progress bar counts up from 5 minutes, the clock turning orange in the last minute
+- For the last `AlertDuration` before the alarm (default 40 seconds) the first ValueMap, or a rainbow "GO!", replaces the countdown
 
 ![image](./docs/gifs/awtrix-triptimer.gif)
 
@@ -33,6 +34,7 @@ Configure it with
 - a `StopId`, found using [TripPlanner API](https://opendata.transport.nsw.gov.au/dataset/trip-planner-apis) for departure and destination stops
 - Your travel time to the station
 - Your preparation time (eg: get dressed, breakfast, pack bag)
+- Optionally, `AlertDuration`: how long the alert shows before the alarm (`hh:mm:ss`, default `00:00:40`, less than 5 minutes)
 
 #### TripTimerApp AppSettings Configuration Example
 
@@ -45,7 +47,8 @@ Configure it with
      "StopIdOrigin": "200060",
      "StopIdDestination": "200070",
      "TimeToOrigin": "00:14:00",
-     "TimeToPrepare": "00:08:00"
+     "TimeToPrepare": "00:08:00",
+     "AlertDuration": "00:00:40"
    },
    "ValueMaps": [
      {
@@ -226,7 +229,8 @@ To test against the NG simulator without a clock, see [docs/simulator.md](docs/s
 
 1. Create your `docker-compose.yaml`
 2. Create `./data/awtrix/appsettings.json`
-3. Set the `basetopic` to be either an mqtt route - eg `awtrix/clock1` or a http url like `http://192.168.10.20` - the device root, with no `/api` suffix.
+3. Create `./data/awtrix/dataprotection-keys`, writable by the container's non-root user (UID 1654): `mkdir -p ./data/awtrix/dataprotection-keys && sudo chown 1654:1654 ./data/awtrix/dataprotection-keys`. This keeps the test UI's antiforgery/circuit keys across restarts; skip it (and the matching volume and `AWTRIXSHARP_DATAPROTECTION__KEYSPATH`) if you don't mind them resetting.
+4. Set the `basetopic` to be either an mqtt route - eg `awtrix/clock1` or a http url like `http://192.168.10.20` - the device root, with no `/api` suffix.
 
 ### Example docker compose
 
@@ -255,9 +259,11 @@ services:
       - 80:8080
     volumes:
       - ./data/awtrix/appsettings.json:/app-api/appsettings.json
+      - ./data/awtrix/dataprotection-keys:/data/dataprotection-keys
     environment:
       TZ: "Australia/Sydney"
       ASPNETCORE_ENVIRONMENT: "Production"
+      AWTRIXSHARP_DATAPROTECTION__KEYSPATH: "/data/dataprotection-keys"
       AWTRIXSHARP_MQTT__HOST: "mosquitto"
       AWTRIXSHARP_MQTT__USERNAME: "xxxxxxxxxxxxxxx"
       AWTRIXSHARP_MQTT__PASSWORD: "xxxxxxxxxxxxxxx"

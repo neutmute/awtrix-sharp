@@ -122,6 +122,39 @@ namespace Test.Configs
             Assert.Equal(TimeSpan.Zero, config.TimeToPrepare);
         }
 
+        [Fact]
+        public void TripTimer_MissingAlertDuration_DefaultsTo40Seconds()
+        {
+            var config = Build<TripTimerAppConfig>(ShippedTripTimer(), "TripTimerApp");
+
+            Assert.Equal(TimeSpan.FromSeconds(40), config.AlertDuration);
+        }
+
+        [Fact]
+        public void TripTimer_AlertDuration_IsRead()
+        {
+            var keys = ShippedTripTimer();
+            keys["AlertDuration"] = "00:01:30";
+
+            var config = Build<TripTimerAppConfig>(keys, "TripTimerApp");
+
+            Assert.Empty(config.Validate());
+            Assert.Equal(TimeSpan.FromSeconds(90), config.AlertDuration);
+        }
+
+        [Theory]
+        [InlineData("later")]
+        [InlineData("00:00:00")]
+        [InlineData("-00:00:10")]
+        [InlineData("00:05:00")]
+        public void TripTimer_InvalidAlertDuration_IsReported(string value)
+        {
+            var keys = ShippedTripTimer();
+            keys["AlertDuration"] = value;
+
+            Assert.Single(Build<TripTimerAppConfig>(keys, "TripTimerApp").Validate(), e => e.StartsWith("AlertDuration:"));
+        }
+
         [Theory]
         [InlineData("TimeToOrigin", "soon")]
         [InlineData("TimeToPrepare", "-00:05:00")]

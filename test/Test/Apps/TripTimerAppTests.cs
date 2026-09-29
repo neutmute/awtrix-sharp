@@ -98,8 +98,9 @@ namespace Test.Apps
 
         [Theory]
         [InlineData(0, 100, "")] // 0% progress
-        [InlineData(175, 44, "")] // 25% progress
-        [InlineData(150, 53, "")] // 50% progress
+        // The bar fills over 5 minutes minus the default 40 s AlertDuration: (300 - s) * 100 / 260
+        [InlineData(175, 48, "")]
+        [InlineData(150, 57, "")]
         [InlineData(300, 0, "")] // 100% progress
         public void GetProgress_ReturnsExpectedProgressValue(int secondsToAlarm, int expectedProgess, string rationale)
         {

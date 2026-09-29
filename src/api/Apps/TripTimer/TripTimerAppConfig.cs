@@ -38,6 +38,20 @@ namespace AwtrixSharpWeb.Apps.TripTimer
             set => SetConfig("TimeToPrepare", value);
         }
 
+        public static readonly TimeSpan DefaultAlertDuration = TimeSpan.FromSeconds(40);
+
+        /// <summary>The countdown's progress bar starts filling this long before the alarm; the alert must fit inside it.</summary>
+        public static readonly TimeSpan MaxAlertDuration = TimeSpan.FromMinutes(5);
+
+        /// <summary>
+        /// How long before the alarm the alert (first ValueMap, or "GO!") replaces the countdown (optional, default 00:00:40)
+        /// </summary>
+        public TimeSpan AlertDuration
+        {
+            get => string.IsNullOrWhiteSpace(Config.Get("AlertDuration")) ? DefaultAlertDuration : GetConfig<TimeSpan>("AlertDuration");
+            set => SetConfig("AlertDuration", value);
+        }
+
         public override IReadOnlyList<string> Validate()
         {
             var errors = new List<string>(base.Validate());
@@ -45,6 +59,12 @@ namespace AwtrixSharpWeb.Apps.TripTimer
             ValidateRequired(errors, "StopIdDestination");
             ValidateTimeSpan(errors, "TimeToOrigin", required: false, mustBePositive: false);
             ValidateTimeSpan(errors, "TimeToPrepare", required: false, mustBePositive: false);
+            var errorsBeforeAlertDuration = errors.Count;
+            ValidateTimeSpan(errors, "AlertDuration", required: false, mustBePositive: true);
+            if (errors.Count == errorsBeforeAlertDuration && AlertDuration >= MaxAlertDuration)
+            {
+                errors.Add($"AlertDuration: '{Config.Get("AlertDuration")}' must be less than {MaxAlertDuration}");
+            }
             return errors;
         }
     }

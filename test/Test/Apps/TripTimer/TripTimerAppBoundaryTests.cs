@@ -32,7 +32,7 @@ namespace Test.Apps.TripTimer
         private Mock<ITripPlannerService> _mockTripPlannerService;
         private TripTimerAppConfig _timerConfig;
 
-        private TripTimerApp GetSystemUnderTest(DateTimeOffset now, DateTimeOffset departureTime)
+        private TripTimerApp GetSystemUnderTest(DateTimeOffset now, DateTimeOffset departureTime, TimeSpan? alertDuration = null)
         {
             _clock = new MockClock(now);
             _mockLog = new Mock<ILogger>();
@@ -53,6 +53,10 @@ namespace Test.Apps.TripTimer
                 TimeToPrepare = TimeSpan.Zero,
             };
             _timerConfig.Type = "TripTimer";
+            if (alertDuration.HasValue)
+            {
+                _timerConfig.AlertDuration = alertDuration.Value;
+            }
 
             var sut = new TripTimerApp(
                 _mockLog.Object,
@@ -135,10 +139,10 @@ namespace Test.Apps.TripTimer
         [Fact]
         public void BuildMessage_AtVisualAlertBufferBoundary_StillShowsCountdown_NotGo()
         {
-            // Arrange - VisualAlertBuffer is exactly 20 seconds; the check is `timeToAlarm < VisualAlertBuffer`
-            // so at exactly 20 seconds remaining the "GO!" alert must NOT yet trigger.
+            // Arrange - the default AlertDuration is exactly 40 seconds; the check is `timeToAlarm < VisualAlertBuffer`
+            // so at exactly 40 seconds remaining the "GO!" alert must NOT yet trigger.
             var departureTime = DateTimeOffset.Parse("2025-08-19T06:41:00+10:00");
-            var now = departureTime.AddSeconds(-20);
+            var now = departureTime.AddSeconds(-40);
             var sut = GetSystemUnderTest(now, departureTime);
 
             // Act
@@ -148,12 +152,26 @@ namespace Test.Apps.TripTimer
             Assert.IsType<TextFragment[]>(message["text"]);
         }
 
+        [Theory]
+        [InlineData(89, true)]
+        [InlineData(90, false)]
+        public void BuildMessage_ConfiguredAlertDuration_SetsWhenTheAlertStarts(int secondsBeforeAlarm, bool expectAlert)
+        {
+            var departureTime = DateTimeOffset.Parse("2025-08-19T06:41:00+10:00");
+            var now = departureTime.AddSeconds(-secondsBeforeAlarm);
+            var sut = GetSystemUnderTest(now, departureTime, TimeSpan.FromSeconds(90));
+
+            var message = InvokeBuildMessage(sut, now.DateTime);
+
+            Assert.Equal(expectAlert, message.Text == "GO!");
+        }
+
         [Fact]
         public void BuildMessage_InsideVisualAlertBuffer_WithNoValueMaps_ShowsGoAlert()
         {
-            // Arrange - just inside the 20 second buffer
+            // Arrange - just inside the default 40 second buffer
             var departureTime = DateTimeOffset.Parse("2025-08-19T06:41:00+10:00");
-            var now = departureTime.AddSeconds(-19);
+            var now = departureTime.AddSeconds(-39);
             var sut = GetSystemUnderTest(now, departureTime);
 
             // Act
@@ -171,7 +189,7 @@ namespace Test.Apps.TripTimer
         {
             // Arrange
             var departureTime = DateTimeOffset.Parse("2025-08-19T06:41:00+10:00");
-            var now = departureTime.AddSeconds(-19);
+            var now = departureTime.AddSeconds(-39);
             var sut = GetSystemUnderTest(now, departureTime);
 
             var valueMap = new ValueMap { ["Text"] = "ALMOST THERE", ["TextColor"] = "#00FFFF" };
