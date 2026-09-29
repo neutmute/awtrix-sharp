@@ -48,6 +48,9 @@ namespace Test.HostedServices
             return config;
         }
 
+        private static bool IsStartupNotification(Conductor conductor, AwtrixAppMessage message) =>
+            message.TryGetValue("text", out var text) && (string?)text == conductor.StartupNotificationText;
+
         private static void RaiseDoubleClick(Mock<IMqttConnector> mqtt, string topic)
         {
             foreach (var payload in new[] { "1", "0", "1" })
@@ -70,6 +73,55 @@ namespace Test.HostedServices
             await Task.Run(() => conductor.StartAsync(CancellationToken.None)).WaitAsync(TimeSpan.FromSeconds(5));
 
             Assert.Single(conductor.FindApps(AppNames.ButtonApp));
+        }
+
+        [Fact]
+        public async Task StartAsync_SendsAStartupNotificationToEveryDevice()
+        {
+            var awtrix = new Mock<IAwtrixService>();
+            var conductor = ConductorTestHelper.Create(
+                new AwtrixConfig { Devices = new[] { Device("awtrix/clock1"), Device(HttpDevice) } },
+                awtrixService: awtrix.Object,
+                clock: new MockClock(HalfPastMidnight));
+            conductor.StartupNotificationText = "Awtrix Sharp abc1234";
+
+            await conductor.StartAsync(CancellationToken.None);
+
+            foreach (var baseTopic in new[] { "awtrix/clock1", HttpDevice })
+            {
+                awtrix.Verify(a => a.Notify(
+                    It.Is<AwtrixAddress>(addr => addr.BaseTopic == baseTopic),
+                    It.Is<AwtrixAppMessage>(m => (string?)m["text"] == "Awtrix Sharp abc1234" && (int)m["durationMs"]! == 4000)), Times.Once);
+            }
+            awtrix.Verify(a => a.Notify(It.IsAny<AwtrixAddress>(), It.IsAny<AwtrixAppMessage>()), Times.Exactly(2));
+        }
+
+        [Fact]
+        public async Task StartAsync_NoDevices_SendsNoStartupNotification()
+        {
+            var awtrix = new Mock<IAwtrixService>();
+            var conductor = ConductorTestHelper.Create(
+                new AwtrixConfig { Devices = Array.Empty<DeviceConfig>() },
+                awtrixService: awtrix.Object);
+
+            await conductor.StartAsync(CancellationToken.None);
+
+            awtrix.Verify(a => a.Notify(It.IsAny<AwtrixAddress>(), It.IsAny<AwtrixAppMessage>()), Times.Never);
+        }
+
+        [Fact]
+        public async Task StartAsync_WhenStartupNotificationThrows_StillStartsTheApps()
+        {
+            var awtrix = new Mock<IAwtrixService>();
+            awtrix.Setup(a => a.Notify(It.IsAny<AwtrixAddress>(), It.IsAny<AwtrixAppMessage>())).ThrowsAsync(new InvalidOperationException("broker down"));
+            var conductor = ConductorTestHelper.Create(
+                new AwtrixConfig { Devices = new[] { Device("awtrix/clock1", Diurnal()) } },
+                awtrixService: awtrix.Object,
+                clock: new MockClock(HalfPastMidnight));
+
+            await conductor.StartAsync(CancellationToken.None);
+
+            Assert.Single(conductor.FindApps(AppNames.DiurnalApp));
         }
 
         [Fact]
@@ -209,8 +261,9 @@ namespace Test.HostedServices
             RaiseDoubleClick(mqtt, "awtrix/clock1/state/buttons/right");
 
             // TripTimerApp's activation announces itself with one Notify ("Starting trip timer")
-            awtrix.Verify(a => a.Notify(clock1, It.IsAny<AwtrixAppMessage>()), Times.Once);
-            awtrix.Verify(a => a.Notify(clock2, It.IsAny<AwtrixAppMessage>()), Times.Never);
+            // Every device also receives the one-off startup notification; count only TripTimer notifications.
+            awtrix.Verify(a => a.Notify(clock1, It.Is<AwtrixAppMessage>(m => !IsStartupNotification(conductor, m))), Times.Once);
+            awtrix.Verify(a => a.Notify(clock2, It.Is<AwtrixAppMessage>(m => !IsStartupNotification(conductor, m))), Times.Never);
 
             await conductor.StopAsync(CancellationToken.None);
         }

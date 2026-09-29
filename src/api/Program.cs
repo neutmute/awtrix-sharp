@@ -409,8 +409,7 @@ namespace AwtrixSharpWeb
         private static void LogStartup(WebApplication app)
         {
             var logger = app.Services.GetRequiredService<ILogger<Program>>();
-            var version = Assembly.GetExecutingAssembly().GetName().Version;
-            logger.LogInformation("Starting AwtrixSharp v{Version}, {Commit}", version, GetGitCommitShort());
+            logger.LogInformation("Starting AwtrixSharp v{Version}, {Commit}", BuildInfo.Version, BuildInfo.CommitShort ?? "no commit");
             logger.LogInformation("Environment: {Environment}", app.Environment.EnvironmentName);
 
             var warnings = ConfigurationWarnings.Get(
@@ -428,10 +427,5 @@ namespace AwtrixSharpWeb
                 logger.LogWarning("Configuration: {Warning}", warning);
             }
         }
-
-        public static string? GetGitCommitShort() =>
-            Assembly.GetExecutingAssembly()
-                .GetCustomAttributes<AssemblyMetadataAttribute>()
-                .FirstOrDefault(a => a.Key == "GitCommitShort")?.Value;
     }
 }
