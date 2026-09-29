@@ -74,7 +74,7 @@ namespace AwtrixSharpWeb.Apps.TripTimer
             _tripPlanner = tripPlanner;
             _timerService = timerService;
 
-            VisualAlertBuffer = TimeSpan.FromSeconds(20);
+            VisualAlertBuffer = config.AlertDuration;
             RefreshDelay = (delay, token) => Task.Delay(delay, Clock.TimeProvider, token);
         }
 
