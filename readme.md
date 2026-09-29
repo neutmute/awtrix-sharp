@@ -24,6 +24,7 @@ Uses [TransportNSW Trip Planner API](https://opendata.transport.nsw.gov.au/data/
 - The clock on the left starts white
 - The red number on the right is the minutes past the hour until you need to get up or leave
 - The progress bar counts up from 5 minutes, the clock turning orange in the last minute
+- For the last `AlertDuration` before the alarm (default 40 seconds) the first ValueMap, or a rainbow "GO!", replaces the countdown
 
 ![image](./docs/gifs/awtrix-triptimer.gif)
 
@@ -33,6 +34,7 @@ Configure it with
 - a `StopId`, found using [TripPlanner API](https://opendata.transport.nsw.gov.au/dataset/trip-planner-apis) for departure and destination stops
 - Your travel time to the station
 - Your preparation time (eg: get dressed, breakfast, pack bag)
+- Optionally, `AlertDuration`: how long the alert shows before the alarm (`hh:mm:ss`, default `00:00:40`, less than 5 minutes)
 
 #### TripTimerApp AppSettings Configuration Example
 
@@ -45,7 +47,8 @@ Configure it with
      "StopIdOrigin": "200060",
      "StopIdDestination": "200070",
      "TimeToOrigin": "00:14:00",
-     "TimeToPrepare": "00:08:00"
+     "TimeToPrepare": "00:08:00",
+     "AlertDuration": "00:00:40"
    },
    "ValueMaps": [
      {
