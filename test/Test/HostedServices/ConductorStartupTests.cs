@@ -4,6 +4,8 @@ using AwtrixSharpWeb.HostedServices;
 using AwtrixSharpWeb.Interfaces;
 using AwtrixSharpWeb.Services;
 using AwtrixSharpWeb.Services.TripPlanner;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Time.Testing;
 using Moq;
 using Test.Apps;
 using Test.Apps.MqttRender;
@@ -75,51 +77,111 @@ namespace Test.HostedServices
             Assert.Single(conductor.FindApps(AppNames.ButtonApp));
         }
 
+        private static readonly TimeSpan JustUnderStartupDelay = Conductor.DefaultStartupNotificationDelay - TimeSpan.FromMilliseconds(100);
+
+        private static Task WaitForNotifications(Conductor conductor) =>
+            conductor.StartupNotificationTask.WaitAsync(TimeSpan.FromSeconds(5));
+
         [Fact]
-        public async Task StartAsync_SendsAStartupNotificationToEveryDevice()
+        public async Task StartAsync_SendsAStartupNotificationToEveryDevice_FiveSecondsAfterStart()
         {
             var awtrix = new Mock<IAwtrixService>();
+            var time = new FakeTimeProvider();
             var conductor = ConductorTestHelper.Create(
                 new AwtrixConfig { Devices = new[] { Device("awtrix/clock1"), Device(HttpDevice) } },
                 awtrixService: awtrix.Object,
-                clock: new MockClock(HalfPastMidnight));
-            conductor.StartupNotificationText = "Awtrix Sharp abc1234";
+                clock: new MockClock(HalfPastMidnight, time));
+            conductor.StartupNotificationText = "Awtrix-Sharp 1.0.53 abc1234";
+            const string expected = "{\"text\":\"Awtrix-Sharp 1.0.53 abc1234\",\"durationMs\":10000,\"effect\":\"PlasmaCloud\",\"palette\":\"Ocean\",\"scroll\":{\"mode\":\"bounce\"},\"textColor\":\"#FFFFFF\"}";
 
             await conductor.StartAsync(CancellationToken.None);
+            time.Advance(JustUnderStartupDelay);
+            awtrix.Verify(a => a.Notify(It.IsAny<AwtrixAddress>(), It.IsAny<AwtrixAppMessage>()), Times.Never);
+
+            time.Advance(TimeSpan.FromMilliseconds(100));
+            await WaitForNotifications(conductor);
 
             foreach (var baseTopic in new[] { "awtrix/clock1", HttpDevice })
             {
                 awtrix.Verify(a => a.Notify(
                     It.Is<AwtrixAddress>(addr => addr.BaseTopic == baseTopic),
-                    It.Is<AwtrixAppMessage>(m => (string?)m["text"] == "Awtrix Sharp abc1234" && (int)m["durationMs"]! == 4000)), Times.Once);
+                    It.Is<AwtrixAppMessage>(m => m.ToJson() == expected)), Times.Once);
             }
             awtrix.Verify(a => a.Notify(It.IsAny<AwtrixAddress>(), It.IsAny<AwtrixAppMessage>()), Times.Exactly(2));
+        }
+
+        [Fact]
+        public async Task StartAsync_LogsWhenTheStartupNotificationIsSent()
+        {
+            var logger = new Mock<ILogger<Conductor>>();
+            var time = new FakeTimeProvider();
+            var conductor = ConductorTestHelper.Create(
+                new AwtrixConfig { Devices = new[] { Device("awtrix/clock1") } },
+                clock: new MockClock(HalfPastMidnight, time),
+                logger: logger.Object);
+            conductor.StartupNotificationText = "Awtrix-Sharp 1.0.53 abc1234";
+
+            await conductor.StartAsync(CancellationToken.None);
+            time.Advance(Conductor.DefaultStartupNotificationDelay);
+            await WaitForNotifications(conductor);
+
+            logger.Verify(l => l.Log(
+                LogLevel.Information,
+                It.IsAny<EventId>(),
+                It.Is<It.IsAnyType>((state, _) => state.ToString()!.Contains("startup notification") && state.ToString()!.Contains("Awtrix-Sharp 1.0.53 abc1234")),
+                null,
+                It.IsAny<Func<It.IsAnyType, Exception?, string>>()), Times.Once);
+        }
+
+        [Fact]
+        public async Task StopAsync_BeforeTheDelayElapses_CancelsTheStartupNotification()
+        {
+            var awtrix = new Mock<IAwtrixService>();
+            var time = new FakeTimeProvider();
+            var conductor = ConductorTestHelper.Create(
+                new AwtrixConfig { Devices = new[] { Device("awtrix/clock1") } },
+                awtrixService: awtrix.Object,
+                clock: new MockClock(HalfPastMidnight, time));
+
+            await conductor.StartAsync(CancellationToken.None);
+            await conductor.StopAsync(CancellationToken.None);
+            time.Advance(Conductor.DefaultStartupNotificationDelay);
+            await WaitForNotifications(conductor);
+
+            awtrix.Verify(a => a.Notify(It.IsAny<AwtrixAddress>(), It.IsAny<AwtrixAppMessage>()), Times.Never);
         }
 
         [Fact]
         public async Task StartAsync_NoDevices_SendsNoStartupNotification()
         {
             var awtrix = new Mock<IAwtrixService>();
+            var time = new FakeTimeProvider();
             var conductor = ConductorTestHelper.Create(
                 new AwtrixConfig { Devices = Array.Empty<DeviceConfig>() },
-                awtrixService: awtrix.Object);
+                awtrixService: awtrix.Object,
+                clock: new MockClock(HalfPastMidnight, time));
 
             await conductor.StartAsync(CancellationToken.None);
+            time.Advance(Conductor.DefaultStartupNotificationDelay);
+            await WaitForNotifications(conductor);
 
             awtrix.Verify(a => a.Notify(It.IsAny<AwtrixAddress>(), It.IsAny<AwtrixAppMessage>()), Times.Never);
         }
 
         [Fact]
-        public async Task StartAsync_WhenStartupNotificationThrows_StillStartsTheApps()
+        public async Task StartAsync_WhenStartupNotificationThrows_AppsStayRunning()
         {
             var awtrix = new Mock<IAwtrixService>();
             awtrix.Setup(a => a.Notify(It.IsAny<AwtrixAddress>(), It.IsAny<AwtrixAppMessage>())).ThrowsAsync(new InvalidOperationException("broker down"));
+            var time = new FakeTimeProvider();
             var conductor = ConductorTestHelper.Create(
                 new AwtrixConfig { Devices = new[] { Device("awtrix/clock1", Diurnal()) } },
                 awtrixService: awtrix.Object,
-                clock: new MockClock(HalfPastMidnight));
+                clock: new MockClock(HalfPastMidnight, time));
 
             await conductor.StartAsync(CancellationToken.None);
+            time.Advance(Conductor.DefaultStartupNotificationDelay);
+            await WaitForNotifications(conductor);
 
             Assert.Single(conductor.FindApps(AppNames.DiurnalApp));
         }

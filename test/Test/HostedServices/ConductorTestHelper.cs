@@ -4,6 +4,7 @@ using AwtrixSharpWeb.HostedServices;
 using AwtrixSharpWeb.Interfaces;
 using AwtrixSharpWeb.Services;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
@@ -25,7 +26,8 @@ namespace Test.HostedServices
             ITimerService? timerService = null,
             ITripPlannerService? tripPlanner = null,
             ISlackConnector? slackConnector = null,
-            SlackSettings? slackSettings = null)
+            SlackSettings? slackSettings = null,
+            ILogger<Conductor>? logger = null)
         {
             config ??= new AwtrixConfig { Devices = Array.Empty<DeviceConfig>() };
 
@@ -38,7 +40,7 @@ namespace Test.HostedServices
             }
 
             return new Conductor(
-                NullLogger<Conductor>.Instance,
+                logger ?? NullLogger<Conductor>.Instance,
                 env,
                 Options.Create(config),
                 timerService ?? new Mock<ITimerService>().Object,
