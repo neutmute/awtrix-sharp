@@ -71,6 +71,19 @@ namespace AwtrixSharpWeb.HostedServices
         internal static readonly TimeSpan StartupNotificationDuration = TimeSpan.FromSeconds(10);
 
         /// <summary>
+        /// Wait between startup completing and the startup notification being sent, so devices that reconnect to the
+        /// broker slowly (for example over the internet) are listening again by the time it arrives.
+        /// </summary>
+        internal static readonly TimeSpan DefaultStartupNotificationDelay = TimeSpan.FromSeconds(5);
+
+        /// <summary>
+        /// The delayed startup notification. Completed before <see cref="StartAsync"/> runs; tests await it after advancing time.
+        /// </summary>
+        internal Task StartupNotificationTask { get; private set; } = Task.CompletedTask;
+
+        private readonly CancellationTokenSource _stopping = new();
+
+        /// <summary>
         /// Text of the notification sent to every configured device once startup completes. Internal and settable so
         /// tests can assert on a known value (the build's commit is not available under test).
         /// </summary>
@@ -138,13 +151,15 @@ namespace AwtrixSharpWeb.HostedServices
 
             _logger.LogInformation("Conductor started {Running} of {Created} app(s)", running.Count, created.Count);
 
-            await NotifyStartupAsync();
+            // Not awaited: host startup continues while the notification waits out its delay.
+            StartupNotificationTask = NotifyStartupAfterDelayAsync();
         }
 
         /// <summary>
-        /// Announces this build on every configured device. Best effort: a device or broker problem is logged and never fails startup.
+        /// Announces this build on every configured device once <see cref="DefaultStartupNotificationDelay"/> has passed.
+        /// Best effort: a device or broker problem is logged and never fails startup; stopping cancels the wait.
         /// </summary>
-        private async Task NotifyStartupAsync()
+        private async Task NotifyStartupAfterDelayAsync()
         {
             var devices = (_awtrixConfig.Devices ?? Array.Empty<DeviceConfig>())
                 .Where(device => device != null && !string.IsNullOrWhiteSpace(device.BaseTopic))
@@ -153,6 +168,20 @@ namespace AwtrixSharpWeb.HostedServices
             {
                 return;
             }
+
+            try
+            {
+                await Task.Delay(DefaultStartupNotificationDelay, _clock.TimeProvider, _stopping.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                _logger.LogDebug("Stopping before the startup notification was due; not sending it");
+                return;
+            }
+
+            _logger.LogInformation(
+                "Sending startup notification '{Text}' to {Count} device(s), {Delay}s after startup",
+                StartupNotificationText, devices.Count, DefaultStartupNotificationDelay.TotalSeconds);
 
             var message = new AwtrixAppMessage()
                 .SetText(StartupNotificationText)
@@ -173,7 +202,6 @@ namespace AwtrixSharpWeb.HostedServices
                     _logger.LogWarning(ex, "Startup notification to {Device} failed", device.BaseTopic);
                 }
             }));
-            _logger.LogInformation("Sent startup notification '{Text}' to {Count} device(s)", StartupNotificationText, devices.Count);
         }
 
         private List<RegisteredApp> CreateApps()
@@ -461,6 +489,7 @@ namespace AwtrixSharpWeb.HostedServices
         public async Task StopAsync(CancellationToken cancellationToken)
         {
             _logger.LogInformation("Conductor stopping");
+            _stopping.Cancel();
 
             List<RegisteredApp> apps;
             lock (_registryLock)
